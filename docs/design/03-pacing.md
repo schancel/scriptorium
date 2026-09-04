@@ -174,6 +174,31 @@ The art is in `core/sprites.ts`: `scribe_hop` (rise, contact, bounce) for the st
 the wind-up and follow-through — the pose was always right; what was missing was something
 leaving his hand.
 
+### A monster is felled by a clean word, not by any word
+
+Completing the word a monster stands on fells it, whatever happened along the way. So a
+word fumbled twice and repaired still kills, and accuracy — the thing the game is
+actually teaching — has no visible consequence anywhere except a meter and a table.
+
+**A word typed clean fells the monster. A word with a mistake in it does not.** The
+monster survives and the scribe walks past it.
+
+The crucial half is what *does not* happen. It is not a punishment and it must never read
+as one:
+
+- **Nothing blocks.** A surviving monster does not stop the player, chase him, or cost
+  him anything. He simply passes it. What he loses is a reward he did not earn, which is
+  not the same as a penalty, and the difference is the whole of ADR 0004.
+- **No second chance mechanic**, no retry prompt, no "you missed one" line. The monster
+  standing there is the entire feedback.
+- Damage is unchanged: mistakes still feed the smudge meter and nothing else
+  (ADR 0005). This adds no new way to lose hearts.
+
+**In every mode, not only gilding.** A beginner erring on roughly one keystroke in ten
+fells about three words in five, which is often enough to feel good and rare enough to
+mean something. Making it fluent-typists-only would say that accuracy matters more once
+you are already good, which is exactly backwards.
+
 ### The ramp must not outrun the gate
 
 Error cost rises with stage so tolerance narrows as skill grows. But the *gate* also
