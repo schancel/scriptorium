@@ -420,6 +420,17 @@ export interface FrameState {
    */
   readonly note?: string;
   /**
+   * A follower who has just joined, named in one sentence.
+   *
+   * Shares the coaching strip, and sits between the two: a first-run note is
+   * spent three times in a player's life, an arrival nineteen times, and a
+   * doorway stands open for the rest of its verse, so the rarer thing wins the
+   * strip. The wording is `arrivalLine` in `core/followers.ts`, beside the
+   * roster it is formed from.
+   * See docs/design/11-followers.md#arriving-with-a-line.
+   */
+  readonly arrival?: string;
+  /**
    * A doorway standing open in this passage, named in one sentence.
    *
    * It shares the coaching strip with `note` rather than taking a band of its
@@ -823,7 +834,7 @@ function topConfusion(stat: KeyStat): string {
 // --- the curve --------------------------------------------------------------
 
 /**
- * One finished part, as the curve reads it.
+ * One finished stretch of verses, as the curve reads it.
  *
  * Structurally a `HistoryEntry` from `core/progress.ts` with the fields the
  * chart does not draw left off. Declared here rather than imported so the
@@ -833,21 +844,21 @@ function topConfusion(stat: KeyStat): string {
 export interface TrendPoint {
   readonly wpm: number;
   readonly accuracy: number;
-  /** True when this part opened a stage. Drawn gold, and named on the card. */
+  /** True when this stretch opened a stage. Drawn gold, and named on the card. */
   readonly promoted: boolean;
 }
 
 export interface Trend {
   /** The window the chart draws, oldest first. */
   readonly points: readonly TrendPoint[];
-  /** Every part in the record, which is what "so far" is averaged over. */
+  /** Every stretch in the record, which is what "so far" is averaged over. */
   readonly parts: number;
   readonly avgWpm: number;
   readonly avgAccuracy: number;
   /** The tallest bar in the window, which is the chart's scale. */
   readonly bestWpm: number;
   readonly promotions: number;
-  /** True when the most recently finished part opened a stage. */
+  /** True when the most recently finished stretch opened a stage. */
   readonly justPromoted: boolean;
 }
 
@@ -926,9 +937,19 @@ export interface ReportMemory {
   readonly gate?: GateView;
 }
 
-/** `1 part`, `20 parts`. A card that says "1 parts" has stopped being written for anyone. */
-export function countParts(n: number): string {
-  return n === 1 ? '1 part' : `${String(n)} parts`;
+/**
+ * `1 stretch`, `20 stretches`. A card that says "1 stretches" has stopped being
+ * written for anyone.
+ *
+ * The thing being counted is a chunk of `candle_interval` verses, and the game
+ * does not name that on screen -- it names the verses themselves, `Genesis
+ * 1:12-14`, wherever one is *identified*. Here it is being *counted*, which a
+ * citation cannot do, so it is counted as what it plainly is: a stretch of the
+ * page he sat down and typed. See
+ * docs/design/03-pacing.md#the-game-says-verses-and-chapters-and-invents-nothing.
+ */
+export function countStretches(n: number): string {
+  return n === 1 ? '1 stretch' : `${String(n)} stretches`;
 }
 
 /** `e and i`; `c, m, w, v, b and p`. Keys as a player would read them aloud. */
@@ -1048,7 +1069,7 @@ export function reportAdvice(card: ReportCard, gate: GateView | undefined, tunin
       + 'opens from here.';
   }
 
-  return 'Next: keep going — a few more parts and this card will have something '
+  return 'Next: keep going — a few more verses and this card will have something '
     + 'specific to say.';
 }
 
@@ -1746,12 +1767,15 @@ export function drawFrame(state: FrameState, rail: RailState, tuning: Tuning): D
   // After the rail, so nothing of either ribbon can be drawn over the phrase
   // the crossing exists to hold still.
   if (warp !== undefined) pushHeldEcho(cmds, warp);
-  // One sentence, in the one strip reserved for one. A first-run note outranks a
-  // doorway: the note is spent three times in a player's life and never comes
-  // back, while the doorway stands open for the rest of its verse.
+  // One sentence, in the one strip reserved for one, and the rarer thing wins
+  // it. A first-run note is spent three times in a player's life and never comes
+  // back; a follower arrives nineteen times; a doorway stands open for the rest
+  // of its verse. docs/design/11-followers.md#arriving-with-a-line.
   const note = state.note;
+  const arrival = state.arrival;
   const doorway = state.doorway;
   if (note !== undefined && note.length > 0) pushNote(cmds, note, pal('hud'));
+  else if (arrival !== undefined && arrival.length > 0) pushNote(cmds, arrival, pal('live'));
   else if (doorway !== undefined && doorway.length > 0) pushNote(cmds, doorway, pal('live'));
   // Reading mode asks for nothing, so it points at nothing. A board lit for a
   // key the player is not being asked for would be the overlay lying.
@@ -2139,7 +2163,7 @@ function wrapText(text: string, cols: number): string[] {
   return out;
 }
 
-/** The progress curve: one bar per finished part, promotions in gold. */
+/** The progress curve: one bar per finished stretch of verses, promotions in gold. */
 function pushTrend(cmds: DrawCmd[], trend: Trend): void {
   const n = trend.points.length;
   if (n === 0) return;
@@ -2214,7 +2238,7 @@ function pushReport(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
       });
     }
   };
-  headerRow(R.statY, 'this part', [
+  headerRow(R.statY, 'these verses', [
     `${String(Math.round(state.score.wpm))} wpm`,
     `${String(pct(state.score.accuracy))}% accurate`,
     `${String(Math.round(state.score.medianLatencyMs))} ms a key`,
@@ -2223,7 +2247,7 @@ function pushReport(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
     headerRow(R.statY2, 'so far', [
       `${String(Math.round(trend.avgWpm))} wpm`,
       `${String(pct(trend.avgAccuracy))}% accurate`,
-      countParts(trend.parts),
+      countStretches(trend.parts),
     ], pal('done'));
   }
 
@@ -2239,7 +2263,7 @@ function pushReport(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
     op: 'text',
     value: state.gilding === true
       ? 'your hands - the keys your stage teaches'
-      : 'your hands - every part so far',
+      : 'your hands - everything you have typed',
     x: R.x, y: R.headY, style: 'report', color: pal('dim'),
   });
   const head: readonly (readonly [string, number])[] = [
@@ -2395,8 +2419,8 @@ function pushReport(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
     cmds.push({
       op: 'text',
       value: trend.promotions > 0
-        ? `last ${countParts(trend.points.length)} - gold: a stage opened`
-        : `last ${countParts(trend.points.length)} - best `
+        ? `last ${countStretches(trend.points.length)} - gold: a stage opened`
+        : `last ${countStretches(trend.points.length)} - best `
           + `${String(Math.round(trend.bestWpm))} wpm`,
       x: R.rightX, y: R.trendHeadY, style: 'report', color: pal('dim'),
     });
@@ -2414,7 +2438,7 @@ function pushReport(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
   }
 
   cmds.push({
-    op: 'text', value: 'enter: next part      r: type it again      esc: menu',
+    op: 'text', value: 'enter: next verses      r: type them again      esc: menu',
     x: R.x, y: R.footY, style: 'report', color: pal('dim'),
   });
 }

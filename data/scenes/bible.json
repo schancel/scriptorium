@@ -3,7 +3,7 @@
   "scenes": [
     {
       "range": "Genesis 1",
-      "theme": "apocalypse",
+      "theme": "daybreak",
       "setpiece": "light_from_dark"
     },
     {
@@ -13,7 +13,7 @@
     },
     {
       "range": "Genesis 1:3-5",
-      "theme": "apocalypse",
+      "theme": "daybreak",
       "setpiece": "light_from_dark"
     },
     {
@@ -113,7 +113,7 @@
     },
     {
       "range": "John 1",
-      "theme": "apocalypse",
+      "theme": "daybreak",
       "setpiece": "light_from_dark"
     },
     {

@@ -324,7 +324,7 @@ const HALF = 0.5;  // tuning-exempt: the midpoint of a range, not a knob
  * finely at all it is authored finely throughout, and a boundary against the
  * chapter row underneath would be an ease toward a default the verse rows have
  * already replaced -- at the end of Genesis 1 that is the garden fading toward
- * the apocalypse the chapter row still names, which is a scene nobody authored.
+ * the daybreak the chapter row still names, which is a scene nobody authored.
  */
 function boundariesIn(map: SceneMap, book: string, chapter: number): number[] {
   const fine = map.rows.filter((row) => isVerseRow(row) && covers(row, book, chapter));

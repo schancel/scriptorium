@@ -85,7 +85,7 @@ continuing — standard in typing tutors, and non-negotiable for habit formation
 |---|---|---|---|
 | `ink_pot` | Ink pot | Restores one heart, or `ink_pot_points` when hearts are already full | Dropped for a clean verse streak, or hidden on side platforms |
 | `candle` | Candle | Checkpoint — death returns here | Placed at verse boundaries through a level |
-| `gold_leaf` | Gold leaf | Score multiplier for the rest of the level | Awarded for a part gilded completely, or hidden on side platforms |
+| `gold_leaf` | Gold leaf | Score multiplier for the rest of the level | Awarded for a stretch of verses gilded completely, or hidden on side platforms |
 | `quill_nib` | Quill nib | Permanent upgrade: extra heart, slower cloud, or wider smudge tolerance | Behind flashback rooms |
 | `wax_seal` | Wax seal | Unlocks routes and cosmetics | Awarded for a perfect chapter |
 
@@ -242,33 +242,41 @@ meeting the standard the game set must be comfortably safe, not marginally.
 
 Current tuning holds it at 5.0x at stage 0 falling to 2.9x at stage 9. There is a test.
 
-### Say "part", not "candle"
+### The game says verses and chapters, and invents nothing
 
-**Candle is our word, not the player's.** It is useful internal vocabulary -- it names
-the checkpoint, the chunk boundary and the item at once -- but it appeared in the HUD as
-`candle 1/11` and in the report card as *"on to the next candle"* to a player who had
-never been told what a candle was. The owner's exact reaction on watching someone play:
-*"I don't know what candles are?"*
+**The interface names the text, not our machinery.** A chapter is cut into chunks of
+`candle_interval` verses so that death and a closed tab cost a verse or two rather than an
+evening. That chunk needed a name on screen, and it got two bad ones in a row.
 
-Player-facing copy says **part** (`part 1/11`, `esc: next part`). The internal names --
-`candle_interval`, chunk, checkpoint -- stay as they are.
+First `candle`, which named the checkpoint, the chunk boundary and the item all at once.
+Excellent internal vocabulary, and it reached the HUD as `candle 1/11` in front of a
+player who had never been told what a candle was -- *"I don't know what candles are?"*
 
-The word can return to the interface once a candle is actually drawn on the platform,
-visibly lighting as the player passes it. Then the metaphor explains itself and needs no
-glossary. Introducing thematic vocabulary before the thing it names is on screen is how
-a game ends up with a private language its player does not speak.
+Then `part`, which was the same mistake in a plainer coat: `part 4/9` is a number about
+our chunking, and the player has no way to check it against anything. The owner, reading
+it: *"Why not verses and chapters or something?"*
 
-**That condition is now met, and the copy still says "part."** `core/draw.ts` draws a
-candle at each end of the part the player is in: the one behind him is lit — it is the
-checkpoint he is standing on — and the one ahead stands dim until he reaches it, when it
-lights. So the metaphor is on screen and could carry the word.
+**So the game says the reference.** Wherever a chunk was named, the citation stands in its
+place -- `Genesis 1:12-14` in the HUD, the same on the report card's title, in the menu, in
+the history and on the map. It is shorter than what it replaced, it is a fact the player
+can read straight off the page in front of him, and it retires the argument: there is no
+private unit left to name, so there is nothing to introduce, explain or defend.
 
-Whether it *should* is the owner's call, not the implementer's, because the evidence that
-started this was a real player and only he can retire it. Two things argue for waiting: the
-candle ahead is only in shot for the last few words of a part, so a player who has not yet
-finished one has still never seen the thing named; and "part 1/11" is legible to someone
-who has seen neither. If the word comes back, it comes back everywhere at once — the HUD,
-the report card footer, and the menu — or the interface is speaking two languages.
+Three consequences, and all three are the point:
+
+- **Nothing is invented.** Verse and chapter are the text's own units, older than this
+  game and known to anyone who has opened a Bible. A word we coined is a word we would
+  have to teach.
+- **The internal names stay.** `candle_interval`, chunk and checkpoint are what the code
+  and these documents call them, and they are good names for what they do. This section is
+  about what a player *reads*, and nothing else.
+- **Both words are on the jargon list.** `core/copy.test.ts` and `tools/smoke.mjs` keep
+  `candle` and `part` out of player-facing copy, together, so neither can drift back in
+  one surface at a time.
+
+The candle stays on the platform. `core/draw.ts` draws one at each end of the stretch the
+player is in -- the one behind him lit, the one ahead dim until he reaches it -- and it is
+a good picture of a checkpoint. It simply does not need a caption.
 
 Candles matter more than they look: they make death cost a verse rather than a chapter.
 A beginner needs 20+ minutes for a chapter, and losing that would end the session and

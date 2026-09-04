@@ -72,13 +72,27 @@ function notes(events: readonly SoundEvent[]): readonly Extract<SoundEvent, { ty
   return events.filter((e): e is Extract<SoundEvent, { type: 'note' }> => e.type === 'note');
 }
 
-test('audio starts muted, because audio_default_on says so', () => {
-  assert.equal(tuningValue(tuning, 'audio_default_on'), 0);
+test('AUDIO STARTS ON, because audio_default_on says so', () => {
+  // It started muted, and the owner played for hours without hearing one of the
+  // ten tunes: "Music should be on, I haven't yet heard anything." The autoplay
+  // worry the mute answered is the platform's, and the platform answers it with
+  // the first keystroke -- a user gesture, which is what a browser wants.
+  // docs/design/09-music.md#audio-is-on-and-starts-on-the-first-keystroke
+  assert.equal(tuningValue(tuning, 'audio_default_on'), 1);
   const state = createAudio(tuning);
-  assert.equal(state.on, false);
+  assert.equal(state.on, true);
 
-  // A whole bar goes by with the game in full swing and nothing is emitted.
+  // A bar of the game in full swing, and the music and the cues are both there.
   const step = stepSound(state, songbook, frame('abbey', 40, ['error', 'candle']), BAR_MS, tuning); // tuning-exempt: test fixture
+  assert.ok(step.events.length > 0, 'a full bar produced no sound at all');
+  assert.equal(step.state.seq.playing, true);
+});
+
+test('and turning it off still stops everything', () => {
+  // The toggle is the door out, and it is the only door there ever was in.
+  const muted = setAudioOn(createAudio(tuning), false);
+  assert.equal(muted.on, false);
+  const step = stepSound(muted, songbook, frame('abbey', 40, ['error', 'candle']), BAR_MS, tuning); // tuning-exempt: test fixture
   assert.deepEqual(step.events, []);
   assert.equal(step.state.seq.playing, false);
 });
@@ -151,7 +165,8 @@ test('cues become sfx events, and never while muted', () => {
   const kinds = step.events.map((e) => e.type);
   assert.ok(kinds.lastIndexOf('note') < kinds.indexOf('sfx'));
 
-  const muted = stepSound(createAudio(tuning), songbook, frame('abbey', 0, ['error']), FRAME_MS, tuning);
+  const muted = stepSound(setAudioOn(createAudio(tuning), false), songbook,
+    frame('abbey', 0, ['error']), FRAME_MS, tuning);
   assert.deepEqual(muted.events, []);
 });
 

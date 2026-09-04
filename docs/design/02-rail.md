@@ -111,7 +111,7 @@ is where to start; until then there is nothing here to repair.
 Recorded because a measurement that looks alarming and turns out not to matter is worth
 keeping — otherwise it gets rediscovered and "fixed" by the next person to notice it.
 
-## Lectio mode
+## Reading mode
 
 The rail makes a reading mode nearly free: same ribbon, same focal guide, no typing.
 Text flows through at a pace that ramps upward the longer the player sustains it.
@@ -120,6 +120,16 @@ This is worth shipping rather than treating as a bonus. It is the mode available
 he does not want to drill, it exercises the same corpus, and it converts the fixed-gaze
 habit from a side effect into something practised deliberately. Pace ramp parameters live
 in [tuning](07-tuning.md).
+
+**It is called Reading, and it was called Lectio.** The name came from *lectio divina*, the
+slow devotional reading the mode is shaped after, and it sat in the interface with nothing
+whatever to explain it. The owner, on meeting it: *"Lectio? Is that the character name?"* —
+which is exactly what an unglossed Latin word does in a menu. Everything a player sees now
+says **Reading**: the menu, the HUD while it is running, and the way out under the rail.
+The internal identifiers keep the old name — `core/lectio.ts`, `LectioState`,
+`lectio_start_wpm` — for the same reason `candle_interval` does: it is a good name for the
+thing, and it is ours rather than his. Same rule as
+[verses and chapters](03-pacing.md#the-game-says-verses-and-chapters-and-invents-nothing).
 
 It is entered from the menu — *Read without typing* — and left with **Escape**, which is
 named on screen where the next-key hint would otherwise be. Both halves matter: a mode for

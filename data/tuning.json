@@ -47,7 +47,7 @@
     "gild_offer_sessions": 3,
     "bonus_word_chance": 0.15,
     "master_volume": 0.35,
-    "audio_default_on": 0,
+    "audio_default_on": 1,
     "wpm_chars_per_word": 5,
     "history_max_sessions": 500,
     "report_trend_parts": 20,
@@ -168,7 +168,7 @@
     },
     "lectio_ramp_wpm": {
       "unit": "wpm/min",
-      "description": "How fast Lectio accelerates while sustained."
+      "description": "How fast [reading mode](02-rail.md#reading-mode) accelerates while sustained. The row keeps the internal name; the player is only ever shown \"Reading\"."
     },
     "lectio_max_wpm": {
       "unit": "wpm",
@@ -252,7 +252,7 @@
     },
     "audio_default_on": {
       "unit": "boolean",
-      "description": "Audio starts muted. Browsers block autoplay and a beginner does not need a surprise."
+      "description": "Audio starts on. The context is opened on the player's first keystroke, which is a user gesture and so is permitted where autoplay is not — see [music](09-music.md#audio-is-on-and-starts-on-the-first-keystroke). The toggle is how it goes off."
     },
     "wpm_chars_per_word": {
       "unit": "chars",

@@ -65,12 +65,43 @@ already braced for one.
 
 ## Tone
 
-Plain, adult, and specific. It never praises him for typing a letter, never uses an
-exclamation mark, and never says "great job". Overpraise for trivial things is what makes
-educational software feel like it is for children, and he will notice immediately.
+Plain, adult, and specific. It never praises him for typing a letter and never says "great
+job". Overpraise for trivial things is what makes educational software feel like it is for
+children, and he will notice immediately.
 
 It also never mentions speed. He is slow, he knows he is slow, and the game's whole
 argument is that slow is fine right now.
+
+### The exclamation ban is about praise, and only covers copy that judges him
+
+The rule above used to be enforced as *no exclamation mark anywhere*, on every string a
+player could read. That was a proxy. "No praise" is hard to test and "no `!`" is trivial,
+so the trivial one got written down and quietly grew into a house style it was never meant
+to be.
+
+It overreached, and the owner found the edge of it: he wanted a party member to arrive with
+some energy. **A follower joining is the world doing something. It is not a verdict on
+him**, and there is no way for it to condescend, because it is not about him at all.
+
+So the copy splits in two, and the two halves are held to different rules.
+
+| | What is in it | The rule |
+|---|---|---|
+| **Copy that evaluates the player** | the report card's note and its one piece of advice, the three coaching notes and the opening screen, the promotion panel and the stage descriptions it leads with | no exclamation mark, no praise for trivia, no verdict where a fact would do |
+| **Copy about the world** | a follower arriving, the menu, the map, the doorway, the scenery, the error lines | ordinary punctuation; still no praise for trivia, still no private vocabulary |
+
+Both halves keep the no-praise rule and the jargon rule. The only thing that narrows is the
+punctuation, on the half where punctuation was never the point.
+
+The line between them is *who the sentence is about*. "You miss the `j` key 34% of the time"
+is about him and stays deadpan for ever. "Moses walks with you" is about Moses. If a
+sentence in the world half ever starts congratulating him, it has moved to the other half
+and the no-praise rule catches it there.
+
+**And the evaluative half is tested with teeth.** `core/copy.test.ts` gathers the two
+corpora separately and runs the exclamation ban over the evaluative one alone, so injecting
+a congratulatory line into `reportNote` still fails the suite. A test that had been widened
+until nothing could trip it would be worse than no test.
 
 ### The tone is the game's, not this screen's
 
@@ -82,14 +113,19 @@ Two tests hold the whole of it to the rule rather than leaving it to a reading.
 
 - `core/copy.test.ts` gathers the copy that can be gathered -- the opening screen and the
   three notes, every sentence `reportNote` and `reportAdvice` can produce, the stage
-  descriptions from [the curriculum](06-curriculum.md#stages), and `index.html` stripped
-  to its visible prose -- and asserts no exclamation marks, no praise for trivia, no
+  descriptions from [the curriculum](06-curriculum.md#stages), the lines a
+  [follower](11-followers.md#arriving-with-a-line) arrives with, and `index.html` stripped
+  to its visible prose. It sorts them into the two corpora above, bans the exclamation mark
+  on the evaluative one, and asserts over *both* that there is no praise for trivia, no
   verdict where a fact would do, and no word that names a thing in the source tree and
-  nothing on his screen. `candle` in the HUD is the precedent for that last rule; see
-  [pacing](03-pacing.md#say-part-not-candle).
-- `tools/smoke.mjs` sweeps the same rule over what a *running* game draws and renders,
+  nothing on his screen. `candle` in the HUD is the precedent for that last rule, and
+  `part` is the second one; see
+  [pacing](03-pacing.md#the-game-says-verses-and-chapters-and-invents-nothing).
+- `tools/smoke.mjs` sweeps the same rules over what a *running* game draws and renders,
   because the panels' copy is assembled in `platform/web/overlay.ts` at the moment of
-  showing and exists nowhere a static reader can find it.
+  showing and exists nowhere a static reader can find it. It bans the exclamation mark on
+  the evaluative panels by name, and elsewhere allows only the lines the roster itself
+  produces -- so a stray `!` anywhere else is still a failure.
 
 Neither test pins a sentence. A word count or a fixed vocabulary would make every future
 edit a test edit, and the point is to keep the voice, not to freeze the wording.

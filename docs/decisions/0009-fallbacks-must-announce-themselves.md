@@ -28,10 +28,26 @@ problem: the failure mode of the safety net is that nobody learns the net was ne
 Any fallback must be visible while it is in use.
 
 The game paints `NOT THE REAL DATA` across the frame in the error colour, naming only the
-sources that actually failed, with the command that fixes it. It is pushed last in the
-display list so nothing can cover it, and there is a test asserting it is the final
-command. Healthy data draws nothing: a frame with no notice is byte-identical to one that
-never had the mechanism.
+sources that actually failed. It is pushed last in the display list so nothing can cover
+it, and there is a test asserting it is the final command. Healthy data draws nothing: a
+frame with no notice is byte-identical to one that never had the mechanism.
+
+**The banner names the failure and does not prescribe a fix.** It used to carry a second
+line reading ``run `make build` and `make fetch`, and serve over http (`make serve`)``,
+which this ADR endorsed. That was wrong about who reads it. The owner, on finding shell
+commands in the game: *"make fetch and all that build deploy stuff shouldn't be in the
+game. User need not be able to do it."* He is right — the person looking at the banner is
+almost always someone who has a URL and no checkout, and telling him to run a command he
+cannot run converts a clear report into a puzzle about his own inadequacy. Worse, it makes
+the banner read as *your installation is broken* when the far commoner cause is that ours
+is.
+
+So the second line says what is true for everybody: the game is running on built-in
+substitutes, what is on the screen is not the real thing, and the data named on the first
+line did not load. Whoever can act on that — us — learns exactly as much as before, because
+the *names of the failed sources* were always the load-bearing half. The console warning
+beside it is where a developer's detail goes, and it is unchanged. The fix belongs in
+`README.md`, where someone with a checkout is already looking.
 
 The deploy also now resolves data URLs the way `main.js` does — parsing the script src out
 of the served index and walking `../../../` from it — rather than checking paths a human
@@ -50,9 +66,9 @@ picked.
 **Log to the console.** Done as well, not instead. Nobody playing a game has a console
 open, and the owner did not.
 
-**Fail hard on missing data.** A blank screen for a first-time player who has not run
-`make fetch` is worse than a stub with a warning, and it would make a transient network
-error fatal.
+**Fail hard on missing data.** A blank screen for a first-time player whose text did not
+download is worse than a stub with a warning, and it would make a transient network error
+fatal.
 
 **Trust the deploy check.** It had already passed on a completely broken deploy, because
 it verified an assumption back to itself. A check you have not tried to defeat is a guess.

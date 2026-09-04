@@ -377,12 +377,12 @@ test('THE FALLBACK BANNER IS STILL THE LAST COMMAND, BEHIND A CROSSING AND A SET
   const drawn = crossingFrame(state, glyphsOf(ORIGIN_TEXT), glyphsOf(DEST_TEXT), {
     scene: scene({ setpiece: piece }),
     note: 'The bar means a space. Either thumb.',
-    notice: ['NOT THE REAL DATA', 'run `make build`'],
+    notice: ['NOT THE REAL DATA', 'these are built-in substitutes'],
   });
   const cmds = drawFrame(drawn.frame, { offset: drawn.offset, targetOffset: drawn.offset }, TUNING);
   const last = cmds[cmds.length - 1];
   assert.ok(last !== undefined && last.op === 'text');
-  assert.equal(last.value, 'run `make build`');
+  assert.equal(last.value, 'these are built-in substitutes');
 });
 
 // --- reading ----------------------------------------------------------------

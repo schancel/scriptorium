@@ -1,7 +1,7 @@
 /**
  * Lectio: the ramp is bounded, gated on sustaining, and deterministic.
  *
- * @doc docs/design/02-rail.md#lectio-mode
+ * @doc docs/design/02-rail.md#reading-mode
  *
  * The mode's whole risk is the ramp. Unbounded, it runs the text off the screen
  * and the reading mode becomes unusable at exactly the moment it was working.

@@ -38,7 +38,7 @@ import {
   type Overlay,
   type RouteView,
 } from './overlay.js';
-import { loadTuning } from '../../core/tuning.js';
+import { loadTuning, tuningValue } from '../../core/tuning.js';
 import { keySetFor, loadStages, stageAt } from '../../core/curriculum.js';
 import { classify } from '../../core/illumination.js';
 import { applyKey, atEnd, createTypingState, gildScore, score, tick } from '../../core/typing.js';
@@ -53,7 +53,7 @@ import {
 } from '../../core/scenes.js';
 import { setpieceState, type SetpieceState } from '../../core/setpieces.js';
 import {
-  followerLine, loadFollowers, party as gatheredParty,
+  arrivalLine, followerLine, loadFollowers, party as gatheredParty,
   type Follower, type FollowerLine, type Roster,
 } from '../../core/followers.js';
 import {
@@ -178,7 +178,7 @@ const FALLBACK_TUNING = {
     smudge_decay_per_key: 2, hearts_start: 3, hearts_max: 5, combo_tempo_max: 1.25,
     rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, warp_phase_ms: 1400,
     warp_echo_hold_ms: 900, lectio_start_wpm: 180, lectio_ramp_wpm: 20, lectio_max_wpm: 700,
-    candle_interval: 3, bonus_word_chance: 0.15, master_volume: 0.35, audio_default_on: 0,
+    candle_interval: 3, bonus_word_chance: 0.15, master_volume: 0.35, audio_default_on: 1,
     monster_burst_ms: 320, strike_reach: 36, stomp_ms: 460, ink_ms: 420,
     strike_hop_px: 12, strike_contact_px: 7, strike_bounce_ratio: 0.6,
     strike_nib_arc_px: 14, strike_rise_travel: 0.7,
@@ -218,14 +218,22 @@ function usingFallback(what: string): void {
 /**
  * The banner `core/draw.ts` paints over everything else, or nothing at all.
  *
- * Two lines: what is missing, and what to do about it. Both short enough to fit
- * the virtual width even when every loader has failed at once.
+ * Two lines: what is missing, and that what is on screen is a substitute for it.
+ * Both short enough to fit the virtual width even when every loader has failed at
+ * once.
+ *
+ * Neither line prescribes a fix. It used to name `make build` and `make fetch`,
+ * which is useless to the reader it almost always has -- someone holding a URL
+ * and no checkout -- and reads as an accusation about his installation when the
+ * commoner cause is ours. The console warning beside it carries the detail, and
+ * `README.md` carries the commands. See
+ * docs/decisions/0009-fallbacks-must-announce-themselves.md.
  */
 function noticeLines(): readonly string[] {
   if (fallbacks.length === 0) return [];
   return [
     `NOT THE REAL DATA \u2014 using built-in fallbacks for: ${fallbacks.join(', ')}`,
-    'run `make build` and `make fetch`, and serve over http (`make serve`)',
+    'these are built-in substitutes; what is on screen is not the real thing',
   ];
 }
 
@@ -252,8 +260,7 @@ const DATA_NAMES = {
  * player's own progress -- so the panel says which, in the same spirit as
  * docs/decisions/0009-fallbacks-must-announce-themselves.md.
  */
-const ROUTE_MISSING =
-  'The route did not load. Run `make build` and serve over http (`make serve`).';
+const ROUTE_MISSING = 'The route did not load, so this map is empty rather than new.';
 
 /**
  * The player's name for a translation.
@@ -334,7 +341,7 @@ async function fetchBook(translation: string, book: string): Promise<Book> {
   }
   throw new Error(
     `The ${editionName(translation)} text for ${book} did not load. `
-    + 'Run `make fetch` and serve over http (`make serve`).',
+    + 'It may not have finished downloading.',
   );
 }
 
@@ -718,7 +725,7 @@ function versePosition(level: Level): number {
   // position can never reach the *next* verse's number. At the end of the last
   // verse of a chapter the cursor sits one past the final glyph, and without
   // this the world resolved for a verse 32 that does not exist -- which fell
-  // through to the chapter's default row and repainted Eden as the apocalypse
+  // through to the chapter's default row and repainted Eden as the daybreak
   // on the last keystroke of Genesis 1.
   return verse + (Math.min(level.typing.cursor, last) - first) / span;
 }
@@ -819,14 +826,20 @@ function frameFor(
   tuning: Tuning,
   points: number,
   note: string | null,
+  arrival: string | null,
   doorway: string | null,
   report: ReportMemory,
   followers: FollowerLine,
 ): FrameState {
-  const candle = `${String(level.chunkIndex + 1)}/${String(level.chunks.length)}`;
   return {
     mode: level.reporting ? 'report' : 'level',
-    ref: `${level.bookTitle} ${String(level.chapter)}:${String(verseUnder(level))}  part ${candle}`,
+    // The verses themselves, and no invented unit beside them. This read
+    // `Genesis 1:12  part 4/9` until the owner asked "why not verses and
+    // chapters or something?" -- `part 4/9` is a number about our chunking that
+    // he has no way to check against the page, and the citation of the stretch
+    // he is actually typing is shorter and true. See
+    // docs/design/03-pacing.md#the-game-says-verses-and-chapters-and-invents-nothing.
+    ref: chunkRef(level.bookTitle, level.chapter, level.chunk),
     stage: level.stage,
     glyphs: level.glyphs,
     cursor: level.typing.cursor,
@@ -853,6 +866,7 @@ function frameFor(
     // Absent on all but a handful of frames in a player's life -- and absent is
     // not the same as empty here, so it is spread in rather than set to null.
     ...(note === null ? {} : { note }),
+    ...(arrival === null ? {} : { arrival }),
     ...(doorway === null ? {} : { doorway }),
   };
 }
@@ -1083,9 +1097,9 @@ async function boot(): Promise<void> {
     const trend = reportTrend(memory.history, tuning);
     return {
       scope: progress.gilding
-        ? 'Over every part you have typed, not just the last one — counting the keys '
+        ? 'Over everything you have typed, not just the last few verses — counting the keys '
           + 'your stage teaches, which with gilding on is not everything you typed.'
-        : 'Over every part you have typed, not just the last one.',
+        : 'Over everything you have typed, not just the last few verses.',
       fingers: card.fingers,
       worst: card.worst,
       quickest: card.quickest?.finger ?? null,
@@ -1322,6 +1336,10 @@ async function boot(): Promise<void> {
     // docs/decisions/0008-gilding-permissive-input.md.
     const offering = shouldOfferGilding(progress, tuning);
     saveProgress(progress);
+    // A finished passage hands over its figure. The report card is about to go
+    // up over the top of this, so the line waits under the rail for the next
+    // stretch of verses, which is where the player will be when he reads it.
+    greetNewcomers();
 
     if (promotion !== null) {
       detachTyping();
@@ -1474,6 +1492,83 @@ async function boot(): Promise<void> {
   /** The company as the screen draws it: capped, nearest first, plus a count. */
   function partyLine(): FollowerLine {
     return followerLine(company(), tuning);
+  }
+
+  // --- an arrival, said once ------------------------------------------------
+
+  /**
+   * A follower who has just joined, and how much typing is left before the line
+   * goes.
+   *
+   * Finishing Moriah used to put Abraham behind the scribe and say nothing at
+   * all: the figure appeared in the scenery band, which is not where the player
+   * is looking, and an arrival nobody notices is an arrival that did not happen.
+   * So it says one sentence in the strip under the rail, in the same manner as a
+   * first-run note -- shown once, dismissed by typing on, never repeated.
+   * See docs/design/11-followers.md#arriving-with-a-line.
+   */
+  interface Arrival {
+    readonly line: string;
+    /** Correct keystrokes still owed before it leaves. */
+    left: number;
+  }
+
+  let arrival: Arrival | null = null;
+
+  /**
+   * Everyone already met, so that only a *new* figure speaks.
+   *
+   * Seeded from the record at boot rather than left empty, or a player nineteen
+   * chapters in would be greeted by his whole company on the first keystroke of
+   * the evening. The party is derived from `completed` and `discovered`
+   * (docs/design/11-followers.md#derived-never-stored), so this is the only
+   * place a "have I said this yet" fact is kept -- and it is session state on
+   * purpose: it is about this sitting, not about the player.
+   */
+  const metAlready = new Set<string>(company().map((f) => f.ref));
+
+  /**
+   * Compare the party against who has already been greeted, and take a line if
+   * it has grown.
+   *
+   * Called after the two things that can grow it -- finishing a passage, and
+   * finding a room -- and after nothing else. If two figures arrive on one
+   * keystroke, which no route currently allows, the first in route order
+   * speaks and the second joins silently: two sentences under the rail at once
+   * is the tutorial wall this whole strip exists to avoid.
+   */
+  function greetNewcomers(): void {
+    for (const figure of company()) {
+      if (metAlready.has(figure.ref)) continue;
+      metAlready.add(figure.ref);
+      if (arrival === null) {
+        arrival = { line: arrivalLine(figure.who), left: noteHoldKeys() };
+      }
+    }
+  }
+
+  /** How many correct keystrokes a line under the rail stays for. */
+  function noteHoldKeys(): number {
+    return Math.max(1, Math.trunc(tuningValue(tuning, 'first_run_note_keys')));
+  }
+
+  /** The sentence in the strip, or null. */
+  function arrivalText(): string | null {
+    return arrival === null ? null : arrival.line;
+  }
+
+  /**
+   * One keystroke, as the arrival sees it: the same rule as a first-run note.
+   *
+   * Dismissed by *continuing to type*, and by nothing else. A clock would take
+   * the sentence away from the one player who stopped to read it, and a button
+   * would make a remark into a thing to deal with.
+   */
+  function stepArrival(before: TypingState): void {
+    if (arrival === null) return;
+    if (level.typing.correct <= before.correct) return;
+    arrival.left -= 1;
+    if (arrival.left <= 0) arrival = null;
   }
 
   function routeView(): RouteView {
@@ -1801,6 +1896,9 @@ async function boot(): Promise<void> {
     returnStack = stepped.stack;
     progress = withDiscovered(progress, stepped.destination);
     saveProgress(progress);
+    // Finding the room is the achievement, so the figure joins here rather than
+    // on the way back out -- and says so, in the room, on the next keystroke.
+    greetNewcomers();
     loading = true;
     // Taken away now rather than when the crossing starts: the room is fetched
     // first, and a keystroke landing on the rail in between would be typed into
@@ -1881,7 +1979,7 @@ async function boot(): Promise<void> {
    * the reader sustains it. The ribbon is classified against the *whole* board
    * rather than the current stage: reading mode asks for no keys, and half a
    * page greyed would be the curriculum answering a question this mode never
-   * puts. See docs/design/02-rail.md#lectio-mode.
+   * puts. See docs/design/02-rail.md#reading-mode.
    */
   function startReading(): void {
     const section = sectionFor(level.book, level.chapter);
@@ -1993,9 +2091,8 @@ async function boot(): Promise<void> {
       stages: stages.map((s) => ({ stage: s.stage, description: s.description })),
       gilding: progress.gilding,
       where:
-        `${level.bookTitle} ${String(level.chapter)}:${String(level.chunk.first)}-` +
-        `${String(level.chunk.last)} · ${editionName(progress.translation)} · part ` +
-        `${String(level.chunkIndex + 1)} of ${String(level.chunks.length)}`,
+        `${chunkRef(level.bookTitle, level.chapter, level.chunk)} · ` +
+        `${editionName(progress.translation)}`,
       stageLine:
         stage === null
           ? `Stage ${String(progress.stage)}`
@@ -2244,9 +2341,11 @@ async function boot(): Promise<void> {
       // before this handler returns, which is the only moment a browser will
       // allow it. The promise it hands back is only the resume.
       if (on) {
+        audioOpened = true;
         void webAudio.start().catch(() => {
           /* The browser refused the context. The label still says what we asked
              for, and the next gesture will try again. */
+          audioOpened = false;
         });
       }
       audio = setAudioOn(audio, on);
@@ -2270,7 +2369,46 @@ async function boot(): Promise<void> {
 
   // --- input ----------------------------------------------------------------
 
+  /**
+   * Whether the browser has been asked for an audio device yet.
+   *
+   * Nothing is constructed before the player's first keystroke: a page sitting
+   * untouched holds no `AudioContext` and makes no sound.
+   */
+  let audioOpened = false;
+
+  /**
+   * Open the audio device on a user gesture, which is the only moment a browser
+   * will allow it.
+   *
+   * Audio ships **on** (`audio_default_on`), because it shipped off behind a
+   * small toggle nobody found and the owner played for hours without hearing
+   * one of the ten tunes: *"Music should be on, I haven't yet heard anything."*
+   * The old default was avoiding the autoplay block, and a keystroke answers
+   * that outright -- a keystroke *is* a user gesture, and in a typing game the
+   * player's first act is always one. He cannot be startled by music he did not
+   * just ask for by typing.
+   *
+   * Synchronous, inside the input handler, exactly as the toggle is inside its
+   * click. The promise `start()` returns is only the resume; the context itself
+   * is constructed before this function returns.
+   * See docs/design/09-music.md#audio-is-on-and-starts-on-the-first-keystroke.
+   */
+  function openAudioDevice(): void {
+    if (audioOpened || !audio.on) return;
+    audioOpened = true;
+    void webAudio.start().catch(() => {
+      /* The browser refused. The next gesture will try again -- and it will,
+         because the next gesture is the next key he presses. */
+      audioOpened = false;
+    });
+  }
+
   function onInput(event: { type: string; value: string }): void {
+    // Sound is on by default, and this is the gesture that lets it be heard.
+    // Before anything else in the handler, so a keystroke swallowed by a warp
+    // or a report card still counts as the permission it is.
+    openAudioDevice();
     // Nothing reaches the rail mid-crossing. The phrase is the only thing on
     // screen and there is nothing to type on either side of it.
     if (warp !== null) return;
@@ -2319,6 +2457,7 @@ async function boot(): Promise<void> {
     const before = level.typing;
     level.typing = applyKey(level.typing, event.value, tuning);
     coachKeystroke(before);
+    stepArrival(before);
     scoreKeystroke(before, level.typing);
     resolveDefeats(before.cursor);
     bookmark();
@@ -2602,8 +2741,8 @@ async function boot(): Promise<void> {
       renderer.render(
         drawFrame(
           frameFor(
-            level, damage, cloud, tuning, levelScore(), noteText(coach), doorwayPrompt(),
-            reportMemory(), partyLine(),
+            level, damage, cloud, tuning, levelScore(), noteText(coach), arrivalText(),
+            doorwayPrompt(), reportMemory(), partyLine(),
           ),
           level.rail,
           tuning,

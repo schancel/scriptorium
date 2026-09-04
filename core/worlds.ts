@@ -233,11 +233,11 @@ export const WORLDS: ReadonlyMap<string, World> = new Map(
       // The catacomb: a wall of bone behind the crypt wall, broken floor.
     }, 'tile_bone', 'tile_stone', 'tile_rubble'),
 
-    makeWorld('apocalypse', {
+    makeWorld('daybreak', {
       outline: 0x05040a, shade: 0x1a1a22, mid: 0x4a4438, light: 0xbfae7a, highlight: 0xfffef2,
       robe: 0xe8e0c8, robeShade: 0x9c9478, accent: 0xffd75e, flame: 0xffffff,
       groundTop: 0xc9b26a, groundBody: 0x6e5f38,
-      // The end: nothing but cloud, opened, standing over white stone.
+      // Daybreak: cloud opening over white stone, the light gathering out of it.
     }, 'tile_cloud', 'tile_cloud', 'tile_stone'),
 
     makeWorld('void', {

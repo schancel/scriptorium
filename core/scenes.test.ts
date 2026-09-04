@@ -62,7 +62,7 @@ const ROW_COUNT = 29; // tuning-exempt: rows in docs/design/05-scenery-warps.md#
 
 /** The seven scenes Genesis 1 is authored as, first verse of each. */
 const GENESIS_1: readonly (readonly [number, string])[] = [
-  [1, 'void'], [3, 'apocalypse'], [6, 'sea'], [9, 'garden'], // tuning-exempt: verse numbers from the scene table
+  [1, 'void'], [3, 'daybreak'], [6, 'sea'], [9, 'garden'], // tuning-exempt: verse numbers from the scene table
   [14, 'firmament'], [20, 'sea'], [26, 'garden'], // tuning-exempt: verse numbers from the scene table
 ];
 
@@ -115,7 +115,7 @@ test('A VERSE ROW BEATS THE CHAPTER ROW COVERING THE SAME GROUND', () => {
   // "A verse range wins over a chapter range covering the same ground, so
   // existing chapter rows stay a useful default and nothing already authored
   // has to change." Genesis 1 still resolves as a chapter; its verses do not.
-  assert.equal(themeFor(scenes, 'Genesis 1'), 'apocalypse', 'the chapter default stands');
+  assert.equal(themeFor(scenes, 'Genesis 1'), 'daybreak', 'the chapter default stands');
   for (const [verse, theme] of GENESIS_1) {
     assert.equal(themeFor(scenes, `Genesis 1:${String(verse)}`), theme, `verse ${String(verse)}`);
   }
@@ -151,8 +151,8 @@ test('THE PALETTE EASES ACROSS A BOUNDARY WHILE THE TILES CUT AT IT', () => {
   const before = at(2.9); // tuning-exempt: a position just short of the boundary
   const after = at(3.05); // tuning-exempt: a position just past it
   assert.equal(before.theme, 'void', 'the tiles have not cut yet');
-  assert.equal(after.theme, 'apocalypse', 'and now they have');
-  assert.equal(before.blendTheme, 'apocalypse');
+  assert.equal(after.theme, 'daybreak', 'and now they have');
+  assert.equal(before.blendTheme, 'daybreak');
   assert.equal(after.blendTheme, 'void', 'the colour is still arriving from the old scene');
   assert.ok(before.blendMix > 0 && after.blendMix > 0);
 
@@ -161,8 +161,8 @@ test('THE PALETTE EASES ACROSS A BOUNDARY WHILE THE TILES CUT AT IT', () => {
   const justBefore = at(2.999);   // tuning-exempt: a position on the boundary
   const justAfter = at(3);        // tuning-exempt: the boundary itself
   assert.ok(Math.abs(justBefore.blendMix - justAfter.blendMix) < 0.01); // tuning-exempt: rounding
-  const left = worldFor(blendThemeId('void', 'apocalypse', justAfter.blendMix));
-  const right = worldFor(blendThemeId('apocalypse', 'void', justAfter.blendMix));
+  const left = worldFor(blendThemeId('void', 'daybreak', justAfter.blendMix));
+  const right = worldFor(blendThemeId('daybreak', 'void', justAfter.blendMix));
   assert.deepEqual([...left.palette], [...right.palette], 'the colour does not jump at the cut');
 });
 

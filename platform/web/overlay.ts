@@ -12,7 +12,7 @@
  */
 
 import { CANON } from '../../core/corpus.js';
-import { countParts } from '../../core/draw.js';
+import { countStretches } from '../../core/draw.js';
 import type { FingerRow, GateView, Trend, WorstKey } from '../../core/draw.js';
 import { OPENING } from '../../core/onboarding.js';
 import type { HistoryEntry, Promotion } from '../../core/progress.js';
@@ -75,7 +75,7 @@ export interface OverlayHandlers {
   exportFile(): void;
   importFile(file: File): void;
   /**
-   * The player asked to see the report card outside the end of a part.
+   * The player asked to see the report card away from the end of a stretch.
    *
    * docs/design/08-stats.md#the-report-card. The card is a history of his hands,
    * and a history reachable only by finishing something is one he cannot consult
@@ -97,7 +97,7 @@ export interface OverlayHandlers {
   /**
    * The player asked to read rather than type.
    *
-   * Lectio: the same ribbon on the same rail with the pace ramping and nothing
+   * Reading: the same ribbon on the same rail with the pace ramping and nothing
    * asked of him. It is "the mode available on a day he does not want to drill",
    * so it is in the menu rather than behind anything.
    */
@@ -145,7 +145,7 @@ export interface MenuView {
  * The report card as the menu shows it.
  *
  * Every field is computed by `core/draw.ts` from the record -- the same
- * functions the end-of-part card draws with -- so the two readings of the same
+ * functions the canvas card draws with -- so the two readings of the same
  * hands cannot disagree. Nothing is judged in this file; it is said out loud
  * here and decided there.
  */
@@ -423,14 +423,14 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   function renderHistory(history: readonly HistoryEntry[]): void {
     historyList.replaceChildren();
     if (history.length === 0) {
-      historyNote.textContent = 'Nothing yet. Finish your first part and it lands here.';
+      historyNote.textContent = 'Nothing yet. Finish your first few verses and it lands here.';
       return;
     }
     historyNote.textContent =
-      `A part marked ${PROMOTED_MARK} opened a stage. Expect the WPM after one to be ` +
+      `A row marked ${PROMOTED_MARK} opened a stage. Expect the WPM after one to be ` +
       'lower than the WPM before it: a new stage lights up more of the page, so there ' +
       'are more characters to type per verse. That dip is the curriculum moving, not ' +
-      'you going backwards, and it comes back within a few parts.';
+      'you going backwards, and it comes back within a few rows.';
 
     for (const entry of [...history].slice(-HISTORY_SHOWN).reverse()) {
       const row = document.createElement('li');
@@ -632,7 +632,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   /**
    * The report card, on demand.
    *
-   * The same nine rows and the same one sentence the end-of-part card carries,
+   * The same nine rows and the same one sentence the canvas card carries,
    * with the room a window has and the canvas does not. It is a diagnosis and
    * never an accusation, and the whole of that difference is in the wording: an
    * empty row says which kind of empty it is, and the latency column -- the one
@@ -753,7 +753,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
 
     handsCurve.replaceChildren();
     const { trend } = view;
-    // A part typed at nought words a minute is not a part; the floor keeps the
+    // A stretch typed at nought words a minute is not one; the floor keeps the
     // scale off a division by zero without inventing a number for the chart.
     const top = Math.max(1, trend.bestWpm);
     for (const point of trend.points) {
@@ -764,15 +764,15 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
       handsCurve.append(bar);
     }
     handsCurveNote.textContent = trend.parts === 0
-      ? 'Nothing yet. Finish a part and it lands here.'
+      ? 'Nothing yet. Finish a few verses and it lands here.'
       : trend.promotions > 0
-        ? `Your last ${countParts(trend.points.length)}, oldest first. A gold bar is a `
-          + 'part that opened a stage: more of the page is lit there, so the same '
+        ? `Your last ${countStretches(trend.points.length)}, oldest first. A gold bar is a `
+          + 'stretch that opened a stage: more of the page is lit there, so the same '
           + 'verse costs more keystrokes and the bars after it are shorter. That dip is '
           + 'the curriculum moving, not you going backwards.'
-        : `Your last ${countParts(trend.points.length)}, oldest first — `
+        : `Your last ${countStretches(trend.points.length)}, oldest first — `
           + `${String(Math.round(trend.avgWpm))} wpm on average over `
-          + `${countParts(trend.parts)} in all.`;
+          + `${countStretches(trend.parts)} in all.`;
   }
 
   function showHands(view: HandsView): void {
@@ -816,7 +816,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
       'Your WPM is about to drop, and that is the promotion working. More of the ' +
       'page is lit now, so there are more characters to type in the same verse — ' +
       'you are being asked for more, not doing worse. It comes back within a few ' +
-      'parts, and the history in the menu marks this one so the dip has a name.';
+      'verses, and the history in the menu marks this one so the dip has a name.';
     promotionCoverage.textContent =
       `Lit characters: ${pct(promotion.coverageBefore)} of the text before, ` +
       `${pct(promotion.coverageAfter)} from here.`;

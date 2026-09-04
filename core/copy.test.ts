@@ -25,14 +25,40 @@
  *    not notes to ourselves: they are the promotion panel's lead sentence and
  *    the label beside every entry in the menu's stage picker.
  *
+ * ## Two corpora, and only one of them may not exclaim
+ *
+ * This test used to ban the exclamation mark from every string a player could
+ * read. That was a proxy: the rule in the design doc is about *praise*, "no
+ * praise" is hard to test and "no `!`" is trivial, so the trivial one got
+ * written down and grew into a house style it was never meant to be.
+ *
+ * It overreached, and the owner found the edge of it on the way to asking for a
+ * party member who arrives with some energy. So the copy is gathered into two
+ * lists rather than one:
+ *
+ *  - `EVALUATIVE` -- copy that judges the player: the report card's note and its
+ *    one piece of advice, the three coaching notes and the opening screen, the
+ *    promotion panel and the stage descriptions it leads with. **No exclamation
+ *    mark here, ever.** Never congratulate a grown man for typing a letter.
+ *  - `WORLD` -- copy about the world: a follower arriving, the menu, the map, the
+ *    doorway, the errors. Ordinary punctuation. A follower joining is the world
+ *    doing something, not a verdict on him, and there is no way for it to
+ *    condescend because it is not about him at all.
+ *
+ * Both halves keep the no-praise rule and the jargon rule. The only thing that
+ * narrowed is the punctuation, on the half where punctuation was never the
+ * point. See
+ * docs/design/10-first-run.md#the-exclamation-ban-is-about-praise-and-only-covers-copy-that-judges-him.
+ *
  * ## What is deliberately *not* asserted
  *
  * Not a word count, not a reading level, not a vocabulary. A test that pinned
  * the wording would make every future edit a test edit, and the point is to
  * keep the voice, not to freeze the sentences. What is pinned is the short list
- * of things that were actually going wrong: shouting, praise for trivia, and
- * private vocabulary leaking out of the source and onto the screen -- which is
- * how `candle` reached the HUD before a player had ever seen one.
+ * of things that were actually going wrong: praise for trivia, verdicts where a
+ * fact would do, shouting at the player, and private vocabulary leaking out of
+ * the source and onto the screen -- which is how `candle` reached the HUD before
+ * a player had ever seen one, and `part` right after it.
  */
 
 import test from 'node:test';
@@ -49,6 +75,7 @@ import {
   type TrendPoint,
 } from './draw.js';
 import { loadStages } from './curriculum.js';
+import { arrivalLines, loadFollowers } from './followers.js';
 import { NOTES, OPENING } from './onboarding.js';
 import { loadTuning } from './tuning.js';
 import type { Key, KeyStat, Tuning } from './types.js';
@@ -67,6 +94,7 @@ function readRepoFile(rel: string): string {
 const tuning: Tuning = loadTuning(JSON.parse(readRepoFile('data/tuning.json')) as unknown);
 const stages = loadStages(JSON.parse(readRepoFile('data/curriculum.json')) as unknown);
 const STAGE_1 = stages[1]?.keySet ?? [];
+const roster = loadFollowers(JSON.parse(readRepoFile('data/followers.json')) as unknown);
 
 // --- gathering the copy ------------------------------------------------------
 
@@ -164,13 +192,13 @@ function cardSentences(): readonly string[] {
 }
 
 /**
- * `index.html` reduced to what a player actually reads.
+ * Markup reduced to what a player actually reads.
  *
  * Style block, comments and tags out; entities to spaces, since the two that
  * matter (`&mdash;`, `&#8617;`) are punctuation rather than words.
  */
-function panelProse(): string {
-  return readRepoFile('index.html')
+function prose(markup: string): string {
+  return markup
     .replace(/<style[\s\S]*?<\/style>/g, ' ')
     .replace(/<!--[\s\S]*?-->/g, ' ')
     .replace(/<[^>]+>/g, ' ')
@@ -179,13 +207,70 @@ function panelProse(): string {
     .trim();
 }
 
-const COPY: readonly string[] = [
+/**
+ * One panel's markup, cut out of `index.html` by its id.
+ *
+ * Div-counting rather than a parser, because the alternative is a dependency
+ * and the input is one file in this repository. It throws rather than returning
+ * nothing if the panel moves: a corpus that silently became empty is the one
+ * failure mode a test like this cannot survive.
+ */
+function panelMarkup(id: string): string {
+  const html = readRepoFile('index.html');
+  const at = html.indexOf(`id="${id}"`);
+  assert.ok(at > 0, `test: no panel "${id}" in index.html`);
+  const start = html.lastIndexOf('<div', at);
+  assert.ok(start >= 0, `test: panel "${id}" is not in a div`);
+  let depth = 0;
+  const tag = /<div\b|<\/div>/g;
+  tag.lastIndex = start;
+  for (let m = tag.exec(html); m !== null; m = tag.exec(html)) {
+    depth += m[0] === '</div>' ? -1 : 1;
+    if (depth === 0) return html.slice(start, m.index + m[0].length);
+  }
+  throw new Error(`test: panel "${id}" is never closed`);
+}
+
+/** `index.html` with one panel taken out of it. */
+function htmlWithout(ids: readonly string[]): string {
+  let html = readRepoFile('index.html');
+  for (const id of ids) html = html.replace(panelMarkup(id), ' ');
+  return html;
+}
+
+/** The panels that pass judgement on the player rather than describe the world. */
+const EVALUATIVE_PANELS = ['panel-promotion'];
+
+/**
+ * Copy that evaluates the player. The exclamation ban is absolute here.
+ *
+ * The report card's two generated sentences, the first run's coaching, and the
+ * promotion panel -- which is the game telling him he has got better, the one
+ * place in the interface most likely to start congratulating him. The stage
+ * descriptions are in it because they are that panel's lead sentence.
+ */
+const EVALUATIVE: readonly string[] = [
   ...Object.values(NOTES),
   OPENING.title, OPENING.lead, OPENING.body, OPENING.rest, OPENING.button,
   ...cardSentences(),
   ...stages.map((s) => s.description),
-  panelProse(),
+  ...EVALUATIVE_PANELS.map((id) => prose(panelMarkup(id))),
 ];
+
+/**
+ * Copy about the world. Ordinary punctuation; every other rule still applies.
+ *
+ * The menu, the map, the gilding offer, the doorway and the errors, plus the
+ * line each follower arrives with -- which is the copy that made this split
+ * necessary and the one place in the game an exclamation mark now stands.
+ */
+const WORLD: readonly string[] = [
+  ...arrivalLines(roster),
+  prose(htmlWithout(EVALUATIVE_PANELS)),
+];
+
+/** Everything, for the rules that apply to the whole voice. */
+const COPY: readonly string[] = [...EVALUATIVE, ...WORLD];
 
 // --- the rules ---------------------------------------------------------------
 
@@ -195,18 +280,51 @@ const CONTEXT = 70; // tuning-exempt: how much of a line a failure message quote
 test('the copy really was gathered, or these rules are asserting nothing', () => {
   // A test that reads an empty corpus passes every rule below and protects
   // nothing, which is the failure mode a deny-list over generated strings has.
+  // Both halves are floored separately: the split is exactly the mechanism by
+  // which one of them could quietly empty out.
   assert.ok(COPY.length > 40, `${String(COPY.length)} strings gathered`); // tuning-exempt: a floor, not a tunable
-  assert.ok(panelProse().includes('Gilding'), 'the panels were stripped to nothing');
+  assert.ok(EVALUATIVE.length > 30, `${String(EVALUATIVE.length)} judging the player`); // tuning-exempt: a floor, not a tunable
+  assert.ok(WORLD.length > 10, `${String(WORLD.length)} about the world`); // tuning-exempt: a floor, not a tunable
+  assert.ok(
+    WORLD.some((line) => line.includes('Gilding')),
+    'the panels were stripped to nothing',
+  );
+  assert.ok(
+    EVALUATIVE.some((line) => line.includes('What happens next')),
+    'the promotion panel is no longer in the corpus that judges him',
+  );
   assert.ok(
     cardSentences().some((s) => s.startsWith('Next:')),
     'the report card produced no advice',
   );
 });
 
-test('TONE: nothing anywhere is exclaimed', () => {
-  for (const line of COPY) {
+test('TONE: copy that judges the player is never exclaimed', () => {
+  // The rule is about praise, and this is the half where praise could happen:
+  // the card's verdict on his hands, the coaching, and the panel that tells him
+  // he has got better. Never congratulate a grown man for typing a letter.
+  // docs/design/10-first-run.md#the-exclamation-ban-is-about-praise-and-only-covers-copy-that-judges-him
+  for (const line of EVALUATIVE) {
     const at = line.indexOf('!');
     assert.equal(at, -1, `an exclamation mark in: ${line.slice(Math.max(0, at - 60), at + 20)}`);
+  }
+});
+
+test('and the world half really is exercising the other rule', () => {
+  // Without this, narrowing the ban above could be quietly undone by an empty
+  // world corpus and nobody would notice: the suite would still be green and
+  // would still be testing only what it tested before.
+  const exclaimed = WORLD.filter((line) => line.includes('!'));
+  assert.ok(
+    exclaimed.length > 0,
+    'nothing in the world half exclaims, so the split is asserting nothing',
+  );
+  // And what exclaims is a follower arriving, which is the whole of the licence.
+  for (const line of exclaimed) {
+    assert.ok(
+      arrivalLines(roster).some((arrival) => line.includes(arrival)),
+      `an exclamation mark outside a follower's arrival: ${line.slice(0, CONTEXT)}`,
+    );
   }
 });
 
@@ -242,7 +360,15 @@ test('THE INTERFACE SPEAKS THE PLAYER’S LANGUAGE, NOT THE SOURCE TREE’S', ()
    * checkpoint, the chunk boundary and the item at once, it was excellent
    * internal vocabulary, and it appeared in the HUD as `candle 1/11` to a
    * player who had never been told what a candle was -- "I don't know what
-   * candles are?". docs/design/03-pacing.md#say-part-not-candle.
+   * candles are?".
+   *
+   * `part` is the second one, and it sits beside `candle` on purpose. It was
+   * the *replacement* for `candle`, and it was the same mistake in a plainer
+   * coat: `part 4/9` is a number about our chunking that the player cannot
+   * check against anything on the page in front of him. The owner: "Why not
+   * verses and chapters or something?" -- so the interface names the verses,
+   * and both words stay ours.
+   * docs/design/03-pacing.md#the-game-says-verses-and-chapters-and-invents-nothing.
    *
    * A term comes off this list when the interface has *introduced* it, not
    * when it becomes convenient: gilding is on no list because the offer and
@@ -250,9 +376,10 @@ test('THE INTERFACE SPEAKS THE PLAYER’S LANGUAGE, NOT THE SOURCE TREE’S', ()
    * taking one off should cost a paragraph on screen.
    */
   const ours: readonly (readonly [RegExp, string])[] = [
-    [/\bcandles?\b/i, 'the part is a "part"; the candle is ours'],
-    [/\blectio\b/i, 'the mode is "read without typing"'],
-    [/\bchunks?\b/i, 'a chunk is a part'],
+    [/\bcandles?\b/i, 'the game names the verses; the candle is ours'],
+    [/\bparts?\b/i, 'a stretch of the page is named by its verses: "Genesis 1:12-14"'],
+    [/\blectio\b/i, 'the mode is "Reading"'],
+    [/\bchunks?\b/i, 'a chunk is named by the verses in it'],
     [/\bglyphs?\b/i, 'a glyph is a letter'],
     [/\bribbon\b/i, 'the ribbon is the page'],
     [/\brail\b/i, 'the rail is not named on screen; it is just where the words are'],

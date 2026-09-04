@@ -175,7 +175,7 @@ test('a roster naming art that does not exist throws rather than walking empty-h
     () => loadFollowers({
       followers: [
         { passage: 'Genesis 1', who: 'Eve', body: 'bare', cloth: 'light', mark: 'shoot' },
-        { passage: 'Genesis 1', who: 'Adam', body: 'bare', cloth: 'robe', mark: 'hoe' },
+        { passage: 'Genesis 1', who: 'Adam', body: 'bare', cloth: 'robe', mark: 'fruit' },
       ],
     }),
     /two figures/,

@@ -155,17 +155,51 @@ globalThis.localStorage = {
   setItem: (k, v) => store.set(k, String(v)),
   removeItem: (k) => store.delete(k),
 };
+// The audio device, and what it was asked to play.
+//
+// Audio ships **on** and the platform opens the context on the player's first
+// keystroke, so this shim is now exercised by an ordinary run rather than only
+// by a click on the toggle. It has to behave like the real thing where
+// `web_audio.ts` leans on it: `connect` returns its destination, because the
+// noise voice chains `noise.connect(filter).connect(gain)`, and an AudioParam
+// carries the full schedule API.
+const audio = { contexts: 0, started: 0, notes: 0 };
+function shimParam(value = 0) {
+  return {
+    value,
+    setValueAtTime() {}, linearRampToValueAtTime() {},
+    exponentialRampToValueAtTime() {}, cancelScheduledValues() {},
+  };
+}
+function shimNode(extra = {}) {
+  return { connect: (to) => to, disconnect() {}, start() {}, stop() {}, ...extra };
+}
 class AudioCtxShim {
-  constructor() { this.state = 'running'; this.currentTime = 0; this.destination = {}; this.sampleRate = 48000; }
-  createGain() { return { gain: { value: 1, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {}, disconnect() {} }; }
-  createOscillator() { return { frequency: { value: 0, setValueAtTime() {} }, type: 'square', connect() {}, disconnect() {}, start() {}, stop() {}, setPeriodicWave() {} }; }
+  constructor() {
+    this.state = 'suspended'; this.currentTime = 0; this.destination = {}; this.sampleRate = 48000;
+    audio.contexts += 1;
+  }
+  createGain() { return shimNode({ gain: shimParam(1) }); }
+  createOscillator() {
+    audio.notes += 1;
+    return shimNode({ frequency: shimParam(), type: 'square', setPeriodicWave() {} });
+  }
   createBuffer(c, l) { return { getChannelData: () => new Float32Array(l) }; }
-  createBufferSource() { return { buffer: null, connect() {}, disconnect() {}, start() {}, stop() {} }; }
-  createBiquadFilter() { return { type: '', frequency: { value: 0 }, Q: { value: 0 }, connect() {}, disconnect() {} }; }
+  createBufferSource() { audio.notes += 1; return shimNode({ buffer: null }); }
+  createBiquadFilter() { return shimNode({ type: '', frequency: shimParam(), Q: shimParam() }); }
   createPeriodicWave() { return {}; }
-  resume() { return Promise.resolve(); }
+  resume() { this.state = 'running'; audio.started += 1; return Promise.resolve(); }
+  close() { this.state = 'closed'; return Promise.resolve(); }
 }
 globalThis.AudioContext = AudioCtxShim; globalThis.webkitAudioContext = AudioCtxShim;
+
+// Set the moment anything clicks the sound toggle. Nothing does, and the
+// assertions about the music starting are worth nothing unless that is checked
+// rather than assumed.
+let audioToggled = false;
+const audioToggle = stubEl('audio-toggle');
+audioToggle.addEventListener('click', () => { audioToggled = true; });
+
 let rafCb = null, frames = 0;
 globalThis.requestAnimationFrame = (cb) => { rafCb = cb; frames += 1; return frames; };
 globalThis.cancelAnimationFrame = () => {};
@@ -201,14 +235,24 @@ const skyColour = () => calls.fills.find(
   (f) => f.x === SKY.x && f.w === SKY.w && f.h === SKY.h,
 )?.color ?? null;
 
-/** Record where the player is standing and what colour the world is there. */
+/**
+ * Record where the player is standing and what colour the world is there.
+ *
+ * The verse comes off the HUD, which now names the stretch he is typing by its
+ * citation -- `Genesis 1:13-15` -- rather than by an invented `part 4/9`. So the
+ * number keyed on here is the *first verse of the stretch*, which is the only
+ * verse number on the screen. That is enough: the scenery is still resolved per
+ * verse and blended between, so the sky moves within a stretch as well as
+ * across one, and the beginning of the chapter and the end of it are two
+ * different stretches. docs/design/03-pacing.md#the-game-says-verses-and-chapters-and-invents-nothing
+ */
 function sampleScene() {
   const sky = skyColour();
   if (sky === null) return;
   const ref = calls.fillText.map((c) => c.v).find((v) => /^Genesis 1:\d+/.test(v));
   if (!ref) return;
   const verse = Number(/^Genesis 1:(\d+)/.exec(ref)?.[1]);
-  if (Number.isInteger(verse)) genesisSky.push({ verse, sky });
+  if (Number.isInteger(verse)) genesisSky.push({ verse, sky, ref });
 }
 
 const frameNow = () => {
@@ -277,6 +321,21 @@ ok(offsets.size === 1 && offsets.has(0), 'the reading column never drifts',
    `grid offsets from focal x: ${[...offsets].join(', ')}`);
 
 ok(store.size > 0, 'progress is written to storage');
+
+// --- the HUD names the text, not our machinery -------------------------------
+//
+// It read `Genesis 1:1  part 1/11`, and `part 1/11` is a number about the way we
+// chunk a chapter that the player has no way to check against the page in front
+// of him. The owner: "Why not verses and chapters or something?" So the HUD
+// carries the citation of the stretch he is typing and nothing else.
+// docs/design/03-pacing.md#the-game-says-verses-and-chapters-and-invents-nothing
+const hudRef = calls.fillText.map((c) => c.v).find((v) => /^Genesis 1[:\d-]/.test(v));
+ok(/^Genesis 1:\d+(-\d+)?$/.test(String(hudRef)),
+   'THE HUD NAMES A VERSE RANGE, NOT A PART', String(hudRef));
+ok(!/\bpart\b/i.test(calls.fillText.map((c) => c.v).join(' ')),
+   'and the word "part" is nowhere on the screen',
+   calls.fillText.map((c) => c.v).find((v) => /\bpart\b/i.test(v)) ?? '');
+
 
 // --- the company walking behind him ------------------------------------------
 //
@@ -377,13 +436,28 @@ function caretX() {
   return up.length === 0 ? null : up[0].x1;
 }
 
-/** Type this part out and stop, with the report card up. */
+/**
+ * The state of the audio device the first time the player pressed a key with
+ * nothing over the rail -- his first keystroke of ordinary play.
+ *
+ * Taken here rather than asserted here, because the assertion belongs beside
+ * the other things a finished passage proves and this is the only place that
+ * can see the moment.
+ */
+let audioAtFirstKey = null;
+
+/** Type this stretch of verses out and stop, with the report card up. */
 async function typeOutPart() {
   for (let i = 0; i < 4000; i++) {
     const k = askedFor();
     if (k === null) break;
     press(k);
     tick();
+    // The opening screen is dismissed with Enter, so a press before that is a
+    // press the game never saw. This is the first one it did.
+    if (audioAtFirstKey === null && !panel('panel-first-run')) {
+      audioAtFirstKey = { ...audio, toggled: audioToggled };
+    }
   }
   tick(2);
 }
@@ -430,7 +504,29 @@ for (; parts < 24; parts++) {
 }
 const record = () => JSON.parse(store.get('scriptorium.progress') ?? '{}');
 ok((record().completed ?? []).includes('Genesis 1'),
-   'a chapter typed to the end is recorded as completed', `after ${parts + 1} parts`);
+   'a chapter typed to the end is recorded as completed',
+   `after ${parts + 1} stretches of verses`);
+
+// --- the music is on, and typing is what opened it ---------------------------
+//
+// It shipped muted behind a toggle in the corner of the screen that nobody
+// found, and the owner played for hours without hearing one of the ten
+// transcribed tunes: "Music should be on, I haven't yet heard anything." The
+// autoplay block the mute was avoiding is answered by the gesture the player
+// makes anyway -- a keystroke. Nothing in this harness has clicked the toggle,
+// and that is asserted rather than assumed.
+// docs/design/09-music.md#audio-is-on-and-starts-on-the-first-keystroke
+ok(audioAtFirstKey !== null, 'the harness got as far as a first keystroke');
+ok(audioAtFirstKey !== null && audioAtFirstKey.toggled === false,
+   'nobody pressed the sound toggle');
+ok(audioAtFirstKey !== null && audioAtFirstKey.contexts > 0 && audioAtFirstKey.started > 0,
+   'AUDIO STARTS ON THE FIRST KEYSTROKE, WITH NOBODY PRESSING ANYTHING',
+   audioAtFirstKey
+     ? `${audioAtFirstKey.contexts} context(s), ${audioAtFirstKey.started} resume(s)`
+     : '(never typed)');
+ok(!audioToggled && audio.notes > 0,
+   'and the tune is actually being sounded, not merely enabled',
+   `${audio.notes} voice(s) started`);
 
 // One passage finished, one figure walking. Not "some": exactly one, because a
 // follower is a record of somewhere he has been and two of them would be the
@@ -456,6 +552,50 @@ const overhead = calls.fillText.filter(
 ok(overhead.length === 0, 'AND NOTHING IS WRITTEN OVER HIS HEAD',
    overhead.map((c) => c.v).join(' / '));
 
+// --- and he arrives with a line ----------------------------------------------
+//
+// A figure appearing in the scenery band, unremarked, on a screen the player is
+// not looking at, is an arrival that did not happen. So one sentence goes in the
+// strip under the rail, in the same manner as a first-run note: once, gone as he
+// types on, never again. docs/design/11-followers.md#arriving-with-a-line
+//
+// The strip is the reserved band immediately under the reading band: its text
+// sits on the centre line of an 18px strip at `M.bandTop + M.bandH`.
+const STRIP_Y = RAIL_BAND_TOP + 62 + 9;
+const stripText = () => calls.fillText.filter((c) => c.y === STRIP_Y).map((c) => c.v);
+const arrivalNow = () => stripText().find((v) => / walks with you\.$|acquired!$/.test(v));
+
+const greeting = arrivalNow();
+ok(greeting !== undefined, 'A FOLLOWER ARRIVES WITH A LINE, IN THE STRIP UNDER THE RAIL',
+   greeting ?? `strip: ${stripText().join(' | ') || '(empty)'}`);
+ok(greeting === 'Adam walks with you.',
+   'and it names the figure the passage just handed over', String(greeting));
+
+// Dismissed by continuing to type, and by nothing else: `first_run_note_keys`
+// correct keystrokes, the same rule the coaching notes are held to.
+const HOLD = TUNING_ROWS.first_run_note_keys;
+for (let i = 0; i < HOLD + 2; i++) {
+  const k = askedFor();
+  if (k === null) break;
+  press(k);
+  tick();
+}
+ok(arrivalNow() === undefined, 'AND IT GOES AS HE TYPES ON',
+   stripText().join(' | ') || '(empty)');
+
+// And never comes back. Genesis 2 is not a passage the route names, so nothing
+// joins while it is typed -- if the line returned here it would be the strip
+// re-announcing a figure that has been walking behind him for a chapter.
+let cameBack = null;
+for (let i = 0; i < 200 && cameBack === null; i++) {
+  const k = askedFor();
+  if (k === null) break;
+  press(k);
+  tick();
+  cameBack = arrivalNow() ?? null;
+}
+ok(cameBack === null, 'AND IT NEVER COMES BACK', cameBack ?? '');
+
 // --- the world changes under him while he types Genesis 1 --------------------
 //
 // The owner's report was that Genesis 1 "is still a cavern or something, rather
@@ -478,12 +618,13 @@ ok(skies.size >= 5, 'GENESIS 1 IS NOT ONE ROOM: THE WORLD CHANGES AS HE TYPES IT
    `${skies.size} distinct skies over ${genesisSky.length} frames`);
 
 // The one comparison the owner would make himself: the beginning against the
-// end. Verse 2 is the formless void and verse 30 is the garden, and if those
-// two paint the same sky then nothing above this line is reaching the screen.
-const early = skyAt(2);
-const late = skyAt(30);
+// end. The first stretch of the chapter opens on the formless void and the last
+// one is the garden, and if those two paint the same sky then nothing above this
+// line is reaching the screen.
+const early = skyAt(1);
+const late = skyAt(Math.max(...versesSeen));
 ok(early !== null && late !== null && early !== late,
-   'THE SCENE AT VERSE 2 IS NOT THE SCENE AT VERSE 30',
+   'THE SCENE AT THE START OF GENESIS 1 IS NOT THE SCENE AT THE END OF IT',
    `v2 ${early} / v30 ${late}`);
 
 // docs/decisions/0004-idle-threat-not-speed-timer.md, on the scenery: the world
@@ -523,7 +664,7 @@ ok(card().every((v) => !v.includes('!')), 'nothing on the card is exclaimed',
 
 ok(card().some((v) => v.includes('still missing')), 'the gate says what is left',
    card().find((v) => v.includes('still missing')) ?? '(none)');
-ok(card().some((v) => /^last \d+ parts? - /.test(v)), 'the curve is drawn and labelled',
+ok(card().some((v) => /^last \d+ stretch(es)? - /.test(v)), 'the curve is drawn and labelled',
    card().find((v) => v.startsWith('last ')) ?? '(none)');
 ok(card().some((v) => v.startsWith('so far')), 'this part is shown against the running average');
 
@@ -753,7 +894,7 @@ if (goButton) {
 // What the stage is dimming right now, for comparison. Reading classifies the
 // ribbon against the *whole board* rather than the current stage -- the mode
 // asks for no keys, so half a page greyed would be the curriculum answering a
-// question this mode never puts (docs/design/02-rail.md#lectio-mode).
+// question this mode never puts (docs/design/02-rail.md#reading-mode).
 const DIM_COLOUR = '#4a4238';
 const dimShare = () => {
   const glyphs = calls.fillText.filter((c) => c.style.includes('17px'));
@@ -1043,8 +1184,39 @@ const spoken = [...everSaid, ...panelText];
 ok(spoken.length > 60, 'the tone sweep has copy to read', `${spoken.length} strings`);
 ok(panelText.some((t) => t.includes('passages finished')), 'including the panels it rendered');
 
-const exclaimed = spoken.find((t) => t.includes('!'));
-ok(exclaimed === undefined, 'NOTHING THE GAME SAYS IS EXCLAIMED', exclaimed ?? '');
+// The exclamation ban narrowed, and this is where the narrowing is kept honest.
+// It is about *praise*, so it holds absolutely over the copy that judges the
+// player -- the promotion panel and the report card's two sentences -- and not
+// over the copy that describes the world. A follower arriving is the world doing
+// something, not a verdict on him.
+// docs/design/10-first-run.md#the-exclamation-ban-is-about-praise-and-only-covers-copy-that-judges-him
+const EVALUATIVE_IDS = [
+  'promotion-title', 'promotion-description', 'promotion-keys', 'promotion-dip',
+  'promotion-coverage', 'promotion-ok', 'hands-note', 'hands-advice', 'hands-scope',
+  'hands-curve-note',
+];
+const judging = EVALUATIVE_IDS.map((id) => String(stubEl(id).textContent ?? '')).filter((t) => t.length > 1);
+ok(judging.length >= 5, 'the panels that judge him were rendered and can be read',
+   `${judging.length} of ${EVALUATIVE_IDS.length}`);
+const judged = judging.find((t) => t.includes('!'));
+ok(judged === undefined, 'NOTHING THAT JUDGES THE PLAYER IS EXCLAIMED', judged ?? '');
+
+// Everywhere else, an exclamation mark is allowed only where the roster puts
+// one. So a stray `!` anywhere in the game is still a failure -- what changed is
+// that there is now exactly one licensed place for it.
+const { loadFollowers, arrivalLines } = await import(
+  pathToFileURL(resolve(ROOT, 'build/core/followers.js')).href
+);
+const ARRIVALS = arrivalLines(
+  loadFollowers(JSON.parse(await readFile(resolve(ROOT, 'data/followers.json'), 'utf8'))),
+);
+const stray = spoken.find(
+  (t) => t.includes('!') && !ARRIVALS.some((line) => t.includes(line)),
+);
+ok(stray === undefined, 'AND NOTHING ELSE EXCLAIMS EXCEPT A FOLLOWER ARRIVING', stray ?? '');
+ok(ARRIVALS.some((line) => line.includes('!')),
+   'and the licence is actually being used, or the rule above tests nothing',
+   ARRIVALS.filter((l) => l.includes('!')).join(' | '));
 
 const praise = ['great', 'well done', 'nice work', 'awesome', 'perfect', 'excellent',
                 'good job', 'congratulations', 'brilliant', 'amazing', 'fantastic'];
@@ -1053,8 +1225,10 @@ ok(flattered === undefined, 'and nothing praises him for typing a letter', flatt
 
 // Words that name a thing in the source tree and nothing on his screen. `candle`
 // is the precedent: excellent internal vocabulary, and it reached the HUD as
-// `candle 1/11` before a player had ever seen one drawn.
-const ours = [/\bcandles?\b/i, /\blectio\b/i, /\bchunks?\b/i, /\bglyphs?\b/i,
+// `candle 1/11` before a player had ever seen one drawn. `part` is the second
+// one, and it was `candle`'s replacement -- the same mistake in a plainer coat.
+// docs/design/03-pacing.md#the-game-says-verses-and-chapters-and-invents-nothing
+const ours = [/\bcandles?\b/i, /\bparts?\b/i, /\blectio\b/i, /\bchunks?\b/i, /\bglyphs?\b/i,
               /\bribbon\b/i, /\bblot\b/i, /\billuminat(e|ed|ion|ing)\b/i,
               /\bgreyed\b/i, /\blive\b/i, /\bmastery gate\b/i, /\bkey ?set\b/i];
 const jargon = spoken.find((t) => ours.some((re) => re.test(t)));

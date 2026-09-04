@@ -140,7 +140,7 @@ test('the dark themes are in harmonic minor, with diminished arpeggios', () => {
   const library = createLibrary([...tunes]);
   const DIMINISHED = [0, 3, 6]; // tuning-exempt: the diminished triad, in semitones
 
-  for (const theme of ['tomb', 'storm', 'apocalypse']) {
+  for (const theme of ['tomb', 'storm', 'daybreak']) {
     const tune = tuneForTheme(library, themes, theme);
     assert.ok(tune !== null, `no tune for ${theme}`);
     const arps = tune.tracks.flatMap((t) => t.notes).filter((n) => n.arp !== null);

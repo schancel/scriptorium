@@ -1476,12 +1476,122 @@ const CHILD_IDLE_1: readonly string[] = [
   '................',
 ];
 
-/** The three silhouettes, in the order a body id names them. */
+/**
+ * A woman: hair past the shoulders, and a gown that flares below a narrow waist.
+ *
+ * The fourth silhouette, and the reason there is a fourth. The owner, on Eve:
+ * *"Eve isn't very feminine. Looks like a second wizard."* He was reading the
+ * art correctly. `bare` and `hooded` differ by **six pixels of ink and not one
+ * pixel of silhouette** -- the hood is `robeShade` at two columns on three rows
+ * beside the face, and the outline of the two figures is identical cell for cell.
+ * So every adult in the line was the same robed figure, and a woman drawn as
+ * that figure reads as a monk or a wizard, because that is what she is drawn as.
+ *
+ * At 16x16 the eye resolves two things about a body and no more, so this changes
+ * exactly those two:
+ *
+ *  - **The head outline.** Hair falls past the jaw and flanks the shoulders, so
+ *    the skull breaks outward to ten columns where the hooded head is eight.
+ *    That is the first thing seen at this size and it is seen before the mark.
+ *  - **The line from waist to hem.** Six columns at the waist opening to twelve
+ *    at the hem: a flare of two to one, where the robe is twelve throughout and
+ *    reads as a cassock. The hem is closed rather than split into two feet,
+ *    which is the other half of the same silhouette.
+ *
+ * Neither is a colour. The palette is the *theme's* -- a follower in the void is
+ * inked out of the void's palette -- so a body told apart by colour would be
+ * told apart in the garden and lost in the dark. Shape survives the theme.
+ *
+ * It is a fourth body in a shared set and not the start of nineteen bespoke
+ * sprites: any woman in the line takes it, and the woman of John 8 does.
+ * docs/design/11-followers.md#art-without-ten-bespoke-sprites
+ */
+const GOWNED_WALK_0: readonly string[] = [
+  '................',
+  '....KKKKK.......',
+  '...KrrrrrrK.....',
+  '..KrrrrrrrrK....',
+  '..KrSSSSSSrK....',
+  '..KrSKSSKSrK....',
+  '..KrSSSSSSrK....',
+  '..KrrKSSKrrK....',
+  '..KrrKRRKrrK....',
+  '....KRRRRK......',
+  '....KRRRRK......',
+  '...KRRRRRRK.....',
+  '..KRRRRRRRRK....',
+  '.KRRRRRRRRRRK...',
+  '.KKKKKKKKKKKK...',
+  '................',
+];
+
+/** Passing: the hem gathers in as the other foot comes through under it. */
+const GOWNED_WALK_1: readonly string[] = [
+  '................',
+  '....KKKKK.......',
+  '...KrrrrrrK.....',
+  '..KrrrrrrrrK....',
+  '..KrSSSSSSrK....',
+  '..KrSKSSKSrK....',
+  '..KrSSSSSSrK....',
+  '..KrrKSSKrrK....',
+  '..KrrKRRKrrK....',
+  '....KRRRRK......',
+  '....KRRRRK......',
+  '....KRRRRK......',
+  '...KRRRRRRK.....',
+  '..KRRRRRRRRK....',
+  '..KKKKKKKKKK....',
+  '................',
+];
+
+/** Standing. */
+const GOWNED_IDLE_0: readonly string[] = [
+  '................',
+  '....KKKKK.......',
+  '...KrrrrrrK.....',
+  '..KrrrrrrrrK....',
+  '..KrSSSSSSrK....',
+  '..KrSKSSKSrK....',
+  '..KrSSSSSSrK....',
+  '..KrrKSSKrrK....',
+  '..KrrKRRKrrK....',
+  '....KRRRRK......',
+  '....KRRRRK......',
+  '...KRRRRRRK.....',
+  '..KRRRRRRRRK....',
+  '.KRRRRRRRRRRK...',
+  '.KKKKKKKKKKKK...',
+  '................',
+];
+
+/** Breathing: the figure settles a pixel; the hem does not move. */
+const GOWNED_IDLE_1: readonly string[] = [
+  '................',
+  '................',
+  '....KKKKK.......',
+  '...KrrrrrrK.....',
+  '..KrrrrrrrrK....',
+  '..KrSSSSSSrK....',
+  '..KrSKSSKSrK....',
+  '..KrSSSSSSrK....',
+  '..KrrKSSKrrK....',
+  '..KrrKRRKrrK....',
+  '....KRRRRK......',
+  '...KRRRRRRK.....',
+  '..KRRRRRRRRK....',
+  '.KRRRRRRRRRRK...',
+  '.KKKKKKKKKKKK...',
+  '................',
+];
+
+/** The four silhouettes, in the order a body id names them. */
 const BODY_FRAMES: ReadonlyMap<string, readonly (readonly string[])[]> = new Map([
   ['hooded', [SCRIBE_WALK_0, SCRIBE_WALK_1, SCRIBE_IDLE_0, SCRIBE_IDLE_1].map(unarmed)],
   ['bare', [SCRIBE_WALK_0, SCRIBE_WALK_1, SCRIBE_IDLE_0, SCRIBE_IDLE_1]
     .map((rows) => bareheaded(unarmed(rows)))],
   ['child', [CHILD_WALK_0, CHILD_WALK_1, CHILD_IDLE_0, CHILD_IDLE_1]],
+  ['gowned', [GOWNED_WALK_0, GOWNED_WALK_1, GOWNED_IDLE_0, GOWNED_IDLE_1]],
 ]);
 
 /**
@@ -1497,7 +1607,7 @@ const CLOTHS: ReadonlyMap<string, readonly [string, string]> = new Map([
   ['light', [ink('light'), ink('highlight')]],
 ]);
 
-/** Every body silhouette, in every cloth. Three by three, and no more art. */
+/** Every body silhouette, in every cloth. Four by three, and no more art. */
 export const FOLLOWER_BODIES: readonly string[] = [...BODY_FRAMES.keys()];
 export const FOLLOWER_CLOTHS: readonly string[] = [...CLOTHS.keys()];
 
@@ -1567,23 +1677,33 @@ const MARK_ROWS: ReadonlyMap<string, readonly string[]> = new Map([
     '..............G.',
     '................',
   ]],
-  // Adam, Genesis 3: a hoe, "to till the ground from which he was taken".
-  ['hoe', [
+  /*
+   * Eve, Genesis 3: the fruit.
+   *
+   * She carried a `hoe`, and it was wrong twice over. It was a vertical stick
+   * within a pixel or two of Moses's staff, the psalmist's harp shaft and the
+   * shepherd's crook -- at four columns wide, everything upright reads as the
+   * same object -- and tilling the ground is *Adam's* curse (Genesis 3:23), not
+   * hers. The fruit is the identifiable image of the chapter, and it is round,
+   * which is the one shape no staff, crook, reed or beam in this set can be
+   * mistaken for. That is the whole reason it works at this size.
+   */
+  ['fruit', [
     '................',
     '................',
-    '..............M.',
-    '..............M.',
-    '..............M.',
-    '..............M.',
-    '..............M.',
-    '..............M.',
-    '..............M.',
-    '..............M.',
-    '..............M.',
-    '..............M.',
-    '..............M.',
-    '..............DD',
-    '..............DD',
+    '................',
+    '..............G.',
+    '.............GK.',
+    '.............BBB',
+    '............BBBB',
+    '............BbbB',
+    '............BBBB',
+    '.............BB.',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
     '................',
   ]],
   // Abraham, Genesis 22: the horn of the ram caught in the thicket.

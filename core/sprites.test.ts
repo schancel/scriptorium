@@ -1114,7 +1114,7 @@ test('the ink lands as a blot and then spreads, and it is ink rather than fire',
 // --- the followers ----------------------------------------------------------
 //
 // docs/design/11-followers.md#art-without-ten-bespoke-sprites. Nineteen figures
-// walk behind the scribe and there are no nineteen bespoke sprites: three body
+// walk behind the scribe and there are no nineteen bespoke sprites: four body
 // silhouettes, each recoloured into three cloths from the theme's own palette,
 // and one small mark apiece laid over the top. The mark is what the eye reads;
 // the body is shared with the scribe, so they look like people walking with him.
@@ -1144,7 +1144,7 @@ function composed(bodyId: string, markId: string, frame: number): string {
 
 /** Every figure the roster names: passage, body, cloth, mark, and the picture. */
 const FIGURES: readonly (readonly [string, string, string, string, readonly string[]])[] = [
-  // Genesis 1 -- Eve, carrying a shoot.
+  // Genesis 1 -- Adam, carrying a shoot.
   ['Genesis 1', 'bare', 'light', 'shoot', [
     '................',
     '.....KKKKK......',
@@ -1163,23 +1163,24 @@ const FIGURES: readonly (readonly [string, string, string, string, readonly stri
     '..KKK......KKKG.',
     '................',
   ]],
-  // Genesis 3 -- Adam, carrying a hoe.
-  ['Genesis 3', 'bare', 'robe', 'hoe', [
+  // Genesis 3 -- Eve, carrying the fruit. The fourth silhouette: hair past the
+  // shoulders over a narrow waist, and a gown flaring to a closed hem.
+  ['Genesis 3', 'gowned', 'robe', 'fruit', [
     '................',
-    '.....KKKKK......',
-    '....KrrrrrKK..M.',
-    '....KrrrrrrK..M.',
-    '....KSSSSSSK..M.',
-    '....KSSKSKSK..M.',
-    '....KSSSSSSK..M.',
-    '.....KSSSSK...M.',
-    '....KKRRRRKK..M.',
-    '...KRRRRRRRRK.M.',
-    '..KRRRRRRRRRRKM.',
-    '..KRRRRRRRRRRKM.',
-    '...KRRRRRRRRK.M.',
-    '...KRK....KRK.DD',
-    '..KKK......KKKDD',
+    '....KKKKK.......',
+    '...KrrrrrrK.....',
+    '..KrrrrrrrrK..G.',
+    '..KrSSSSSSrK.GK.',
+    '..KrSKSSKSrK.BBB',
+    '..KrSSSSSSrKBBBB',
+    '..KrrKSSKrrKBbbB',
+    '..KrrKRRKrrKBBBB',
+    '....KRRRRK...BB.',
+    '....KRRRRK......',
+    '...KRRRRRRK.....',
+    '..KRRRRRRRRK....',
+    '.KRRRRRRRRRRK...',
+    '.KKKKKKKKKKKK...',
     '................',
   ]],
   // Genesis 22 -- Abraham, carrying a horn.
@@ -1429,23 +1430,24 @@ const FIGURES: readonly (readonly [string, string, string, string, readonly stri
     '..KKK......KKK..',
     '................',
   ]],
-  // John 8 -- the woman he did not condemn, carrying a stone.
-  ['John 8', 'bare', 'light', 'stone', [
+  // John 8 -- the woman he did not condemn, carrying the stone that was put
+  // down. The same gowned body as Eve, which is what a shared silhouette is for.
+  ['John 8', 'gowned', 'light', 'stone', [
     '................',
-    '.....KKKKK......',
-    '....KWWWWWKK....',
-    '....KWWWWWWK....',
-    '....KSSSSSSK....',
-    '....KSSKSKSK....',
-    '....KSSSSSSK....',
-    '.....KSSSSK.....',
-    '....KKLLLLKK....',
-    '...KLLLLLLLLK...',
-    '..KLLLLLLLLLLK..',
-    '..KLLLLLLLLLLK..',
-    '...KLLLLLLLLK.DD',
-    '...KLK....KLKDDD',
-    '..KKK......KKKDD',
+    '....KKKKK.......',
+    '...KWWWWWWK.....',
+    '..KWWWWWWWWK....',
+    '..KWSSSSSSWK....',
+    '..KWSKSSKSWK....',
+    '..KWSSSSSSWK....',
+    '..KWWKSSKWWK....',
+    '..KWWKLLKWWK....',
+    '....KLLLLK......',
+    '....KLLLLK......',
+    '...KLLLLLLK.....',
+    '..KLLLLLLLLK..DD',
+    '.KLLLLLLLLLLKDDD',
+    '.KKKKKKKKKKKK.DD',
     '................',
   ]],
   // John 10 -- the doorkeeper, carrying a key.
@@ -1521,7 +1523,7 @@ test('a mark never lands on the body it is there to identify', () => {
   // The whole economy of the art depends on this: the mark is drawn as a second
   // command over the first, so a mark that overlapped would rub out the figure
   // rather than be carried by it. It holds for every body, every frame, and
-  // every mark -- 3 x 3 x 4 x 19 of them -- because it is a fact about which
+  // every mark -- 4 x 3 x 4 x 19 of them -- because it is a fact about which
   // columns each is allowed to use, not about the pairs the roster happens to
   // name today.
   for (const body of FOLLOWER_BODIES) {
@@ -1603,6 +1605,69 @@ test('taking the hood off opens the face and leaves the hair', () => {
   for (let y = 8; y < SPRITE_SIZE; y++) { // tuning-exempt: the first row below the neck
     assert.equal(bareRows[y], hoodedRows[y], `the bodies differ below the neck at row ${String(y)}`);
   }
+});
+
+test('THE GOWNED BODY IS A DIFFERENT SILHOUETTE, BY COUNT AND NOT BY EYE', () => {
+  /*
+   * `bare` and `hooded` differ by six pixels of ink and, measured the way this
+   * test measures, by NOTHING AT ALL: their silhouettes are identical cell for
+   * cell, because the hood only recolours skin beside the face. So for as long
+   * as those were the only two adult bodies, every grown follower was the same
+   * robed figure. The owner read it back exactly: "Eve isn't very feminine.
+   * Looks like a second wizard."
+   *
+   * A fourth body only fixes that if it is genuinely a fourth *shape*, and the
+   * one thing that would not have caught the old problem is looking at it. So
+   * the silhouette -- ink or nothing, which is what a player resolves at 16x16
+   * -- is compared cell by cell against every other body and the difference is
+   * counted. The floor is a quarter of the figure's own area -- 32 cells against
+   * the 48 she actually differs by, and against the zero a hood moves -- low
+   * enough to be a statement about silhouette rather than a pin on this
+   * particular drawing.
+   *
+   * docs/design/11-followers.md#a-shared-set-is-not-one-body-with-a-switch-on-it
+   */
+  const filled = (id: string, frame: number): boolean[] => {
+    const figure = art(id);
+    const cells: boolean[] = [];
+    for (let y = 0; y < SPRITE_SIZE; y++) {
+      for (let x = 0; x < SPRITE_SIZE; x++) cells.push(pixelAt(figure, frame, x, y) !== NONE);
+    }
+    return cells;
+  };
+  const painted = filled(followerBodyId('gowned', 'robe'), 0).filter(Boolean).length;
+  const floor = Math.round(painted / 4); // tuning-exempt: a quarter of the figure
+  assert.ok(floor > 0, 'the margin collapsed to nothing');
+
+  for (const body of FOLLOWER_BODIES) {
+    if (body === 'gowned') continue;
+    const hers = filled(followerBodyId('gowned', 'robe'), 0);
+    const theirs = filled(followerBodyId(body, 'robe'), 0);
+    let differ = 0;
+    for (let i = 0; i < hers.length; i++) if (hers[i] !== theirs[i]) differ += 1;
+    assert.ok(
+      differ >= floor,
+      `gowned differs from ${body} by only ${String(differ)} pixels, and the floor `
+        + `is ${String(floor)}: that is a variant, not a silhouette`,
+    );
+  }
+
+  // And the two things the eye actually reads, stated as facts about the rows.
+  const rows = toAscii(art(followerBodyId('gowned', 'robe')), 0).split('\n');
+  const width = (row: string): number => {
+    const first = row.search(/[^.]/);
+    return first < 0 ? 0 : row.length - row.split('').reverse().join('').search(/[^.]/) - first;
+  };
+  const hoodedRows = toAscii(art(followerBodyId('hooded', 'robe')), 0).split('\n');
+  const EYE_ROW = 5;   // tuning-exempt: a row of the art in core/sprites.ts
+  const WAIST_ROW = 9; // tuning-exempt: a row of the art in core/sprites.ts
+  const HEM_ROW = 14;  // tuning-exempt: a row of the art in core/sprites.ts
+  const FLARE = 2;     // tuning-exempt: the hem is twice the waist, or it is a cassock
+  assert.ok(width(rows[EYE_ROW] ?? '') > width(hoodedRows[EYE_ROW] ?? ''),
+    'the head is no wider than a hood: hair has to break the skull outline outward');
+  assert.ok(width(rows[HEM_ROW] ?? '') >= width(rows[WAIST_ROW] ?? '') * FLARE,
+    `the gown does not flare: waist ${String(width(rows[WAIST_ROW] ?? ''))}, `
+      + `hem ${String(width(rows[HEM_ROW] ?? ''))}`);
 });
 
 test('the child is shorter than the adults and stands on the same line', () => {

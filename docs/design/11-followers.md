@@ -44,6 +44,43 @@ you get, so the player who needs help least receives it, and the beginner the ga
 for gets nothing. As a pure record it costs nothing, cannot unbalance anything, and still
 does the job — the screen finally shows the journey.
 
+## Arriving with a line
+
+Finishing Moriah used to put Abraham behind the scribe and say nothing whatever. The
+figure simply appeared, mid-stride, on a screen the player was not looking at -- he was
+looking at the rail, which is where the game has spent every other decision keeping him.
+An arrival nobody notices is an arrival that did not happen.
+
+So a follower arrives with **one sentence in the strip under the rail**, in the same place
+and the same manner as a [first-run note](10-first-run.md#how-it-is-wired): shown once when
+they join, dismissed by typing on (`first_run_note_keys` correct keystrokes), and never
+shown again. It costs no layout -- the strip's space is reserved whether anything is in it
+or not -- and it costs no mechanic, because it is a sentence and nothing else.
+
+Priority in the strip, highest first: **a first-run note**, then **an arrival**, then **a
+doorway**. A note is spent three times in a player's life, an arrival nineteen times, and a
+doorway stands open for the rest of its verse; the rarer thing wins.
+
+### What they say
+
+Deadpan, and formed from the roster: *"Moses walks with you."* The person is the row's
+`who` with its first letter raised, so *"The shepherd walks with you."* and *"The woman he
+did not condemn walks with you."* fall out of the same rule and no second column is needed
+for eighteen of the nineteen.
+
+**Eve's is a joke.** *"Wife acquired!"* -- the owner asked for it twice and finds it funny,
+and it is his game. It is also the right joke: it lands *because* the other eighteen are
+flat, and one gag among nineteen deadpan lines is funnier than a gag every time. It is the
+game's one moment of a video game acknowledging itself, and one is the correct number.
+
+That is the exception that made the exclamation ban narrow. A follower arriving is the
+world doing something rather than a verdict on the player, so it is
+[copy about the world](10-first-run.md#the-exclamation-ban-is-about-praise-and-only-covers-copy-that-judges-him)
+and may use ordinary punctuation. Nothing on the report card moved an inch.
+
+The wording lives in `core/followers.ts` beside the roster, the way the first run's wording
+lives in `core/onboarding.ts` -- a string spelled in a DOM file is a string nothing tests.
+
 ## They must not compete with the rail
 
 The rail is the point and everything else serves it
@@ -65,6 +102,42 @@ a staff, a crown, a lamb, a scroll. The mark is what the eye reads; the body is 
 That also keeps them coherent with the scribe, who is the same size and build. They
 should look like people walking with him, not like a parade of mascots.
 
+### A shared set is not one body with a switch on it
+
+The first three bodies were `hooded`, `bare` and `child`, and two of those three were the
+same drawing. `bare` is `hooded` with the hood taken off by a rule, and the rule moves
+**six pixels of ink and not one pixel of silhouette** — `robeShade` becomes skin at two
+columns on three rows beside the face, and the two outlines are identical cell for cell.
+Everything else is the same: same shoulders, same robe, same hem, same feet. So every adult
+in the line was one robed figure, and the owner said what that looks like: *"Eve isn't very
+feminine. Looks like a second wizard."*
+
+He is reading the art correctly, and the fix is not a fourth colour. There is now a fourth
+**silhouette**, `gowned`, and it differs in the only two things the eye resolves at this
+size:
+
+- **The head outline.** Hair falls past the jaw and flanks the shoulders, so the skull
+  breaks outward to ten columns where the hooded head is eight. It is the first thing seen,
+  before the mark and before the garment.
+- **The line from waist to hem.** Six columns at the waist opening to twelve at the hem —
+  a flare of two to one, against a robe that is twelve columns all the way down and reads
+  as a cassock. The hem is closed rather than split into two feet, which is the other half
+  of the same shape.
+
+Neither of those is a colour, and that is deliberate: the palette belongs to the *theme*,
+so a body told apart by colour would be told apart in the garden and lost in the void.
+Shape survives the theme.
+
+**It is a fourth body in a shared set, not the first of nineteen bespoke sprites.** Any
+woman in the line takes it — Eve, and the woman of John 8 — and so would Mary Magdalene if
+she is ever added. Four bodies in three cloths is twelve sprites for nineteen figures,
+which is the same economy as before.
+
+`core/sprites.test.ts` commits the picture, as it does for every other sprite, and asserts
+that `gowned` differs from each of the other bodies by a counted number of pixels rather
+than by eye. That assertion exists because a four-pixel "variant" is exactly what was
+already here, and nothing but a count would have caught it.
+
 ## Who joins after what
 
 One figure per passage the route names, and each is a person the passage itself
@@ -73,16 +146,22 @@ when the passage is finished; a **secret** hands over its figure when the room i
 found, because finding it is the achievement and walking back out of it is not a
 way to lose one.
 
-`body` is which of the three shared silhouettes it is drawn from, `cloth` which
+`body` is which of the four shared silhouettes it is drawn from, `cloth` which
 pair of art roles the garment takes, and `mark` the one thing it carries. None of
 the three is unique to a row: that is the entire economy of it.
+
+Eve's `mark` is the **fruit**, and it was a hoe. The hoe was wrong twice: it is a vertical
+stick, and at four columns wide every upright object in this set — the staff, the crook,
+the reed, the harp's shaft — is the same picture; and tilling the ground is *Adam's* curse
+(Genesis 3:23) rather than hers. The fruit is the image the chapter is remembered by, and
+it is round, which is the one shape nothing else in the set can be confused with.
 
 <!-- generates: data/followers.json -->
 
 | passage | who | body | cloth | mark |
 |---|---|---|---|---|
 | Genesis 1 | Adam | bare | light | shoot |
-| Genesis 3 | Eve | bare | robe | hoe |
+| Genesis 3 | Eve | gowned | robe | fruit |
 | Genesis 22 | Abraham | hooded | mid | horn |
 | Exodus 3 | Moses | hooded | robe | staff |
 | Exodus 12 | the firstborn | child | light | lamb |
@@ -96,7 +175,7 @@ the three is unique to a row: that is the entire economy of it.
 | John 1 | John the Baptist | bare | robe | scroll |
 | John 3 | Nicodemus | hooded | light | lamp |
 | John 6 | the boy with the loaves | child | mid | basket |
-| John 8 | the woman he did not condemn | bare | light | stone |
+| John 8 | the woman he did not condemn | gowned | light | stone |
 | John 10 | the doorkeeper | hooded | mid | key |
 | John 19 | Joseph of Arimathaea | hooded | robe | linen |
 | Revelation 22 | the one who came to the water | bare | light | cup |

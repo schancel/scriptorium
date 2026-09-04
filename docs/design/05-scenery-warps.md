@@ -30,9 +30,25 @@ A **theme** is the reusable bundle: palette, tileset, parallax layers, and tune.
 | `city` | sandstone, banners | Jerusalem, walls and gates | `ewing` |
 | `temple` | gold, deep red, incense | sanctuary and altar | `nun-danket` |
 | `tomb` | near-black, cold blue | the grave, catacombs | `passion-chorale` |
-| `apocalypse` | white-gold, void black | new creation, the end | `helmsley` |
+| `daybreak` | white-gold, void black | light gathering out of the dark | `helmsley` |
 | `void` | black on black, one shade of deep | before the first day: no ground, no horizon | `veni-creator` |
 | `firmament` | night blue, star white | the expanse, lights set in it | `nicaea` |
+
+### `daybreak` was called `apocalypse`, and that named the wrong thing
+
+It was written for Revelation 22 and then reused for Genesis 1's first morning, so it was
+named after a genre: *apocalypse*, unveiling. The owner, on meeting it: *"why was it an
+apocalypse to begin with and do you mean armageddon or a vision/revelation?"* -- which is
+the whole problem in one sentence. Colloquially the word means the end of the world, that
+is not what the theme looks like, and a player has no way to discover which of the two
+senses was intended.
+
+**A theme is named for what it looks like.** Every other id in the table is: `abbey`,
+`tomb`, `firmament`, `void` are all places or pictures, and none of them is a genre or a
+mood. This one is white-gold on void black, with light gathering out of the dark, and it
+carries the first day of Genesis 1, John 1's light in the darkness and the new creation
+equally well -- because all three *look* like a dawn. So it is `daybreak`, which says what
+is on the screen and settles the question the old name raised.
 
 ## A chapter is not one place
 
@@ -68,7 +84,7 @@ and which theme and flourish carry it:
 | range | theme | setpiece | reads as |
 |---|---|---|---|
 | `Genesis 1:1-2` | `void` | — | the void — no ground, no horizon, only dark |
-| `Genesis 1:3-5` | `apocalypse` | `light_from_dark` | light breaking over it |
+| `Genesis 1:3-5` | `daybreak` | `light_from_dark` | light breaking over it |
 | `Genesis 1:6-8` | `sea` | `waters_divided` | the sky parting the waters |
 | `Genesis 1:9-13` | `garden` | `land_from_water` | dry land, and green on it |
 | `Genesis 1:14-19` | `firmament` | — | stars in the expanse |
@@ -123,9 +139,9 @@ scene, so most passages need only a theme and the memorable ones can be special.
 
 | range | theme | setpiece |
 |---|---|---|
-| Genesis 1 | `apocalypse` | `light_from_dark` |
+| Genesis 1 | `daybreak` | `light_from_dark` |
 | Genesis 1:1-2 | `void` | — |
-| Genesis 1:3-5 | `apocalypse` | `light_from_dark` |
+| Genesis 1:3-5 | `daybreak` | `light_from_dark` |
 | Genesis 1:6-8 | `sea` | `waters_divided` |
 | Genesis 1:9-13 | `garden` | `land_from_water` |
 | Genesis 1:14-19 | `firmament` | — |
@@ -145,7 +161,7 @@ scene, so most passages need only a theme and the memorable ones can be special.
 | Jonah 1-2 | `storm` | `swallowed` |
 | Matthew 12 | `city` | `bruised_reed` |
 | Matthew 27 | `tomb` | `darkness_at_noon` |
-| John 1 | `apocalypse` | `light_from_dark` |
+| John 1 | `daybreak` | `light_from_dark` |
 | John 3 | `city` | `lifted_up` |
 | John 6 | `desert` | `loaves_multiplied` |
 | John 8 | `temple` | `lamps_kindled` |

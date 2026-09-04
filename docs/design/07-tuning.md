@@ -40,7 +40,7 @@ first evening a real beginner plays it and something feels wrong.
 | `warp_phase_ms` | 1400 | ms | Duration of a warp crossfade. |
 | `warp_echo_hold_ms` | 900 | ms | How long the shared phrase stays lit while the world changes. |
 | `lectio_start_wpm` | 180 | wpm | Opening pace in reading mode. |
-| `lectio_ramp_wpm` | 20 | wpm/min | How fast Lectio accelerates while sustained. |
+| `lectio_ramp_wpm` | 20 | wpm/min | How fast [reading mode](02-rail.md#reading-mode) accelerates while sustained. The row keeps the internal name; the player is only ever shown "Reading". |
 | `lectio_max_wpm` | 700 | wpm | Ceiling. |
 | `candle_interval` | 3 | verses | Checkpoint spacing, so death costs a verse or two, never a chapter. |
 | `monster_burst_ms` | 320 | ms | How long a struck monster takes to burst and leave the screen. Feedback only -- nothing is at stake while it runs. |
@@ -61,7 +61,7 @@ first evening a real beginner plays it and something feels wrong.
 | `gild_offer_sessions` | 3 | sessions | Consecutive sessions at that pace before the offer is made. One fast part is a short verse, not a fluent typist. |
 | `bonus_word_chance` | 0.15 | probability | Chance a verse offers a side-platform bonus word. |
 | `master_volume` | 0.35 | gain | Default output gain. |
-| `audio_default_on` | 0 | boolean | Audio starts muted. Browsers block autoplay and a beginner does not need a surprise. |
+| `audio_default_on` | 1 | boolean | Audio starts on. The context is opened on the player's first keystroke, which is a user gesture and so is permitted where autoplay is not — see [music](09-music.md#audio-is-on-and-starts-on-the-first-keystroke). The toggle is how it goes off. |
 | `wpm_chars_per_word` | 5 | chars | The standard definition of a "word" for WPM. Do not change; it makes scores incomparable. |
 | `history_max_sessions` | 500 | sessions | How much practice history is retained locally. |
 | `report_trend_parts` | 20 | parts | How many finished parts the report card's curve shows. Enough to see the shape of a fortnight; few enough that one bar is still wide enough to read. |

@@ -1,7 +1,7 @@
 /**
  * Lectio: the reading mode. Same rail, same focal guide, no typing.
  *
- * @doc docs/design/02-rail.md#lectio-mode
+ * @doc docs/design/02-rail.md#reading-mode
  *
  * "The rail makes a reading mode nearly free: same ribbon, same focal guide, no
  * typing. Text flows through at a pace that ramps upward the longer the player

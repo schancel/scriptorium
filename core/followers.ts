@@ -176,6 +176,54 @@ export function party(roster: Roster, route: Route, state: MapState): readonly F
   return out;
 }
 
+// --- arriving ---------------------------------------------------------------
+
+/**
+ * The one line a follower arrives with, and the only place it is written.
+ *
+ * A figure used to appear behind the scribe unremarked, on a screen the player
+ * was not looking at -- he was looking at the rail, which is where every other
+ * decision in this game has spent itself keeping him. So an arrival says one
+ * sentence in the strip under the rail, once, and is gone as he types on. See
+ * docs/design/11-followers.md#arriving-with-a-line.
+ *
+ * Deadpan and formed from the roster, so eighteen of the nineteen need no
+ * authoring at all: the row's `who` with its first letter raised, and "walks
+ * with you". `the shepherd` becomes "The shepherd walks with you."
+ *
+ * The wording lives here rather than in `platform/web/`, for the reason
+ * `core/onboarding.ts` gives about the first run's three notes: a string spelled
+ * in a DOM file is a string nothing tests.
+ */
+const ARRIVAL_JOKES: Readonly<Record<string, string>> = {
+  /*
+   * The owner asked for this twice and finds it funny, and it is his game.
+   *
+   * It is also the right joke, and the reason it is the *only* one: it lands
+   * because the other eighteen lines are flat, and one gag among nineteen
+   * deadpan arrivals is funnier than a gag every time. Adding a second entry to
+   * this table would spend the first one.
+   *
+   * It is why the exclamation ban narrowed. An arrival is the world doing
+   * something rather than a verdict on the player, so it is copy about the world
+   * and may use ordinary punctuation -- and nothing on the report card moved.
+   * docs/design/10-first-run.md#the-exclamation-ban-is-about-praise-and-only-covers-copy-that-judges-him
+   */
+  Eve: 'Wife acquired!',
+};
+
+/** What the strip says when this figure joins. */
+export function arrivalLine(who: string): string {
+  const joke = ARRIVAL_JOKES[who];
+  if (joke !== undefined) return joke;
+  return `${who.slice(0, 1).toUpperCase()}${who.slice(1)} walks with you.`;
+}
+
+/** Every line an arrival can produce, for the tests that read the copy back. */
+export function arrivalLines(roster: Roster): readonly string[] {
+  return roster.rows.map((row) => arrivalLine(row.who));
+}
+
 /**
  * The line as it is actually drawn: the figures on screen, nearest first, and
  * how many are not.

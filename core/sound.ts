@@ -12,10 +12,14 @@
  * Three decisions live here rather than in the platform, because all three are
  * about the game and not about the browser:
  *
- * **Muted until asked.** `audio_default_on` is 0. Browsers block autoplay, so
- * unmuted-by-default would be a promise the page cannot keep -- but the real
- * reason is the player. A beginner concentrating on finding the `j` key does
- * not need a surprise fanfare, and a tutor that startles him has already lost.
+ * **On, and opened by the first keystroke.** `audio_default_on` is 1. It was 0,
+ * on the argument that browsers block autoplay and a beginner does not need a
+ * surprise fanfare -- and the result was ten transcribed tunes the owner never
+ * heard, because the toggle in the corner was the only door in and he did not
+ * find it. A keystroke is a user gesture, so the platform opens the context on
+ * the player's first key: nothing plays before he has typed, and nothing stands
+ * between him and the music once he has. See
+ * docs/design/09-music.md#audio-is-on-and-starts-on-the-first-keystroke.
  *
  * **The theme owns the tune.** A scene change swaps the tune and rewinds it,
  * so entering the tomb starts the Passion Chorale at its beginning rather than
@@ -126,7 +130,7 @@ const STRIKE_VELOCITY_FULL: Readonly<Record<StrikeCue, number>> = {
 // --- state ------------------------------------------------------------------
 
 export interface AudioState {
-  /** False until the player asks for sound; see `audio_default_on`. */
+  /** Whether sound is wanted at all; see `audio_default_on`. On by default. */
   readonly on: boolean;
   /** The theme whose tune is loaded, so a change can be detected. */
   readonly theme: string;
@@ -155,8 +159,8 @@ export interface SoundStep {
 }
 
 /**
- * The opening state. Muted or not is read from the tuning table rather than
- * assumed, so the "starts muted" promise is one row in one document.
+ * The opening state. On or off is read from the tuning table rather than
+ * assumed, so what the game does about sound is one row in one document.
  */
 export function createAudio(tuning: Tuning): AudioState {
   return {

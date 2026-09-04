@@ -540,7 +540,8 @@ test('A FRAME RUNNING ON FALLBACK DATA SAYS SO, AND SAYS IT OVER EVERYTHING', ()
     cmds.filter((c) => c.op === 'text').map((c) => c.value);
   assert.ok(!texts(quiet).some((v) => v.includes('FALLBACK')), 'a healthy frame cries wolf');
 
-  const lines = ['NOT THE REAL DATA - using built-in fallbacks for: the text', 'run make build'];
+  const lines = ['NOT THE REAL DATA - using built-in fallbacks for: the text',
+    'these are built-in substitutes'];
   const warned = drawFrame(frame(0, { notice: lines }), createRail(0), TUNING);
   for (const line of lines) assert.ok(texts(warned).includes(line), `the banner dropped "${line}"`);
 
@@ -798,7 +799,7 @@ test('the fallback banner is still the last command with a world mid-transition'
       notice: lines,
       scene: scene({
         theme: 'void',
-        blend: { theme: 'apocalypse', mix: 0.5 }, // tuning-exempt: the midpoint of a mix
+        blend: { theme: 'daybreak', mix: 0.5 }, // tuning-exempt: the midpoint of a mix
         setpiece: setpieceState('light_from_dark', { elapsedMs: 0, progress: 0.5 }), // tuning-exempt: mid-passage
       }),
     }),

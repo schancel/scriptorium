@@ -48,7 +48,8 @@ which is why sparse arrangements still sound full.
 
 ## The gothic sound
 
-For the darker themes — `tomb`, `storm`, `apocalypse` — the Castlevania flavour comes
+For the dark-grounded themes — `tomb`, `storm`, and `daybreak`, whose black is still
+the void the light is breaking over — the Castlevania flavour comes
 from **harmonic minor** (the raised seventh) rather than natural minor, driving eighth-note
 triangle bass, and duty-cycle switching mid-phrase so one square wave delivers two
 timbres. Fast `[0,3,6]` arpeggios over a pedal bass carry most of the menace.
@@ -118,7 +119,7 @@ All melodies below are public domain. Where a date is given it is first publicat
 | `ewing` | Ewing ("Jerusalem the Golden") | Alexander Ewing, 1853 | `city` |
 | `nun-danket` | Nun danket alle Gott | Johann Crüger, 1647 | `temple` |
 | `passion-chorale` | Passion Chorale ("O Sacred Head") | Hans Leo Hassler, 1601 | `tomb` |
-| `helmsley` | Helmsley ("Lo, He Comes with Clouds Descending") | Thomas Olivers, 1763 | `apocalypse` |
+| `helmsley` | Helmsley ("Lo, He Comes with Clouds Descending") | Thomas Olivers, 1763 | `daybreak` |
 
 ## Tempo, and the cues
 
@@ -167,5 +168,24 @@ Both are the only cues whose weight the combo moves, for the reason the `defeat`
 felling a monster on a long clean run should sound like it. Neither ever falls below its
 own resting velocity, so breaking a combo quietens nothing.
 
-Audio starts muted (`audio_default_on`). Browsers block autoplay, and a beginner
-concentrating hard does not need a surprise fanfare.
+### Audio is on, and starts on the first keystroke
+
+It shipped muted, behind a small toggle at the corner of the screen, on the argument that
+browsers block autoplay and a beginner does not need a surprise fanfare. The owner played
+it and reported: *"Music should be on, I haven't yet heard anything."*
+
+Both halves of the old argument were wrong. The toggle was the only door in, and a door
+nobody finds is a door that is not there -- ten tunes were transcribed against real
+notation and nobody had heard one of them. And the autoplay problem has an answer that
+costs nothing: **a keystroke is a user gesture.** A browser will let an `AudioContext`
+start inside one, and this is a typing game, so the player's first act is always a
+keystroke. There is no frame in which he could be startled by music he had not just asked
+for by typing.
+
+So `audio_default_on` is 1, and `platform/web/main.ts` starts the context on the first key
+the player presses -- synchronously, inside the input handler, which is the only moment the
+browser will allow it. Nothing is constructed before that: a page sitting untouched makes
+no sound and holds no audio device.
+
+The toggle stays exactly where it was. It is how the sound goes *off*, which is the
+direction it was always more likely to be wanted in, and the choice is remembered.

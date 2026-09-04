@@ -78,8 +78,9 @@
   #menu-open { right: .75rem; }
   /* The mute control sits beside the way out, because both are the same kind of
      thing: chrome the player must be able to find without being told. Audio
-     starts off (`audio_default_on`), so this is the only way it ever comes on
-     -- a hidden one would leave the music undiscoverable. */
+     starts on (`audio_default_on`) and opens on the first keystroke, so this is
+     how it goes *off* -- which is the direction it was always more likely to be
+     wanted in. It was the only way it came on, and nobody found it. */
   #audio-toggle { right: 7.5rem; }
   #menu-open:hover, #menu-open:focus-visible,
   #audio-toggle:hover, #audio-toggle:focus-visible { opacity: 1; }
@@ -265,8 +266,8 @@
     <p>
       <b>Gilding</b> turns them back on. Every character in the passage is
       required, nothing skips ahead on its own, and the letters your stage has
-      not taught yet turn gold as you type them. Fill a whole part and you earn
-      gold leaf, which multiplies your score for the rest of the chapter.
+      not taught yet turn gold as you type them. Gild every verse in a stretch and
+      you earn gold leaf, which multiplies your score for the rest of the chapter.
     </p>
     <p class="dim">
       It will not move your stage. A stage still opens on the keys it teaches,
@@ -314,7 +315,7 @@
     <h3>Threads</h3>
     <ul id="map-threads"></ul>
     <p class="dim">
-      A thread marked with &#8617; is a doorway: an optional room part-way
+      A thread marked with &#8617; is a doorway: an optional room partway
       through a passage that phases back into an older one for a few verses and
       returns you to the exact verse you left. Walking straight past one costs
       nothing and never closes anything off.
@@ -327,10 +328,10 @@
   </div>
 
   <!-- The report card, reachable on purpose rather than only at the end of a
-       part. Same nine rows, same one sentence, same judgements -- every one of
+       stretch of verses. Same nine rows, same one sentence, same judgements -- every one of
        them computed by core/draw.ts. docs/design/08-stats.md. -->
   <div class="panel" id="panel-hands" hidden>
-    <p class="panel-hint"><b>Esc</b> closes this and picks up where you left off &middot; the same card you get at the end of a part</p>
+    <p class="panel-hint"><b>Esc</b> closes this and picks up where you left off &middot; the same card you get after every few verses</p>
     <h2>Your hands</h2>
     <p class="lead" id="hands-scope"></p>
 
@@ -357,7 +358,7 @@
     <h3>This stage &mdash; what is still missing</h3>
     <ul id="hands-gate"></ul>
 
-    <h3>Part by part</h3>
+    <h3>Verse by verse</h3>
     <div id="hands-curve"></div>
     <p class="dim" id="hands-curve-note"></p>
 
@@ -466,8 +467,8 @@
     <p class="dim">
       <b>Gilding</b> is for people who already type. With it on, every character
       is required and nothing skips ahead on its own; the letters your stage has
-      not taught turn gold as you type them, and filling a whole part earns gold
-      leaf, which multiplies your score for the rest of the chapter. It does not
+      not taught turn gold as you type them, and gilding every verse in a stretch
+      earns gold leaf, which multiplies your score for the rest of the chapter. It does not
       move your stage — a stage opens on the keys it teaches, in either mode.
     </p>
 
@@ -496,8 +497,8 @@
       <button id="menu-hands" type="button">Show the report card</button>
     </div>
     <p class="dim">
-      The per-finger table you get at the end of a part, over everything you have
-      typed rather than the last few verses &mdash; plus the worst keys, how far
+      The per-finger table you get after every few verses, over everything you have
+      typed rather than the last handful &mdash; plus the worst keys, how far
       this stage is from opening, and the shape of the last few weeks. It is here
       because a history you can only see by finishing something is one you cannot
       look at when you want to.
@@ -510,8 +511,8 @@
     </div>
     <p class="dim">
       The route is a small graph of passages joined by phrases they share, not a
-      run through the Bible front to back. <b>Read without typing</b> is the same
-      page, flowing past on its own with nothing asked of you &mdash; it speeds up
+      run through the Bible front to back. <b>Reading</b> is the same page,
+      flowing past on its own with nothing asked of you &mdash; it speeds up
       gently the longer you stay with it, and <b>Esc</b> brings you back.
     </p>
 
@@ -541,7 +542,7 @@
     <ol id="menu-history"></ol>
 
     <div class="panel-actions">
-      <button id="menu-restart" type="button">Back to the start of this part</button>
+      <button id="menu-restart" type="button">Back to the start of these verses</button>
       <button id="menu-resume" class="primary" type="button">Resume</button>
     </div>
   </div>
@@ -551,14 +552,15 @@
 <div id="boot">
   <h1>Scriptorium</h1>
   <p>Learn to type by copying the Bible.</p>
-  <p>
-    This page runs the compiled output. If you are seeing this message, build it
-    once with <code>npm install &amp;&amp; npm run build</code> (or <code>make build</code>),
-    then reload.
+<p>
+    This page did not start. Either it has not been built yet, or it was opened
+    straight off the disk rather than served over http &mdash; a browser will not
+    load a page like this one from a <code>file://</code> address.
   </p>
   <p class="dim">
-    Opened from a file:// URL, the browser will not load ES modules or fetch the
-    text. Run <code>make serve</code> and open <code>http://localhost:8000</code>.
+    If you have a copy of the project, <code>README.md</code> has the two steps
+    that fix both. If you followed a link here, the site is broken rather than
+    anything you did.
   </p>
 </div>
 

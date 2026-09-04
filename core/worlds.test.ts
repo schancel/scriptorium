@@ -225,7 +225,7 @@ test('A SETTLED SCENE IS EXACTLY THE WORLD IT ALWAYS WAS', () => {
 
 test('a blended palette lies between the two it is between, channel by channel', () => {
   for (const from of ['void', 'garden', 'tomb']) {
-    for (const to of ['apocalypse', 'sea', 'firmament']) {
+    for (const to of ['daybreak', 'sea', 'firmament']) {
       if (from === to) continue;
       for (const mix of MIXES) {
         const world = worldFor(blendThemeId(from, to, mix));
