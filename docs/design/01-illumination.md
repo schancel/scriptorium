@@ -201,6 +201,25 @@ menu's stage control in the same breath. The one thing a player might reasonably
 here is a shortcut through the curriculum, and letting them discover otherwise by playing
 would be a worse way to say it.
 
+## Letting a mistake stand
+
+By default a wrong key does not advance the cursor: the player must produce the correct
+letter. That is right for a beginner — it makes the error unmissable and stops him
+drifting out of sync with the text.
+
+It is wrong for a fluent typist, and for a reason worth stating precisely: everywhere
+else a keyboard is used, a wrong letter appears and backspace removes it. That repair is
+a reflex, not a decision. Blocking gives the reflex nothing to act on, so the player's
+attempt to correct reads to the game as a second mistake.
+
+So there is a second mode, off by default, in which the wrong character stands in the
+cell where the expected one was — marked wrong, so the page shows what he actually typed
+— the cursor advances, and **backspace removes it** and steps back, as it would in any
+text field. Accuracy still counts every keypress, so nothing is hidden.
+
+It is its own setting rather than part of gilding: the two serve the same player but are
+different requests. See [ADR 0010](../decisions/0010-mistakes-may-stand-and-be-deleted.md).
+
 ## Feel
 
 Greyed runs auto-advance with **no animation delay** — the cursor snaps from one live
