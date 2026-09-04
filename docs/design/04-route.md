@@ -4,7 +4,7 @@
 
 ## A graph, not a reading plan
 
-Typing through the whole Old Testament to reach Jesus would kill the game. Nobody starting
+Typing through the whole Old Testament to reach Jesus would sink the game. Nobody starting
 at 10 WPM survives Leviticus.
 
 So the map is not a linear list of books. It is a **small graph of passages connected by

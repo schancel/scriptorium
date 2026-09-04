@@ -1,12 +1,12 @@
 /**
- * A beginner must not be killed by his own error rate.
+ * A beginner must not run out of hearts through his own error rate.
  *
  * @doc docs/design/03-pacing.md#damage-is-metered
  *
  * docs/decisions/0005-smudge-meter-over-per-typo-damage.md rejects a heart per
  * typo on arithmetic: one keystroke in ten is wrong for the player this game is
  * for, and three hearts against 10% error is four deaths a verse. The pacing doc
- * calls a meter that kills him repeatedly a quit-the-game bug, so the survival
+ * calls a meter that empties his hearts repeatedly a quit-the-game bug, so survival
  * of a simulated 90%-accuracy beginner across a whole chapter is asserted here
  * rather than reasoned about.
  */
@@ -71,7 +71,7 @@ test('a full meter costs exactly one heart and empties', () => {
 test('a typo alone never costs a heart, at any stage', () => {
   for (let stage = 0; stage < 10; stage++) {   // tuning-exempt: test fixture, not a game tunable
     const one = applyError(createDamage(TUNING), stage, TUNING);
-    assert.equal(one.heartsLost, 0, `stage ${String(stage)} killed on a single typo`);
+    assert.equal(one.heartsLost, 0, `stage ${String(stage)} lost a heart to a single typo`);
     assert.ok(smudgePerError(stage, TUNING) < MAX);
   }
 });
@@ -198,7 +198,7 @@ const SEEDS: readonly number[] = [1, 7, 42, 1234, 99991, 5, 13, 777];   // tunin
 
 test('a 90%-accuracy beginner survives a whole chapter', () => {
   // This is the player the game is for, at the stage he spends his first weeks
-  // in. docs/design/03-pacing.md calls a meter that kills him repeatedly a
+  // in. docs/design/03-pacing.md calls a meter that empties his hearts repeatedly a
   // quit-the-game bug, so it is a failing test rather than a note.
   for (const seed of SEEDS) {
     const run = typeAChapter(0, 0.077, 3, seed);   // tuning-exempt: test fixture, not a game tunable
@@ -208,11 +208,11 @@ test('a 90%-accuracy beginner survives a whole chapter', () => {
       run.heartsLost <= 2,
       `seed ${String(seed)} cost a 90%-accurate beginner ${String(run.heartsLost)} hearts in one chapter`,
     );
-    assert.equal(run.deaths, 0, `seed ${String(seed)} killed a 90%-accurate beginner`);
+    assert.equal(run.deaths, 0, `seed ${String(seed)} emptied a 90%-accurate beginner's hearts`);
   }
 });
 
-test('the same beginner is killed several times over by a heart per typo', () => {
+test('the same beginner runs out of hearts several times over with a heart per typo', () => {
   // The rejected design, priced. ADR 0005 rests on this arithmetic; if it ever
   // stops holding, the ADR needs revisiting rather than the code.
   const run = typeAChapter(0, 0.077, 0, 1);   // tuning-exempt: test fixture, not a game tunable

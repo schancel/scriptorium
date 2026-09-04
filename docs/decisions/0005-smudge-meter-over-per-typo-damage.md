@@ -15,7 +15,7 @@ costs a heart. Tolerance narrows by stage.
 ## Consequences
 
 - A beginner errs on roughly one keystroke in ten. At three hearts, per-typo damage would
-  kill him four or five times per verse — an unplayable death spiral during exactly the
+  empty his hearts four or five times per verse — an unplayable death spiral during exactly the
   period he most needs to keep going.
 - The meter recovers, so a bad patch is survivable if he steadies afterwards. That
   recovery arc is a better lesson than a punishment.

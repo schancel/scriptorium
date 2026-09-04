@@ -28,7 +28,7 @@ motivate; that switch is deliberate, not a debug leftover.
 
 ## Damage is metered
 
-A beginner errs on roughly one keystroke in ten. A heart per typo would kill them four
+A beginner errs on roughly one keystroke in ten. A heart per typo would empty their hearts four
 times per verse.
 
 Instead, errors **smudge** the page. Each mistake adds to a smudge meter; clean typing
@@ -55,12 +55,12 @@ continuing — standard in typing tutors, and non-negotiable for habit formation
 
 Error cost rises with stage so tolerance narrows as skill grows. But the *gate* also
 demands a fixed accuracy (`gate_accuracy`, 95%) to reach a stage at all. If the ramp
-climbs faster than that, the game eventually kills players for typing at exactly the
+climbs faster than that, the game eventually ends a player's run for typing at exactly the
 standard it just promoted them for.
 
 It did. Measured over a simulated chapter with errors arriving in bursts, a 95%-accuracy
 player -- one who legitimately earned the stage -- lost 6-8 hearts at stage 5 and 16-23 at
-stage 9, dying 5-7 times. The first tuning made error cost climb to 30 while decay stayed
+stage 9, running out of hearts 5-7 times. The first tuning made error cost climb to 30 while decay stayed
 flat at 2, so the break-even error rate fell to 6.7% against a gate demanding 5%: a
 margin of 1.3x, which any burst erases.
 
