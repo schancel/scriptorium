@@ -16,6 +16,12 @@ import assert from 'node:assert/strict';
 import {
   BURST_FRAMES,
   CANDLE_UNLIT_FRAME,
+  HOP_BOUNCE,
+  HOP_CONTACT,
+  HOP_FRAMES,
+  HOP_RISE,
+  INK_BURST_FRAMES,
+  NIB_FRAMES,
   INK_CHARS,
   NONE,
   PALETTE_ROLES,
@@ -31,7 +37,8 @@ import {
 
 /** Everything the game names. A missing id is a sprite that cannot be drawn. */
 const REQUIRED: readonly string[] = [
-  'scribe_idle', 'scribe_walk', 'scribe_strike', 'bat', 'skeleton', 'burst', 'blot_cloud',
+  'scribe_idle', 'scribe_walk', 'scribe_strike', 'scribe_hop',
+  'nib', 'ink_burst', 'bat', 'skeleton', 'burst', 'blot_cloud',
   'candle', 'ink_pot', 'heart_full', 'heart_empty',
   'tile_stone', 'tile_grass', 'tile_sand',
 ];
@@ -363,4 +370,212 @@ test('an unlit candle is a candle that is out, not a dimmed flame', () => {
   assert.equal(held(CANDLE_UNLIT_FRAME), held(0));
   assert.equal(held(CANDLE_UNLIT_FRAME), held(1));
   assert.ok(inked('candle', CANDLE_UNLIT_FRAME) < inked('candle', 0));
+});
+
+// --- the two verbs -----------------------------------------------------------
+
+test('the stomp is the same scribe with his legs doing three different things', () => {
+  assert.equal(art('scribe_hop').frames.length, HOP_FRAMES);
+
+  // Only the legs may move. The head, the shoulders and the quill are the idle
+  // figure pixel for pixel in all three frames, because at 16x16 a figure that
+  // redraws itself between frames reads as three figures rather than as one
+  // doing something -- the same rule the strike frames are held to.
+  const aboveTheWaist = (id: string, frame: number): string =>
+    toAscii(art(id), frame).split('\n').slice(0, 11).join('\n');   // tuning-exempt: down to the hem, where only the legs are left
+  for (const frame of [HOP_RISE, HOP_CONTACT, HOP_BOUNCE]) {
+    assert.equal(
+      aboveTheWaist('scribe_hop', frame),
+      aboveTheWaist('scribe_idle', 0),
+      `hop frame ${String(frame)} redrew the figure above the waist`,
+    );
+  }
+
+  // And the legs really do differ, or it is one pose held for three frames --
+  // which is the thing this whole verb exists to stop being.
+  const legs = (frame: number): string =>
+    toAscii(art('scribe_hop'), frame).split('\n').slice(11).join('\n');   // tuning-exempt: the hem down
+  const poses = new Set([legs(HOP_RISE), legs(HOP_CONTACT), legs(HOP_BOUNCE)]);
+  assert.equal(poses.size, HOP_FRAMES, 'the hop holds one pose for three frames');
+
+  // Rise: knees drawn up, feet tucked under the robe.
+  assert.equal(toAscii(art('scribe_hop'), HOP_RISE), [
+    '................',
+    '.....KKKKK......',
+    '....KrrrrrKK.WW.',
+    '....KrrrrrrK.LW.',
+    '....KrSSSSrK.L..',
+    '....KrSKSKrK.L..',
+    '....KrSSSSrK.L..',
+    '.....KSSSSK..L..',
+    '....KKRRRRKK.L..',
+    '...KRRRRRRRRKA..',
+    '..KRRRRRRRRRRK..',
+    '..KRRRRRRRRRRK..',
+    '...KRRRRRRRRK...',
+    '...KKRRRRRRKK...',
+    '.....KK..KK.....',
+    '................',
+  ].join('\n'));
+
+  // Contact: the figure narrows to a wedge driven straight down, with the
+  // impact thrown out sideways under it. This is the frame that has to read as
+  // landing *on* something.
+  assert.equal(toAscii(art('scribe_hop'), HOP_CONTACT), [
+    '................',
+    '.....KKKKK......',
+    '....KrrrrrKK.WW.',
+    '....KrrrrrrK.LW.',
+    '....KrSSSSrK.L..',
+    '....KrSKSKrK.L..',
+    '....KrSSSSrK.L..',
+    '.....KSSSSK..L..',
+    '....KKRRRRKK.L..',
+    '...KRRRRRRRRKA..',
+    '..KRRRRRRRRRRK..',
+    '...KRRRRRRRRK...',
+    '....KRRRRRRK....',
+    '.....KRRRRK.....',
+    '.....KKKKKK.....',
+    '...KK......KK...',
+  ].join('\n'));
+
+  // Bounce: legs flung wide as he comes off it.
+  assert.equal(toAscii(art('scribe_hop'), HOP_BOUNCE), [
+    '................',
+    '.....KKKKK......',
+    '....KrrrrrKK.WW.',
+    '....KrrrrrrK.LW.',
+    '....KrSSSSrK.L..',
+    '....KrSKSKrK.L..',
+    '....KrSSSSrK.L..',
+    '.....KSSSSK..L..',
+    '....KKRRRRKK.L..',
+    '...KRRRRRRRRKA..',
+    '..KRRRRRRRRRRK..',
+    '..KRRRRRRRRRRK..',
+    '...KRRRRRRRRK...',
+    '..KRK......KRK..',
+    '..KK........KK..',
+    '................',
+  ].join('\n'));
+
+  // The contact frame is the narrowest of the three at the feet and the only one
+  // that puts ink on the bottom row: that is what "he landed on it" looks like.
+  const bottomRow = (frame: number): string =>
+    toSilhouette(art('scribe_hop'), frame).split('\n')[SPRITE_SIZE - 1] ?? '';
+  assert.notEqual(bottomRow(HOP_CONTACT), '.'.repeat(SPRITE_SIZE));
+  assert.equal(bottomRow(HOP_RISE), '.'.repeat(SPRITE_SIZE));
+  assert.equal(bottomRow(HOP_BOUNCE), '.'.repeat(SPRITE_SIZE));
+});
+
+test('the thrown nib is small, pointed, and tumbles', () => {
+  assert.equal(art('nib').frames.length, NIB_FRAMES);
+
+  // Small: a thrown object that fills the cell reads as a second monster rather
+  // than as a trajectory. A quarter of the sprite, at most.
+  for (let frame = 0; frame < NIB_FRAMES; frame += 1) {
+    assert.ok(
+      inked('nib', frame) < (SPRITE_SIZE * SPRITE_SIZE) / 4,   // tuning-exempt: a quarter of the cell
+      'the nib is too big to read as a thrown thing',
+    );
+  }
+
+  // Pointed, and leaning the other way on the second frame: that is the tumble,
+  // and it is all the animation two hundred milliseconds of flight can hold.
+  assert.equal(toAscii(art('nib'), 0), [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '..........KK....',
+    '.........KAAK...',
+    '........KAAWK...',
+    '.......KAAWK....',
+    '......KAAWK.....',
+    '.....KKAWK......',
+    '......KKK.......',
+    '................',
+    '................',
+    '................',
+    '................',
+  ].join('\n'));
+
+  assert.equal(toAscii(art('nib'), 1), [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '....KK..........',
+    '...KAAK.........',
+    '...KWAAK........',
+    '....KWAAK.......',
+    '.....KWAAK......',
+    '......KWAKK.....',
+    '.......KKK......',
+    '................',
+    '................',
+    '................',
+    '................',
+  ].join('\n'));
+});
+
+test('the ink lands as a blot and then spreads, and it is ink rather than fire', () => {
+  assert.equal(art('ink_burst').frames.length, INK_BURST_FRAMES);
+
+  // It spreads. A splash that shrank would play the impact backwards, exactly as
+  // the monster burst would.
+  assert.ok(
+    inked('ink_burst', 0) < inked('ink_burst', 1),
+    'the ink splash gets smaller instead of spreading',
+  );
+
+  // And it is drawn in the shade the blot-cloud is drawn in, not in the burst's
+  // highlights: the scribe and the thing that threatens his page throw the same
+  // substance, which is the whole joke of the verb.
+  const ink = INK_CHARS.charAt(2);   // tuning-exempt: 'shade', the ink role
+  for (let frame = 0; frame < INK_BURST_FRAMES; frame += 1) {
+    assert.ok(toAscii(art('ink_burst'), frame).includes(ink), 'the ink burst has no ink in it');
+  }
+  assert.ok(!toAscii(art('ink_burst'), 0).includes(INK_CHARS.charAt(11)), 'the ink is on fire');   // tuning-exempt: 'flame'
+
+  assert.equal(toAscii(art('ink_burst'), 0), [
+    '................',
+    '................',
+    '................',
+    '.......KK.......',
+    '......KDDK......',
+    '.....KDDDDK.....',
+    '....KDDDDDDK....',
+    '....KDDDDDDK....',
+    '....KDDDDDDK....',
+    '.....KDDDDK.....',
+    '......KDDK......',
+    '.......KK.......',
+    '................',
+    '................',
+    '................',
+    '................',
+  ].join('\n'));
+
+  assert.equal(toAscii(art('ink_burst'), 1), [
+    '..K..........K..',
+    '....K......K....',
+    '.......KK.......',
+    '.....KKDDKK.....',
+    '...KKDDDDDDKK...',
+    '..KDDDDDDDDDDK..',
+    '.KDDDDDDDDDDDDK.',
+    '.KDDDDDDDDDDDDK.',
+    '.KDDDDDDDDDDDDK.',
+    '..KDDDDDDDDDDK..',
+    '...KKDDDDDDKK...',
+    '.....KKDDKK.....',
+    '.......KK.......',
+    '....K......K....',
+    '..K..........K..',
+    '................',
+  ].join('\n'));
 });

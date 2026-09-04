@@ -44,7 +44,9 @@ first evening a real beginner plays it and something feels wrong.
 | `lectio_max_wpm` | 700 | wpm | Ceiling. |
 | `candle_interval` | 3 | verses | Checkpoint spacing, so death costs a verse or two, never a chapter. |
 | `monster_burst_ms` | 320 | ms | How long a struck monster takes to burst and leave the screen. Feedback only -- nothing is at stake while it runs. |
-| `strike_pose_ms` | 200 | ms | How long the scribe holds the strike pose after felling a monster. |
+| `strike_reach` | 36 | px | How far beyond the scribe a monster stands, so a blow has a gap to cross. Derived placement put it exactly where he arrives, and standing in a monster is not a fight -- see [pacing](03-pacing.md#defeating-a-monster-must-read-as-an-action). |
+| `stomp_ms` | 460 | ms | The whole stomp: the hop out, the landing on the skull, the bounce back. Longer than the ~430 ms a 140 WPM typist spends on a word, which is why strikes are a list rather than a slot. |
+| `ink_ms` | 420 | ms | The whole ink throw: the flung nib's flight, and the burst it makes on the bat. |
 | `monster_drop_chance` | 0.20 | probability | Chance a felled monster leaves an ink pot. |
 | `combo_drop_bonus` | 0.20 | probability | Added to that chance at a full combo, scaling linearly from none. Losing the combo only returns the chance to its base; nothing is ever taken away. |
 | `gild_score_per_char` | 2 | points | Awarded per greyed character typed correctly, in [gilding mode](01-illumination.md#gilding-a-mode-for-people-who-already-type). |

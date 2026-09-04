@@ -30,7 +30,9 @@
     "lectio_max_wpm": 700,
     "candle_interval": 3,
     "monster_burst_ms": 320,
-    "strike_pose_ms": 200,
+    "strike_reach": 36,
+    "stomp_ms": 460,
+    "ink_ms": 420,
     "monster_drop_chance": 0.2,
     "combo_drop_bonus": 0.2,
     "gild_score_per_char": 2,
@@ -164,9 +166,17 @@
       "unit": "ms",
       "description": "How long a struck monster takes to burst and leave the screen. Feedback only -- nothing is at stake while it runs."
     },
-    "strike_pose_ms": {
+    "strike_reach": {
+      "unit": "px",
+      "description": "How far beyond the scribe a monster stands, so a blow has a gap to cross. Derived placement put it exactly where he arrives, and standing in a monster is not a fight -- see [pacing](03-pacing.md#defeating-a-monster-must-read-as-an-action)."
+    },
+    "stomp_ms": {
       "unit": "ms",
-      "description": "How long the scribe holds the strike pose after felling a monster."
+      "description": "The whole stomp: the hop out, the landing on the skull, the bounce back. Longer than the ~430 ms a 140 WPM typist spends on a word, which is why strikes are a list rather than a slot."
+    },
+    "ink_ms": {
+      "unit": "ms",
+      "description": "The whole ink throw: the flung nib's flight, and the burst it makes on the bat."
     },
     "monster_drop_chance": {
       "unit": "probability",

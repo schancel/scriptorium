@@ -33,13 +33,20 @@ import {
   stepEntities,
   stepEntity,
   stepMonsters,
-  strikeDurationMs,
-  strikePose,
+  stepStrikes,
+  beginStrike,
+  scribeStrike,
+  strikeMissiles,
+  strikeReachPx,
+  strikeSpanMs,
   strikeWord,
   toCloudState,
+  verbFor,
   type BlotCloud,
   type CloudInput,
   type Entity,
+  type Strike,
+  type StrikeVerb,
 } from './entities.js';
 import { spriteFor } from './sprites.js';
 import { loadTuning, tuningValue } from './tuning.js';
@@ -415,21 +422,180 @@ test('a standing monster has no burst pose, and the fraction is total', () => {
   assert.equal(burstFraction(stepEntity(struck, burstDurationMs(TUNING) * 4), TUNING), 1);   // tuning-exempt: test fixture, well past the end
 });
 
-test('the scribe holds the strike pose for strike_pose_ms and then puts it down', () => {
-  const scribe = createEntity('scribe', 'scribe', 10, 20);   // tuning-exempt: test fixture placement
-  const span = strikeDurationMs(TUNING);
-  const art = spriteFor('scribe_strike');
-  assert.ok(art !== null);
+// --- the two verbs -----------------------------------------------------------
 
-  assert.equal(strikePose(scribe, null, TUNING), null, 'he struck without being asked to');
-  assert.equal(strikePose(scribe, 0, TUNING)?.spriteId, 'scribe_strike');
-  assert.equal(strikePose(scribe, span - 1, TUNING)?.spriteId, 'scribe_strike');
-  assert.equal(strikePose(scribe, span, TUNING), null, 'the pose outstayed its tuning row');
+const SCRIBE = createEntity('scribe', 'scribe', 100, 60);   // tuning-exempt: test fixture placement
 
-  for (let ms = 0; ms < span; ms += 1) {
-    const pose = strikePose(scribe, ms, TUNING);
-    assert.ok(pose !== null && pose.frame >= 0 && pose.frame < art.frames.length);
-    assert.equal(pose.x, scribe.x);
-    assert.equal(pose.y, scribe.y);
+/** A skeleton and a bat, standing where `strike_reach` puts them. */
+const SKELETON = createEntity('skel-v', 'skeleton', 300, 60, 0, -1, 3);  // tuning-exempt: test fixture placement
+const BAT = createEntity('bat-v', 'bat', 340, 30, 0, -1, 4);             // tuning-exempt: test fixture placement
+
+/** Every millisecond of a verb, so nothing can hide in a frame boundary. */
+function everyMs(verb: StrikeVerb, fn: (strike: Strike, ms: number) => void): void {
+  for (let ms = 0; ms < strikeSpanMs(verb, TUNING); ms += 1) {
+    fn({ verb, x: 300, y: 60, elapsedMs: ms }, ms);   // tuning-exempt: test fixture placement
   }
+}
+
+test('each enemy has its own verb, and the verb follows the kind', () => {
+  assert.equal(verbFor('skeleton'), 'stomp');
+  assert.equal(verbFor('bat'), 'ink');
+  assert.equal(beginStrike(SKELETON).verb, 'stomp');
+  assert.equal(beginStrike(BAT).verb, 'ink');
+
+  // A blow is aimed at the monster's own position, so the picture can reach it.
+  const blow = beginStrike(BAT);
+  assert.equal(blow.x, BAT.x);
+  assert.equal(blow.y, BAT.y);
+  assert.equal(blow.elapsedMs, 0);
+});
+
+test('THERE IS NO AIM, NO WINDOW AND NO WAY TO MISS', () => {
+  // ADR 0004 rules out anything that punishes a slow player, and an attack that
+  // can miss is exactly that in disguise. Asserted three ways.
+
+  // One: the record has nowhere to write a miss. Four fields, and a fifth would
+  // be the place someone eventually puts a hit test.
+  assert.deepEqual(Object.keys(beginStrike(SKELETON)).sort(), ['elapsedMs', 'verb', 'x', 'y']);
+
+  // Two: the outcome is already settled. `strikeWord` fells the monster on the
+  // keystroke; running the animation for any length of time, in any size of
+  // frame, cannot put it back or leave it standing.
+  for (const dt of [1, 16, 100, 5000]) {   // tuning-exempt: test fixture, four frame lengths
+    let strikes = [beginStrike(SKELETON), beginStrike(BAT)];
+    const felled = strikeWord([SKELETON, BAT], SKELETON.word ?? 0);
+    assert.equal(felled.defeated.length, 1);
+    for (let t = 0; t < 2000; t += dt) strikes = stepStrikes(strikes, dt, TUNING);   // tuning-exempt: the length of the simulated trace
+    assert.equal(strikes.length, 0, 'a blow outstayed its own duration');
+    assert.equal(strikeWord(felled.entities, SKELETON.word ?? 0).defeated.length, 0, 'the monster came back');
+  }
+
+  // Three: both verbs always arrive. The stomp reaches the skull and the nib
+  // reaches the bat, at every millisecond trace, with no branch that falls short.
+  everyMs('stomp', (strike) => {
+    const pose = scribeStrike(SCRIBE, [strike], TUNING);
+    assert.ok(pose !== null && pose.travel >= 0 && pose.travel <= 1 && pose.lift >= 0);
+  });
+  const contact = new Set<number>();
+  everyMs('stomp', (strike) => {
+    const pose = scribeStrike(SCRIBE, [strike], TUNING);
+    if (pose?.spriteId === 'scribe_hop') contact.add(pose.frame);
+  });
+  assert.deepEqual([...contact].sort((a, b) => a - b), [0, 1, 2], 'the hop skipped a phase');
+
+  const landed = new Set<string>();
+  everyMs('ink', (strike) => {
+    const [missile] = strikeMissiles([strike], TUNING);
+    assert.ok(missile !== undefined && missile.travel >= 0 && missile.travel <= 1);
+    landed.add(missile.spriteId);
+    if (missile.spriteId === 'ink_burst') assert.equal(missile.travel, 1, 'the ink burst short of the bat');
+  });
+  assert.deepEqual([...landed].sort(), ['ink_burst', 'nib'], 'the nib never landed');
+});
+
+test('the scribe stomps a skeleton and stands to throw at a bat', () => {
+  const hop = spriteFor('scribe_hop');
+  const throwArt = spriteFor('scribe_strike');
+  assert.ok(hop !== null && throwArt !== null);
+
+  const stomp = scribeStrike(SCRIBE, [beginStrike(SKELETON)], TUNING);
+  assert.ok(stomp !== null);
+  assert.equal(stomp.spriteId, 'scribe_hop');
+  assert.equal(stomp.toX, SKELETON.x, 'the hop is not aimed at the skeleton');
+  // The stomp is the scribe: he is the thing that travels, and nothing is thrown.
+  assert.deepEqual(strikeMissiles([beginStrike(SKELETON)], TUNING), []);
+
+  const ink = scribeStrike(SCRIBE, [beginStrike(BAT)], TUNING);
+  assert.ok(ink !== null);
+  assert.equal(ink.spriteId, 'scribe_strike');
+  assert.equal(ink.travel, 0, 'the scribe went with his own nib');
+  assert.equal(ink.lift, 0);
+  // The nib is what travels, and it is aimed at the bat rather than at the floor.
+  const [nib] = strikeMissiles([beginStrike(BAT)], TUNING);
+  assert.ok(nib !== undefined);
+  assert.equal(nib.spriteId, 'nib');
+  assert.equal(nib.toX, BAT.x);
+  assert.equal(nib.toY, BAT.y);
+
+  // He stands still when he is not striking at all.
+  assert.equal(scribeStrike(SCRIBE, [], TUNING), null, 'he struck without being asked to');
+  assert.deepEqual(strikeMissiles([], TUNING), []);
+});
+
+test('the stomp arcs out to the skull and comes back, without leaving the ground line', () => {
+  const seen: { travel: number; lift: number }[] = [];
+  everyMs('stomp', (strike) => {
+    const pose = scribeStrike(SCRIBE, [strike], TUNING);
+    assert.ok(pose !== null);
+    seen.push({ travel: pose.travel, lift: pose.lift });
+  });
+  const first = seen[0];
+  const last = seen[seen.length - 1];
+  assert.ok(first !== undefined && last !== undefined);
+  assert.equal(first.travel, 0, 'he started the hop already on top of it');
+  assert.equal(first.lift, 0, 'he started the hop already in the air');
+  assert.ok(Math.max(...seen.map((p) => p.travel)) === 1, 'he never reached the skull');
+  assert.ok(last.travel < first.travel + 1, 'he never came home');
+
+  // The lift is never negative, which is what keeps the whole verb out of the
+  // rail's band however far it travels: `core/draw.ts` only ever subtracts it.
+  assert.ok(seen.every((p) => p.lift >= 0));
+});
+
+test('STRIKES ARE A LIST, SO A SECOND BLOW DOES NOT CUT THE FIRST ONE SHORT', () => {
+  // The failure only appears at speed, which is exactly where it would be seen.
+  // A typist at 140 WPM finishes a word every ~430 ms; a stomp runs longer than
+  // that, so the second blow lands on top of the first.
+  const wordMs = 430;   // tuning-exempt: one word at 140 WPM, the pace the design doc names
+  assert.ok(
+    strikeSpanMs('stomp', TUNING) > wordMs,
+    'a stomp now finishes inside one word at 140 WPM; the overlap this list exists for is untested',
+  );
+
+  let strikes: Strike[] = [beginStrike(SKELETON)];
+  for (let t = 0; t < wordMs; t += FRAME_MS) strikes = stepStrikes(strikes, FRAME_MS, TUNING);
+  assert.equal(strikes.length, 1, 'the first blow ended before the next word did');
+
+  // The next word lands. Both are live, both draw, and the scribe takes the new
+  // one -- a scribe still finishing the older animation would be replaying a
+  // blow the player has already moved on from.
+  strikes = [...strikes, beginStrike(BAT)];
+  assert.equal(strikes.length, 2);
+  assert.equal(scribeStrike(SCRIBE, strikes, TUNING)?.spriteId, 'scribe_strike');
+  assert.equal(strikeMissiles(strikes, TUNING).length, 1, 'the newer ink threw nothing');
+
+  // And the other way round: an ink still flying while a stomp starts over it.
+  // The nib keeps travelling; the scribe hops.
+  let mixed: Strike[] = [beginStrike(BAT)];
+  const partway = 64; // tuning-exempt: test fixture, four frames into the flight
+  for (let t = 0; t < partway; t += FRAME_MS) mixed = stepStrikes(mixed, FRAME_MS, TUNING);
+  const flying = strikeMissiles(mixed, TUNING)[0]?.travel ?? 0;
+  mixed = [...mixed, beginStrike(SKELETON)];
+  assert.equal(scribeStrike(SCRIBE, mixed, TUNING)?.spriteId, 'scribe_hop');
+  const stillFlying = strikeMissiles(mixed, TUNING);
+  assert.equal(stillFlying.length, 1, 'the older nib fell out of the air when a stomp began');
+  assert.equal(stillFlying[0]?.travel, flying, 'the older nib was restarted by the newer blow');
+
+  // Three at once, and each leaves on its own duration rather than the newest.
+  let three: Strike[] = [beginStrike(BAT), beginStrike(SKELETON), beginStrike(BAT)];
+  assert.equal(strikeMissiles(three, TUNING).length, 2);
+  const shortest = Math.min(strikeSpanMs('ink', TUNING), strikeSpanMs('stomp', TUNING));
+  for (let t = 0; t < shortest; t += FRAME_MS) three = stepStrikes(three, FRAME_MS, TUNING);
+  assert.ok(three.length < 3, 'nothing expired'); // tuning-exempt: test fixture, the three blows begun above
+  assert.ok(three.every((strike) => strike.elapsedMs < strikeSpanMs(strike.verb, TUNING)));
+});
+
+test('a blow only ever starts on a keystroke, and never on a clock', () => {
+  // Ten seconds of silence over a level with monsters standing in it: no blow
+  // is begun, and a list that was empty stays empty. The one thing time may do
+  // here is finish an animation a keystroke already started.
+  let strikes: Strike[] = [];
+  const tenSeconds = 10000;   // tuning-exempt: the length of the simulated trace
+  for (let t = 0; t < tenSeconds; t += FRAME_MS) strikes = stepStrikes(strikes, FRAME_MS, TUNING);
+  assert.deepEqual(strikes, [], 'a blow appeared out of silence');
+
+  // And the reach is a real gap: without it a monster stands on the pixel the
+  // scribe arrives at, which is the whole of the owner's "you just stand on top
+  // of them for a bit".
+  assert.ok(strikeReachPx(TUNING) > 0, 'a monster stands exactly where the scribe arrives');
 });

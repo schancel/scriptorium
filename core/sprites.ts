@@ -298,6 +298,184 @@ const SCRIBE_STRIKE_1: readonly string[] = [
   '................',
 ];
 
+/**
+ * The stomp, in three frames: the hop out, the landing, the bounce back.
+ *
+ * The skeleton's verb. A pose is not an action -- the scribe used to hold a
+ * strike frame while a monster evaporated beside him -- so this one *travels*:
+ * `core/draw.ts` carries him along an arc toward the skull and back, and these
+ * frames are what he looks like on the way.
+ *
+ * Everything above the waist is the idle figure, pixel for pixel, including the
+ * quill at his side. Only the legs change. At 16x16 a figure that redraws itself
+ * between frames reads as two different figures, and the whole point of the
+ * three is that it is plainly *him* doing something.
+ *
+ * Rise: knees drawn up under the robe, feet tucked.
+ */
+const SCRIBE_HOP_0: readonly string[] = [
+  '................',
+  '.....KKKKK......',
+  '....KrrrrrKK.WW.',
+  '....KrrrrrrK.LW.',
+  '....KrSSSSrK.L..',
+  '....KrSKSKrK.L..',
+  '....KrSSSSrK.L..',
+  '.....KSSSSK..L..',
+  '....KKRRRRKK.L..',
+  '...KRRRRRRRRKA..',
+  '..KRRRRRRRRRRK..',
+  '..KRRRRRRRRRRK..',
+  '...KRRRRRRRRK...',
+  '...KKRRRRRRKK...',
+  '.....KK..KK.....',
+  '................',
+];
+
+/**
+ * Contact: both legs driven straight down into a point, with the impact thrown
+ * out sideways beneath them. This is the frame that has to read as *landing on
+ * something*, so the figure narrows to a wedge and the flecks say where it hit.
+ */
+const SCRIBE_HOP_1: readonly string[] = [
+  '................',
+  '.....KKKKK......',
+  '....KrrrrrKK.WW.',
+  '....KrrrrrrK.LW.',
+  '....KrSSSSrK.L..',
+  '....KrSKSKrK.L..',
+  '....KrSSSSrK.L..',
+  '.....KSSSSK..L..',
+  '....KKRRRRKK.L..',
+  '...KRRRRRRRRKA..',
+  '..KRRRRRRRRRRK..',
+  '...KRRRRRRRRK...',
+  '....KRRRRRRK....',
+  '.....KRRRRK.....',
+  '.....KKKKKK.....',
+  '...KK......KK...',
+];
+
+/** Bounce: legs flung wide as he comes off the skull. */
+const SCRIBE_HOP_2: readonly string[] = [
+  '................',
+  '.....KKKKK......',
+  '....KrrrrrKK.WW.',
+  '....KrrrrrrK.LW.',
+  '....KrSSSSrK.L..',
+  '....KrSKSKrK.L..',
+  '....KrSSSSrK.L..',
+  '.....KSSSSK..L..',
+  '....KKRRRRKK.L..',
+  '...KRRRRRRRRKA..',
+  '..KRRRRRRRRRRK..',
+  '..KRRRRRRRRRRK..',
+  '...KRRRRRRRRK...',
+  '..KRK......KRK..',
+  '..KK........KK..',
+  '................',
+];
+
+// --- the ink throw ----------------------------------------------------------
+
+/**
+ * The nib in flight: the bat's verb, and the thing that was missing.
+ *
+ * A thrown object has to be *small* and it has to be *pointed*, or at this size
+ * it reads as a second monster. So it is a five-pixel-long dart of accent ink
+ * with one highlight down its spine, and it takes up a quarter of the cell --
+ * which is also what makes the arc legible, because a small thing crossing a gap
+ * is a trajectory and a large one is a wipe.
+ *
+ * Two frames, mirrored, so it tumbles as it goes. It is on screen for a couple
+ * of hundred milliseconds; a tumble is all the animation that time can hold.
+ */
+const NIB_0: readonly string[] = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '..........KK....',
+  '.........KAAK...',
+  '........KAAWK...',
+  '.......KAAWK....',
+  '......KAAWK.....',
+  '.....KKAWK......',
+  '......KKK.......',
+  '................',
+  '................',
+  '................',
+  '................',
+];
+
+/** The same nib, tumbled over. */
+const NIB_1: readonly string[] = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '....KK..........',
+  '...KAAK.........',
+  '...KWAAK........',
+  '....KWAAK.......',
+  '.....KWAAK......',
+  '......KWAKK.....',
+  '.......KKK......',
+  '................',
+  '................',
+  '................',
+  '................',
+];
+
+/**
+ * The ink bursting on the bat: a blot, then a splatter.
+ *
+ * Deliberately *not* the `burst` sprite. The burst is what a monster turns into
+ * and it is bright; this is what hits it, and it is ink -- the same dark the
+ * blot-cloud is drawn in, because the scribe and the thing that threatens his
+ * page throw the same substance. Two frames, and the second is strictly larger
+ * with droplets thrown clear of it, so the splash spreads rather than fading.
+ */
+const INK_BURST_0: readonly string[] = [
+  '................',
+  '................',
+  '................',
+  '.......KK.......',
+  '......KDDK......',
+  '.....KDDDDK.....',
+  '....KDDDDDDK....',
+  '....KDDDDDDK....',
+  '....KDDDDDDK....',
+  '.....KDDDDK.....',
+  '......KDDK......',
+  '.......KK.......',
+  '................',
+  '................',
+  '................',
+  '................',
+];
+
+const INK_BURST_1: readonly string[] = [
+  '..K..........K..',
+  '....K......K....',
+  '.......KK.......',
+  '.....KKDDKK.....',
+  '...KKDDDDDDKK...',
+  '..KDDDDDDDDDDK..',
+  '.KDDDDDDDDDDDDK.',
+  '.KDDDDDDDDDDDDK.',
+  '.KDDDDDDDDDDDDK.',
+  '..KDDDDDDDDDDK..',
+  '...KKDDDDDDKK...',
+  '.....KKDDKK.....',
+  '.......KK.......',
+  '....K......K....',
+  '..K..........K..',
+  '................',
+];
+
 // --- the monsters -----------------------------------------------------------
 
 /**
@@ -731,6 +909,9 @@ export const SPRITES: ReadonlyMap<string, PixelSprite> = new Map(
     sprite('scribe_idle', [SCRIBE_IDLE_0, SCRIBE_IDLE_1]),
     sprite('scribe_walk', [SCRIBE_WALK_0, SCRIBE_WALK_1, SCRIBE_WALK_2, SCRIBE_WALK_3]),
     sprite('scribe_strike', [SCRIBE_STRIKE_0, SCRIBE_STRIKE_1]),
+    sprite('scribe_hop', [SCRIBE_HOP_0, SCRIBE_HOP_1, SCRIBE_HOP_2]),
+    sprite('nib', [NIB_0, NIB_1]),
+    sprite('ink_burst', [INK_BURST_0, INK_BURST_1]),
     sprite('bat', [BAT_0, BAT_1]),
     sprite('skeleton', [SKELETON_0, SKELETON_1]),
     sprite('burst', [BURST_0, BURST_1, BURST_2]),
@@ -756,6 +937,21 @@ export const SPRITES: ReadonlyMap<string, PixelSprite> = new Map(
  */
 export const BURST_FRAMES = 3;        // tuning-exempt: frame count of the art in this file
 export const CANDLE_UNLIT_FRAME = 2;  // tuning-exempt: an index into the art in this file
+export const HOP_FRAMES = 3;          // tuning-exempt: frame count of the art in this file
+export const NIB_FRAMES = 2;          // tuning-exempt: frame count of the art in this file
+export const INK_BURST_FRAMES = 2;    // tuning-exempt: frame count of the art in this file
+
+/**
+ * The three phases of `scribe_hop`, by name.
+ *
+ * Indices into this file's own art, exported for the same reason `BURST_FRAMES`
+ * is: `core/entities.ts` chooses between them by fraction of the stomp, and a
+ * consumer that spelled `1` for "contact" would be a second copy of a fact that
+ * only changes when the pictures above do.
+ */
+export const HOP_RISE = 0;            // tuning-exempt: an index into the art in this file
+export const HOP_CONTACT = 1;         // tuning-exempt: an index into the art in this file
+export const HOP_BOUNCE = 2;          // tuning-exempt: an index into the art in this file
 
 /** Look one up. Null rather than a throw: a missing sprite is a drawing bug. */
 export function spriteFor(id: string): PixelSprite | null {

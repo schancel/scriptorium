@@ -39,8 +39,11 @@ import {
   frameAt,
   isBursting,
   poseOf,
-  strikePose,
+  scribeStrike,
+  strikeMissiles,
   type Entity,
+  type Strike,
+  type StrikeVisual,
 } from './entities.js';
 import { CANDLE_UNLIT_FRAME, SPRITE_SIZE } from './sprites.js';
 import { roleIndex, worldFor, type ParallaxLayer, type World } from './worlds.js';
@@ -176,6 +179,20 @@ const SCENE = {
   dropFloor: 0.35,      // tuning-exempt: art -- the pot is never fainter than this
 } as const;
 
+/**
+ * The data-failure banner.
+ *
+ * It sits across the top of the scenery band, in the interface palette rather
+ * than a theme's, because it is not part of the world -- a warning that a world
+ * recoloured would be a warning a world could hide. It is drawn last of all, so
+ * nothing, including the report card, can cover it.
+ */
+const NOTICE = {
+  lineH: 12,        // tuning-exempt: band composition
+  padY: 2,          // tuning-exempt: band composition
+  alpha: 0.92,      // tuning-exempt: art -- the level stays faintly visible behind it
+} as const;
+
 /** The art role the sky behind the parallax takes; every theme supplies one. */
 const SKY_ROLE = 'shade';
 
@@ -246,6 +263,19 @@ export interface FrameState {
    * existing frame is byte-for-byte what it was.
    */
   readonly scene?: SceneState;
+  /**
+   * Lines of a warning banner, drawn over everything else. Absent or empty
+   * draws nothing.
+   *
+   * It exists for one failure and it is worth naming: every data loader in the
+   * platform falls back silently, so a 404 on the corpus yields a hardcoded five
+   * verses of Genesis and an empty theme list -- which reads exactly like
+   * working software. A deploy bug hid behind that for hours while the owner
+   * played a stub and reported only that the sound was missing. Fallbacks are
+   * right for a first run; silence about them is not, so when the platform is
+   * running on one it says so on the screen and cannot stop saying it.
+   */
+  readonly notice?: readonly string[];
 }
 
 /**
@@ -297,14 +327,19 @@ export interface SceneState {
   /** The checkpoint candles standing in this stretch of world. */
   readonly candles: readonly SceneCandle[];
   /**
-   * Milliseconds since the scribe last struck, or null when he has not.
+   * The blows still playing, oldest first.
    *
    * The one duration in this record, and the only thing here a clock touches.
-   * It is set to zero by a *completed word* and by nothing else, so the pose it
-   * selects is a consequence of typing rather than of time passing; the clock
-   * only decides when to stop showing it.
+   * A strike is begun by a *completed word* and by nothing else, so the poses it
+   * selects are a consequence of typing rather than of time passing; the clock
+   * only decides when to stop showing them.
+   *
+   * A list rather than a slot, because at 140 WPM a word lands every ~430 ms
+   * while a stomp runs longer -- see
+   * docs/design/03-pacing.md#defeating-a-monster-must-read-as-an-action. The
+   * scribe takes the most recent; everything in flight is drawn.
    */
-  readonly strikeMs: number | null;
+  readonly strikes: readonly Strike[];
 }
 
 // --- the report card --------------------------------------------------------
@@ -518,6 +553,39 @@ function onScreen(x: number): boolean {
 }
 
 /**
+ * Put one thing a strike is drawing on the screen.
+ *
+ * `core/entities.ts` hands back a position *along the path* -- a travel fraction
+ * and a lift -- rather than pixels, because it does not know where the camera
+ * has put the monster this frame. Resolving it here is what makes the nib land
+ * on the bat rather than on the pixel the bat occupied when it was thrown, and
+ * it keeps the only piece of arithmetic that needs `cameraX` in the file that
+ * already owns `cameraX`.
+ *
+ * `lift` is never negative and the target is never below the scribe's feet, so
+ * nothing this draws can reach down into the rail's band.
+ */
+function pushStrikeVisual(
+  cmds: DrawCmd[],
+  scene: SceneState,
+  visual: StrikeVisual,
+  theme: string,
+): void {
+  const fromX = scene.scribe.x;
+  const fromY = scene.scribe.y;
+  const toX = visual.toX - scene.cameraX;
+  cmds.push({
+    op: 'sprite',
+    id: visual.spriteId,
+    x: px(fromX + (toX - fromX) * visual.travel),
+    y: px(fromY + (visual.toY - fromY) * visual.travel - visual.lift),
+    frame: visual.frame,
+    flip: visual.flip,
+    theme,
+  });
+}
+
+/**
  * The band between the HUD and the rail: sky, parallax, candles, monsters, the
  * scribe, and the cloud over the top of him.
  *
@@ -596,13 +664,25 @@ function pushScene(cmds: DrawCmd[], scene: SceneState, tuning: Tuning): void {
   }
 
   // The strike outranks walking and idling: at the moment something is
-  // destroyed the player should be looking at the blow.
-  const scribe = strikePose(scene.scribe, scene.strikeMs, tuning)
-    ?? poseOf(scene.scribe, scene.walking);
-  cmds.push({
-    op: 'sprite', id: scribe.spriteId, x: px(scribe.x), y: px(scribe.y),
-    frame: scribe.frame, flip: scribe.flip, theme,
-  });
+  // destroyed the player should be looking at the blow. A stomp carries him
+  // along an arc to the skull and back, which is why this is not simply a pose.
+  const blow = scribeStrike(scene.scribe, scene.strikes, tuning);
+  if (blow === null) {
+    const scribe = poseOf(scene.scribe, scene.walking);
+    cmds.push({
+      op: 'sprite', id: scribe.spriteId, x: px(scribe.x), y: px(scribe.y),
+      frame: scribe.frame, flip: scribe.flip, theme,
+    });
+  } else {
+    pushStrikeVisual(cmds, scene, blow, theme);
+  }
+
+  // Everything in the air, from every blow still playing -- not just the most
+  // recent one. A nib thrown at a bat two words ago is still crossing the gap
+  // while the scribe is already stomping something else.
+  for (const missile of strikeMissiles(scene.strikes, tuning)) {
+    pushStrikeVisual(cmds, scene, missile, theme);
+  }
 
   // The cloud, in front of everything, drifting in from the right as the
   // telegraph runs. `cloud.x` is an approach fraction, not pixels -- see
@@ -619,6 +699,33 @@ function pushScene(cmds: DrawCmd[], scene: SceneState, tuning: Tuning): void {
   }
 }
 
+/**
+ * The banner that says the game is not running on the real data.
+ *
+ * Loud on purpose, and unconditional: a fallback is the right behaviour and
+ * being quiet about one is not. The whole reason it exists is that a 404 on the
+ * corpus produces five hardcoded verses and an empty songbook, which is
+ * indistinguishable from a working game -- so this is drawn in the error colour,
+ * across the full width, over everything else in the frame, and it does not go
+ * away while the condition holds.
+ */
+function pushNotice(cmds: DrawCmd[], lines: readonly string[]): void {
+  const h = lines.length * NOTICE.lineH + NOTICE.padY * 2;
+  cmds.push({
+    op: 'rect', x: 0, y: SCENE.top, w: M.vw, h, color: pal('error'), alpha: NOTICE.alpha,
+  });
+  lines.forEach((line, index) => {
+    cmds.push({
+      op: 'text',
+      value: line,
+      x: M.vw / 2,
+      y: SCENE.top + NOTICE.padY + index * NOTICE.lineH + NOTICE.lineH / 2,
+      style: 'hud-center',
+      color: pal('bg'),
+    });
+  });
+}
+
 // --- the frame --------------------------------------------------------------
 
 /** The whole frame, back to front. */
@@ -630,6 +737,10 @@ export function drawFrame(state: FrameState, rail: RailState, tuning: Tuning): D
   pushRail(cmds, state, rail, tuning);
   pushKeyboard(cmds, state, tuning);
   if (state.mode === 'report') pushReport(cmds, state);
+  // Last, so the report card cannot bury it. Running on fallback data must be
+  // impossible to miss from any screen in the game.
+  const notice = state.notice;
+  if (notice !== undefined && notice.length > 0) pushNotice(cmds, notice);
   return cmds;
 }
 

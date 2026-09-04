@@ -42,8 +42,8 @@ import {
 } from '../../core/draw.js';
 import { SPRITE_SIZE } from '../../core/sprites.js';
 import {
-  createCloud, createEntity, monstersAt, stepCloud, stepEntities, stepMonsters,
-  strikeDurationMs, strikeWord, type Entity,
+  beginStrike, createCloud, createEntity, monstersAt, stepCloud, stepEntities, stepMonsters,
+  stepStrikes, strikeReachPx, strikeWord, type Entity, type Strike,
 } from '../../core/entities.js';
 import { applyItem, createPlayer, dropsInkPot, type PlayerState } from '../../core/items.js';
 import {
@@ -138,11 +138,67 @@ const FALLBACK_TUNING = {
     rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, warp_phase_ms: 1400,
     warp_echo_hold_ms: 900, lectio_start_wpm: 180, lectio_ramp_wpm: 20, lectio_max_wpm: 700,
     candle_interval: 3, bonus_word_chance: 0.15, master_volume: 0.35, audio_default_on: 0,
-    monster_burst_ms: 320, strike_pose_ms: 200, monster_drop_chance: 0.2, combo_drop_bonus: 0.2,
+    monster_burst_ms: 320, strike_reach: 36, stomp_ms: 460, ink_ms: 420,
+    monster_drop_chance: 0.2, combo_drop_bonus: 0.2,
     gild_score_per_char: 2, gild_page_bonus: 50, gild_offer_wpm: 60, gild_offer_sessions: 3,
     wpm_chars_per_word: 5, history_max_sessions: 500,
   },
 };
+
+// --- saying so when a fallback is in use -------------------------------------
+
+/**
+ * Which data this session is faking, in the order it was discovered.
+ *
+ * Every loader above and below falls back rather than refusing to start, and
+ * that is right: a beginner opening a half-deployed page should still be able to
+ * type. What is *not* right is being quiet about it. A 404 on `data/texts/`
+ * yields five hardcoded verses of Genesis; a 404 on `data/themes.json` yields an
+ * empty songbook. Both look exactly like working software, and that is how a
+ * deploy bug survived hours of play -- the owner typed a stub, enjoyed it, and
+ * reported only that the sound seemed to be missing.
+ *
+ * So every fallback is recorded here and the recording is drawn on the screen
+ * for as long as it holds. Degraded play still beats a blank page; silent
+ * degraded play does not beat anything.
+ */
+const fallbacks: string[] = [];
+
+function usingFallback(what: string): void {
+  if (fallbacks.includes(what)) return;
+  fallbacks.push(what);
+  // The banner is the promise; this is for whoever is looking at a console
+  // because a deploy went wrong, and wants the detail rather than the headline.
+  console.warn(`scriptorium: falling back for ${what} -- this is not the real data`);
+}
+
+/**
+ * The banner `core/draw.ts` paints over everything else, or nothing at all.
+ *
+ * Two lines: what is missing, and what to do about it. Both short enough to fit
+ * the virtual width even when every loader has failed at once.
+ */
+function noticeLines(): readonly string[] {
+  if (fallbacks.length === 0) return [];
+  return [
+    `NOT THE REAL DATA \u2014 using built-in fallbacks for: ${fallbacks.join(', ')}`,
+    'run `make build` and `make fetch`, and serve over http (`make serve`)',
+  ];
+}
+
+/**
+ * The names the banner uses. Bare nouns, so that the worst case -- every loader
+ * failing at once, which is what a wrong base path looks like -- still fits
+ * across the virtual width instead of running off both ends of it.
+ */
+const DATA_NAMES = {
+  tuning: 'tuning',
+  curriculum: 'curriculum',
+  scenery: 'scenery',
+  themes: 'themes',
+  tunes: 'tunes',
+  text: 'the text',
+} as const;
 
 // --- loading ----------------------------------------------------------------
 
@@ -157,10 +213,18 @@ async function fetchJson(path: string): Promise<unknown> {
   return (await response.json()) as unknown;
 }
 
-async function fetchJsonOr(path: string, fallback: unknown): Promise<unknown> {
+/**
+ * Fetch, or fall back *and say so*. `what` is the name the banner uses.
+ *
+ * Every call site names itself rather than sharing one generic "data" label,
+ * because "themes did not load" and "the corpus did not load" send whoever reads
+ * the banner to two completely different places.
+ */
+async function fetchJsonOr(path: string, fallback: unknown, what: string): Promise<unknown> {
   try {
     return await fetchJson(path);
   } catch {
+    usingFallback(what);
     return fallback;
   }
 }
@@ -189,7 +253,12 @@ async function fetchBook(translation: string, book: string): Promise<Book> {
       // Try the next candidate; the hardcoded chapter is the last resort.
     }
   }
-  if (canonicalBook(book) === FALLBACK_BOOK.title) return FALLBACK_BOOK;
+  if (canonicalBook(book) === FALLBACK_BOOK.title) {
+    // The five hardcoded verses. This is the fallback the owner played for hours
+    // without being told, so it is the one that must announce itself loudest.
+    usingFallback(DATA_NAMES.text);
+    return FALLBACK_BOOK;
+  }
   throw new Error(`no text for ${book} (${translation}) -- run \`make fetch\``);
 }
 
@@ -299,6 +368,12 @@ const WORDS_PER_MONSTER = Math.max(1, Math.round(MONSTER_SPACING / WORLD_STRIDE)
  * blow lands. Position and anchor are therefore the same fact, and a monster
  * cannot end up being struck from across the room.
  *
+ * Plus `strike_reach`, which is the whole of the owner's first complaint about
+ * combat: without it "the position the camera will have reached" is *exactly*
+ * where the scribe is standing, so he fells the monster by occupying it and the
+ * blow has no distance to cross. The reach is the gap something can happen in.
+ * See docs/design/03-pacing.md#defeating-a-monster-must-read-as-an-action.
+ *
  * They face left, toward the oncoming scribe, and they never move. The scribe
  * arrives at them because he typed; they never arrive at him.
  */
@@ -307,6 +382,7 @@ function placeMonsters(
   wordCount: number,
   groundY: number,
   scribeX: number,
+  reach: number,
 ): Entity[] {
   const count = wordCount === 0 ? 0 : Math.max(1, Math.floor(wordCount / WORDS_PER_MONSTER));
   const rolls = draws(seed, Math.max(1, count) * DRAWS_PER_MONSTER);
@@ -321,7 +397,7 @@ function placeMonsters(
       wordCount - 1,
       i * WORDS_PER_MONSTER + Math.floor(jitter * WORDS_PER_MONSTER),
     );
-    const x = Math.round((word + 1) * WORLD_STRIDE + scribeX);
+    const x = Math.round((word + 1) * WORLD_STRIDE + scribeX + reach);
     const y = groundY - SPRITE_SIZE - (kind === 'bat' ? BAT_LIFT : 0);
     out.push(createEntity(`${kind}-${String(i)}`, kind, x, y, phase * PHASE_SPREAD_MS, -1, word));
   }
@@ -469,12 +545,16 @@ interface Level {
   monsters: Entity[];
   scribe: Entity;
   /**
-   * Milliseconds since the scribe last struck, or null when he is not striking.
+   * The blows still playing.
    *
-   * Set to zero by a completed word and by nothing else. The loop runs it out
-   * so the pose ends; nothing depends on it having ended.
+   * A list and not a slot. One is appended by a completed word and by nothing
+   * else; the loop runs each of them out so the animation ends, and nothing
+   * depends on any of them having ended. At 140 WPM a word lands every ~430 ms
+   * while a stomp runs longer, so the second blow starts on top of the first --
+   * a single slot would cut the hop off mid-air, and only ever at the speed
+   * where somebody would notice.
    */
-  strikeMs: number | null;
+  strikes: Strike[];
   /**
    * The PRNG state the drop rolls draw from.
    *
@@ -524,7 +604,7 @@ function sceneFor(
     damage,
     heartsMax: maxHearts(tuning),
     candles: candlesOf(level),
-    strikeMs: level.strikeMs,
+    strikes: level.strikes,
   };
 }
 
@@ -551,6 +631,8 @@ function frameFor(
     gilding: level.gilding,
     gildPoints,
     scene: sceneFor(level, damage, cloud, tuning),
+    // Drawn over everything, every frame, for as long as a fallback is in use.
+    notice: noticeLines(),
   };
 }
 
@@ -566,11 +648,12 @@ function frameFor(
  * found; it is caught here per tune, so one bad file costs one theme.
  */
 async function loadSongbook(): Promise<Songbook> {
-  const parsed = await fetchJsonOr('data/themes.json', { themes: [] });
+  const parsed = await fetchJsonOr('data/themes.json', { themes: [] }, DATA_NAMES.themes);
   let themes;
   try {
     themes = loadThemeTunes(parsed);
   } catch {
+    usingFallback(DATA_NAMES.themes);
     return { library: createLibrary([]), themes: new Map<string, string>() };
   }
   const ids = [...new Set(themes.values())];
@@ -579,6 +662,7 @@ async function loadSongbook(): Promise<Songbook> {
       try {
         return loadTune(await fetchJson(`data/tunes/${id}.json`));
       } catch {
+        usingFallback(DATA_NAMES.tunes);
         return null;
       }
     }),
@@ -594,7 +678,7 @@ async function boot(): Promise<void> {
   if (!(surface instanceof HTMLCanvasElement)) throw new Error('main: no #stage canvas');
   const renderer: Renderer = createRenderer(surface);
 
-  const tuning = loadTuning(await fetchJsonOr('data/tuning.json', FALLBACK_TUNING));
+  const tuning = loadTuning(await fetchJsonOr('data/tuning.json', FALLBACK_TUNING, DATA_NAMES.tuning));
 
   let stages: Stage[] = [];
   try {
@@ -603,11 +687,12 @@ async function boot(): Promise<void> {
     // No curriculum file reachable: fall back to home row, which is stage 1 and
     // where a beginner starts anyway. Never guess a *larger* set than that --
     // the illumination invariant is the one thing that must not be approximated.
+    usingFallback(DATA_NAMES.curriculum);
   }
 
   // The authored scene map. Unreachable, it is an empty list and every passage
   // wears the abbey -- which is the documented fallback, not a degraded mode.
-  const scenes: SceneRow[] = loadScenes(await fetchJsonOr('data/scenes/bible.json', null));
+  const scenes: SceneRow[] = loadScenes(await fetchJsonOr('data/scenes/bible.json', null, DATA_NAMES.scenery));
 
   const songbook = await loadSongbook();
   const webAudio: WebAudio = createWebAudio(tuning);
@@ -740,10 +825,11 @@ async function boot(): Promise<void> {
       // Resuming mid-part, the monsters whose words are already behind the
       // cursor are gone: he beat them before he closed the tab, and re-fighting
       // them would make a checkpoint cost something it is not supposed to cost.
-      monsters: placeMonsters(seed, breaks.length, layout.groundY, layout.scribeX)
-        .filter((m) => m.word === null || m.word >= wordsDone(breaks, typing.cursor)),
+      monsters: placeMonsters(
+        seed, breaks.length, layout.groundY, layout.scribeX, strikeReachPx(tuning),
+      ).filter((m) => m.word === null || m.word >= wordsDone(breaks, typing.cursor)),
       scribe: createEntity('scribe', 'scribe', layout.scribeX, layout.groundY - SPRITE_SIZE),
-      strikeMs: null,
+      strikes: [],
       dropRng: seedFrom(`${where} drops`),
       // The camera opens where the cursor already is, so resuming mid-part does
       // not scroll the whole passage past the player before it settles.
@@ -1169,8 +1255,12 @@ async function boot(): Promise<void> {
         // being slow, and that is the one thing this game does not have.
         damage = restoreHeart(damage, tuning);
       }
-      level.monsters = strikeWord(level.monsters, word, drops).entities;
-      level.strikeMs = 0;
+      const struck = strikeWord(level.monsters, word, drops);
+      level.monsters = struck.entities;
+      // One blow per monster felled, each with the verb its kind is felled by: a
+      // skeleton is stomped and a bat is inked. Appended rather than replacing
+      // whatever was already playing -- see the field's comment.
+      for (const felled of struck.defeated) level.strikes.push(beginStrike(felled));
       cues.push('defeat');
     }
   }
@@ -1296,10 +1386,10 @@ async function boot(): Promise<void> {
       // by this call -- only `resolveDefeats` can do any of that.
       level.monsters = stepMonsters(level.monsters, dtMs, tuning);
       level.scribe = stepEntities([level.scribe], dtMs)[0] ?? level.scribe;
-      if (level.strikeMs !== null) {
-        const held = level.strikeMs + dtMs;
-        level.strikeMs = held >= strikeDurationMs(tuning) ? null : held;
-      }
+      // Runs out the blows a keystroke already began, and drops each when its
+      // verb's duration is spent. It can start one no more than it can end a
+      // monster: only `resolveDefeats` does either.
+      level.strikes = stepStrikes(level.strikes, dtMs, tuning);
       stepThreat(dtMs);
       // Word-driven, and only word-driven: the target is a function of how many
       // words are behind the cursor, and this only eases toward it.

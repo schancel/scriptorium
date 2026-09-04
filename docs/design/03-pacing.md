@@ -1,6 +1,6 @@
 # Pacing, damage and items
 
-**Implemented by:** `core/entities.ts`, `core/damage.ts`, `core/items.ts`, `core/corpus.ts`
+**Implemented by:** `core/entities.ts`, `core/damage.ts`, `core/items.ts`, `core/corpus.ts`, `core/sprites.ts`
 
 ## Player-paced
 
@@ -46,9 +46,9 @@ What follows from that, and what must stay true:
   Combat is a *reward* for typing, wearing the costume of a fight. See
   [ADR 0004](../decisions/0004-idle-threat-not-speed-timer.md).
 - **Nothing about it advances on a clock.** A monster's anchor, its position and whether it
-  has been struck are all functions of the cursor. The burst and the strike pose have
-  durations (`monster_burst_ms`, `strike_pose_ms`) because an animation must, but they only
-  ever *start* on a keystroke, and while they run nothing is at stake.
+  has been struck are all functions of the cursor. The burst and the two strike verbs have
+  durations (`monster_burst_ms`, `stomp_ms`, `ink_ms`) because an animation must, but they
+  only ever *start* on a keystroke, and while they run nothing is at stake.
 - **Drops are occasional and seeded.** A felled monster sometimes leaves an ink pot --
   `monster_drop_chance`, drawn from the injected PRNG in `core/rng.ts`, so a passage
   replays identically. The pot is granted as it is dropped rather than left lying to be
@@ -115,6 +115,25 @@ a burst runs longer than that. So strikes are a list, not a single slot — a se
 begins while the first is still playing, and the scribe's own pose takes the most recent.
 Getting this wrong shows up only at speed, which is precisely where it would look broken
 to the person most able to notice.
+
+**How it is put together.** `core/entities.ts` holds a `Strike`: a verb, the world
+position of the thing being struck, and the milliseconds since it began — four fields, and
+deliberately no fifth in which a miss, an aim or a timing window could be written. A strike
+is created by `beginStrike` from the monster `strikeWord` just felled, so the only thing
+that can start one is a completed word. `stepStrikes` runs the list and drops each entry
+when its verb's row (`stomp_ms`, `ink_ms`) is spent. `scribeStrike` returns the pose of the
+*last* strike in the list — the most recent — and `strikeMissiles` returns one visual per
+live strike, so an earlier nib keeps flying while a later hop plays over it.
+
+Both are returned as a position *along the path* from the scribe to the monster — a travel
+fraction and a lift, never pixels — because only `core/draw.ts` knows where the camera has
+put the monster this frame. That is what makes the nib land on the bat rather than on the
+place the bat was standing when it was thrown.
+
+The art is in `core/sprites.ts`: `scribe_hop` (rise, contact, bounce) for the stomp, and
+`nib` plus `ink_burst` for the throw, which reuses the existing `scribe_strike` frames for
+the wind-up and follow-through — the pose was always right; what was missing was something
+leaving his hand.
 
 ### The ramp must not outrun the gate
 

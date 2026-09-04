@@ -32,8 +32,8 @@ import {
 } from './draw.js';
 import { createRail, focalX } from './rail.js';
 import {
-  burstDurationMs, createCloud, createEntity, idleThresholdMs, stepCloud, stepEntities,
-  stepMonsters, strikeDurationMs, strikeWord,
+  beginStrike, burstDurationMs, createCloud, createEntity, idleThresholdMs, stepCloud,
+  stepEntities, stepMonsters, stepStrikes, strikeReachPx, strikeSpanMs, strikeWord, type Strike,
 } from './entities.js';
 import { createDamage } from './damage.js';
 import { CANDLE_UNLIT_FRAME, PALETTE_ROLES, SPRITE_SIZE, spriteFor } from './sprites.js';
@@ -42,7 +42,7 @@ import { classify } from './illumination.js';
 import type { BlotCloud, DamageState, DrawCmd, Glyph, Key, Score, Tuning } from './types.js';
 
 /** The rows data/tuning.json carries that any of this path reads. */
-const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20, smudge_max: 100, smudge_per_error_base: 12, smudge_per_error_step: 1, smudge_decay_per_key: 3, hearts_start: 3, hearts_max: 5, idle_base_ms: 8000, idle_step_ms: 400, idle_floor_ms: 3000, cloud_approach_ms: 2500, cloud_smudge: 25, monster_burst_ms: 320, strike_pose_ms: 200 }; // tuning-exempt: test fixture mirroring data/tuning.json
+const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20, smudge_max: 100, smudge_per_error_base: 12, smudge_per_error_step: 1, smudge_decay_per_key: 3, hearts_start: 3, hearts_max: 5, idle_base_ms: 8000, idle_step_ms: 400, idle_floor_ms: 3000, cloud_approach_ms: 2500, cloud_smudge: 25, monster_burst_ms: 320, strike_reach: 36, stomp_ms: 460, ink_ms: 420 }; // tuning-exempt: test fixture mirroring data/tuning.json
 
 const FRAME_MS = 16; // tuning-exempt: test fixture, a frame at 60Hz
 const HOUR_MS = 3600000; // tuning-exempt: the length of the simulated trace
@@ -80,7 +80,7 @@ function scene(over: Partial<SceneState> = {}): SceneState {
     damage,
     heartsMax: TUNING['hearts_max'] ?? 0,
     candles: [{ x: 0, lit: true }, { x: 900, lit: false }], // tuning-exempt: test fixture placement
-    strikeMs: null,
+    strikes: [],
     ...over,
   };
 }
@@ -383,25 +383,182 @@ test('a drop puts an ink pot in the burst, and no drop puts nothing there', () =
   assert.ok(pot !== undefined && bottomOf(pot) <= RAIL_TOP);
 });
 
-test('the scribe strikes when he strikes, and goes back to walking after', () => {
-  const striking = drawFrame(
-    frame(0, { scene: scene({ walking: true, strikeMs: 0 }) }),
+/**
+ * The two monsters a blow is aimed at, standing where `strike_reach` puts them:
+ * a gap ahead of the scribe rather than on the pixel he arrives at. That gap is
+ * the thing the verbs cross, so a fixture without it would test nothing.
+ */
+const REACH = strikeReachPx(TUNING);
+const SKELETON = createEntity('skel-t', 'skeleton', LAYOUT.scribeX + REACH, LAYOUT.groundY - SPRITE_SIZE, 0, -1, 4); // tuning-exempt: test fixture placement
+const BAT = createEntity('bat-t', 'bat', LAYOUT.scribeX + REACH, LAYOUT.groundY - SPRITE_SIZE * 2, 0, -1, 2); // tuning-exempt: test fixture placement
+
+function withStrikes(strikes: readonly Strike[], over: Partial<SceneState> = {}): DrawCmd[] {
+  return drawFrame(
+    frame(0, { scene: scene({ walking: true, strikes, ...over }) }),
     createRail(0),
     TUNING,
   );
+}
+
+test('the scribe strikes when he strikes, and goes back to walking after', () => {
+  const striking = withStrikes([beginStrike(BAT)]);
   assert.ok(sprites(striking).some((c) => c.id === 'scribe_strike'));
   assert.ok(!sprites(striking).some((c) => c.id.startsWith('scribe_walk')));
 
-  // The pose outranks walking for exactly its tuning row, and not a millisecond
-  // more: it is feedback on a keystroke, not a state to get stuck in.
-  const span = strikeDurationMs(TUNING);
-  const done = drawFrame(
-    frame(0, { scene: scene({ walking: true, strikeMs: span }) }),
+  // The blow outranks walking for exactly its tuning row, and not a millisecond
+  // more: it is feedback on a keystroke, not a state to get stuck in. An expired
+  // strike is dropped from the list, and then he is simply walking again.
+  let strikes: Strike[] = [beginStrike(BAT)];
+  const span = strikeSpanMs('ink', TUNING);
+  for (let t = 0; t < span; t += FRAME_MS) strikes = stepStrikes(strikes, FRAME_MS, TUNING);
+  assert.deepEqual(strikes, [], 'the blow outstayed its tuning row');
+  const done = withStrikes(strikes);
+  assert.ok(sprites(done).some((c) => c.id === 'scribe_walk'));
+  assert.ok(!sprites(done).some((c) => c.id === 'scribe_strike'));
+});
+
+test('a stomp travels to the skull and an ink throw sends the nib instead', () => {
+  // The stomp: the scribe himself crosses the gap, so the sprite that moves is
+  // him, and nothing is thrown.
+  let hop: Strike[] = [beginStrike(SKELETON)];
+  const xs: number[] = [];
+  const ids = new Set<string>();
+  for (let t = 0; t < strikeSpanMs('stomp', TUNING); t += FRAME_MS) {
+    const drawn = sprites(withStrikes(hop)).find((c) => c.id === 'scribe_hop');
+    assert.ok(drawn !== undefined, `nothing hopping at ${String(t)}ms`);
+    xs.push(drawn.x);
+    ids.add(drawn.id);
+    assert.equal(sprites(withStrikes(hop)).filter((c) => c.id === 'nib').length, 0);
+    hop = stepStrikes(hop, FRAME_MS, TUNING);
+  }
+  const start = xs[0];
+  assert.ok(start !== undefined);
+  assert.equal(start, LAYOUT.scribeX, 'the hop began somewhere other than under him');
+  // Within a pixel of the skull: the frames land where a 60Hz trace puts them,
+  // and contact is a moment in the animation rather than a frame boundary.
+  assert.ok(Math.max(...xs) >= SKELETON.x - 1, 'the hop never reached the skeleton');
+  assert.ok(Math.max(...xs) > start, 'the hop went nowhere -- the gap is not being crossed');
+  // And he comes home: the last frame of the hop is back beside where he began,
+  // not parked on the skull. The remaining pixels are the sliver of the bounce
+  // left over when a 460ms verb is sampled at 60Hz.
+  const home = xs[xs.length - 1] ?? 0;
+  assert.ok(home - start < SPRITE_SIZE / 2, 'he stayed on the skull instead of bouncing home');
+  assert.ok(Math.max(...xs) - home > SPRITE_SIZE, 'he never came back off it');
+
+  // The ink: he stands where he is and the nib crosses the gap for him, landing
+  // on the bat and bursting there.
+  let throwing: Strike[] = [beginStrike(BAT)];
+  const nibXs: number[] = [];
+  let burst = 0;
+  for (let t = 0; t < strikeSpanMs('ink', TUNING); t += FRAME_MS) {
+    const drawn = sprites(withStrikes(throwing));
+    const scribe = drawn.find((c) => c.id === 'scribe_strike');
+    assert.ok(scribe !== undefined && scribe.x === LAYOUT.scribeX, 'the scribe went with his nib');
+    const nib = drawn.find((c) => c.id === 'nib');
+    const splash = drawn.find((c) => c.id === 'ink_burst');
+    assert.ok(nib !== undefined || splash !== undefined, `nothing in the air at ${String(t)}ms`);
+    if (nib !== undefined) nibXs.push(nib.x);
+    if (splash !== undefined) {
+      burst += 1;
+      assert.equal(splash.x, BAT.x, 'the ink burst somewhere other than on the bat');
+      assert.equal(splash.y, BAT.y);
+    }
+    throwing = stepStrikes(throwing, FRAME_MS, TUNING);
+  }
+  assert.ok(nibXs.length > 1 && burst > 0, 'the nib never flew or never landed');
+  assert.equal(nibXs[0], LAYOUT.scribeX, 'the nib left from somewhere other than his hand');
+  // It closes on the bat the whole way, without doubling back.
+  const away = nibXs.map((x) => Math.abs(x - BAT.x));
+  for (let i = 1; i < away.length; i += 1) {
+    assert.ok((away[i] ?? 0) <= (away[i - 1] ?? 0), 'the nib flew away from the bat');
+  }
+  assert.ok((away[0] ?? 0) >= REACH - 1, 'the nib had no gap to cross');
+});
+
+test('the nib follows the bat as the camera moves, rather than the pixel it was thrown at', () => {
+  // The strike carries a *world* position, so a camera that scrolls between the
+  // keystroke and the landing takes the target and the missile with it together.
+  let flying: Strike[] = [beginStrike(BAT)];
+  const partway = 96; // tuning-exempt: test fixture, six frames into the flight
+  for (let t = 0; t < partway; t += FRAME_MS) flying = stepStrikes(flying, FRAME_MS, TUNING);
+  const still = sprites(withStrikes(flying)).find((c) => c.id === 'nib');
+  const scrolled = sprites(withStrikes(flying, { cameraX: SPRITE_SIZE }))
+    .find((c) => c.id === 'nib');
+  assert.ok(still !== undefined && scrolled !== undefined);
+  // The scribe's end of the path has not moved, so the nib shifts by the camera
+  // scaled by how far along it is -- which is exactly what keeps it on the bat.
+  assert.ok(scrolled.x < still.x, 'the nib ignored the camera');
+});
+
+test('overlapping blows both draw, and the scribe takes the most recent', () => {
+  // The list, on the screen. An ink thrown a few frames ago is still crossing
+  // the gap while a stomp begins over it; the older nib keeps its place.
+  let strikes: Strike[] = [beginStrike(BAT)];
+  const partway = 80; // tuning-exempt: test fixture, five frames into the flight
+  for (let t = 0; t < partway; t += FRAME_MS) strikes = stepStrikes(strikes, FRAME_MS, TUNING);
+  const flyingX = sprites(withStrikes(strikes)).find((c) => c.id === 'nib')?.x;
+  assert.ok(flyingX !== undefined);
+
+  const both = sprites(withStrikes([...strikes, beginStrike(SKELETON)]));
+  assert.equal(both.filter((c) => c.id === 'nib').length, 1, 'the older nib was dropped');
+  assert.equal(both.find((c) => c.id === 'nib')?.x, flyingX, 'the older nib was restarted');
+  assert.ok(both.some((c) => c.id === 'scribe_hop'), 'the scribe replayed the older blow');
+  assert.ok(!both.some((c) => c.id === 'scribe_strike'));
+  assert.equal(both.filter((c) => c.id.startsWith('scribe_')).length, 1, 'there are two scribes');
+
+  // Three at once: two nibs in the air and one scribe over the top of them.
+  const three = sprites(withStrikes([beginStrike(BAT), beginStrike(SKELETON), beginStrike(BAT)]));
+  assert.equal(three.filter((c) => c.id === 'nib').length, 2);
+  assert.equal(three.filter((c) => c.id.startsWith('scribe_')).length, 1);
+});
+
+test('nothing a strike draws reaches into the rail band', () => {
+  // The verbs travel, which is new, so the band invariant has to hold for every
+  // millisecond of both of them rather than only for a standing scribe.
+  for (const target of [SKELETON, BAT]) {
+    let strikes: Strike[] = [beginStrike(target)];
+    const span = strikeSpanMs(strikes[0]?.verb ?? 'ink', TUNING);
+    for (let t = 0; t < span; t += FRAME_MS) {
+      for (const cmd of withStrikes(strikes, { cameraX: 120 })) { // tuning-exempt: test fixture, a scrolled camera
+        if (!('theme' in cmd) || cmd.theme === undefined) continue;
+        assert.ok(bottomOf(cmd) <= RAIL_TOP, `a ${cmd.op} at ${String(t)}ms reaches past the rail`);
+      }
+      strikes = stepStrikes(strikes, FRAME_MS, TUNING);
+    }
+  }
+});
+
+// --- saying so when the data did not load ------------------------------------
+
+test('A FRAME RUNNING ON FALLBACK DATA SAYS SO, AND SAYS IT OVER EVERYTHING', () => {
+  // The bug this exists for: every loader in the platform falls back silently,
+  // so a 404 on the corpus produces five hardcoded verses that read exactly like
+  // working software. Quiet is the failure; the banner is the fix.
+  const quiet = drawFrame(frame(0), createRail(0), TUNING);
+  const texts = (cmds: readonly DrawCmd[]): string[] =>
+    cmds.filter((c) => c.op === 'text').map((c) => c.value);
+  assert.ok(!texts(quiet).some((v) => v.includes('FALLBACK')), 'a healthy frame cries wolf');
+
+  const lines = ['NOT THE REAL DATA - using built-in fallbacks for: the text', 'run make build'];
+  const warned = drawFrame(frame(0, { notice: lines }), createRail(0), TUNING);
+  for (const line of lines) assert.ok(texts(warned).includes(line), `the banner dropped "${line}"`);
+
+  // Over everything, and last: a warning the report card could bury is a
+  // warning that disappears at exactly the moment the player stops to read.
+  const reported = drawFrame(
+    frame(0, { mode: 'report', notice: lines }),
     createRail(0),
     TUNING,
   );
-  assert.ok(sprites(done).some((c) => c.id === 'scribe_walk'));
-  assert.ok(!sprites(done).some((c) => c.id === 'scribe_strike'));
+  const lastNotice = reported.map((c) => c.op === 'text' && lines.includes(c.value)).lastIndexOf(true);
+  assert.ok(lastNotice >= 0, 'the report card buried the warning');
+  assert.equal(lastNotice, reported.length - 1, 'something is painted over the warning');
+
+  // An empty list is not a banner: absent and "nothing failed" must look alike.
+  assert.deepEqual(
+    drawFrame(frame(0, { notice: [] }), createRail(0), TUNING),
+    quiet,
+  );
 });
 
 test('nothing about the combat loop moves without a keystroke', () => {
