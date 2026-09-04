@@ -18,6 +18,17 @@ Psalm 23. They walk when he walks, idle when he idles, and do nothing else at al
 Finding a flashback room adds its figure too — currently a secret room leaves no visible
 trace once you have left it, and this is the natural one.
 
+### Who Genesis hands over
+
+Genesis 1 gives **Adam** and Genesis 3 gives **Eve**, in that order. The first draft had
+them the other way around: Genesis 1:27 says *male and female he created them*, so Eve is
+textually present there, and Adam was left to arrive from Genesis 3.
+
+The owner's correction: *"Adam was created first."* Genesis 2 forms the man and then the
+woman from him, so a party that gathers Eve before Adam gets the order of the story
+backwards even where a single verse names them together. Genesis 3 is the route's node
+for the garden, which is where she belongs.
+
 ## They have no abilities, deliberately
 
 Tempting, and wrong twice over.
@@ -70,8 +81,8 @@ the three is unique to a row: that is the entire economy of it.
 
 | passage | who | body | cloth | mark |
 |---|---|---|---|---|
-| Genesis 1 | Eve | bare | light | shoot |
-| Genesis 3 | Adam | bare | robe | hoe |
+| Genesis 1 | Adam | bare | light | shoot |
+| Genesis 3 | Eve | bare | robe | hoe |
 | Genesis 22 | Abraham | hooded | mid | horn |
 | Exodus 3 | Moses | hooded | robe | staff |
 | Exodus 12 | the firstborn | child | light | lamb |
