@@ -80,6 +80,32 @@ A rect is exactly the size core asks for, on every platform and in every port.
 The keyboard overlay does the other half: the space bar is the widest key on the board
 and lights like any other next key, and the hint line names it in words — `next: space`.
 
+## The ribbon must settle before the next keystroke
+
+Measured, not assumed. `rail_scroll_lerp` closes a quarter of the remaining distance each
+frame, so the ribbon takes about **267 ms** to come to rest. A keystroke arrives every:
+
+| | rate | interval | |
+|---|---|---|---|
+| a beginner | 22 wpm | 545 ms | the ribbon settles between every keystroke |
+| a fluent typist, gilding on | 75 wpm | 160 ms | **it never settles** |
+| the same typist copying normally | 120 wpm | 100 ms | **it never settles** |
+
+So the rail is calm for the player it was built for and permanently sliding for anyone
+quick. That is backwards for copy typing specifically: reading ahead is how a fast typist
+buffers words for his hands, and a buffer cannot form on a target that is still moving.
+
+The owner types 120 wpm copying and reached 75 here. The settling figures are fact; that
+they are the cause is a hypothesis, but a cheap one to test.
+
+**The easing adapts to the player's own rate**, settling inside their recent median
+keystroke interval rather than at a fixed fraction. Smooth for a beginner, effectively
+instant for a fast typist, and nobody has to find a setting. A floor keeps it from
+snapping so hard that the movement stops reading as movement.
+
+This does not touch the focal column, which never moves in either case — the ribbon's
+speed of arrival is a separate thing from where it arrives.
+
 ## Lectio mode
 
 The rail makes a reading mode nearly free: same ribbon, same focal guide, no typing.
