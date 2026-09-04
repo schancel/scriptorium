@@ -80,7 +80,7 @@ A rect is exactly the size core asks for, on every platform and in every port.
 The keyboard overlay does the other half: the space bar is the widest key on the board
 and lights like any other next key, and the hint line names it in words — `next: space`.
 
-## The ribbon must settle before the next keystroke
+## The ribbon does not settle at speed, and that appears to be fine
 
 Measured, not assumed. `rail_scroll_lerp` closes a quarter of the remaining distance each
 frame, so the ribbon takes about **267 ms** to come to rest. A keystroke arrives every:
@@ -95,16 +95,21 @@ So the rail is calm for the player it was built for and permanently sliding for 
 quick. That is backwards for copy typing specifically: reading ahead is how a fast typist
 buffers words for his hands, and a buffer cannot form on a target that is still moving.
 
-The owner types 120 wpm copying and reached 75 here. The settling figures are fact; that
-they are the cause is a hypothesis, but a cheap one to test.
+I inferred from this that a permanently sliding ribbon must be costing a fast typist
+speed — reading ahead is how he feeds his hands, and a buffer cannot form on a moving
+target — and specified adaptive easing to fix it.
 
-**The easing adapts to the player's own rate**, settling inside their recent median
-keystroke interval rather than at a fixed fraction. Smooth for a beginner, effectively
-instant for a fast typist, and nobody has to find a setting. A floor keeps it from
-snapping so hard that the movement stops reading as movement.
+**Then I asked the owner, who types at that speed, and he said he had not noticed any
+problem there.**
 
-This does not touch the focal column, which never moves in either case — the ribbon's
-speed of arrival is a separate thing from where it arrives.
+So the numbers above stay, because they are true and worth knowing, and the fix does not:
+the timings are fact, the harm was inference, and the only person who can see the screen
+says there is none. **Do not implement adaptive easing on the strength of this section.**
+If someone one day reports that the page is hard to read ahead on while typing fast, this
+is where to start; until then there is nothing here to repair.
+
+Recorded because a measurement that looks alarming and turns out not to matter is worth
+keeping — otherwise it gets rediscovered and "fixed" by the next person to notice it.
 
 ## Lectio mode
 
