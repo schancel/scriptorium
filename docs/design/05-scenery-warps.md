@@ -130,6 +130,34 @@ tuning — it lives with the parallax depths in `core/worlds.ts` — and the win
 `scene_blend_verses` in [the tuning table](07-tuning.md), because how fast the world turns
 under you is something the owner may want to turn.
 
+## Held scenes: not every passage is a journey
+
+The world scrolls because finishing a word carries the scribe forward. That is right for
+narrative -- Exodus is a journey and reads as one -- and wrong for a passage where nobody
+is going anywhere. The serpent and the woman are talking. Nothing about that conversation
+travels, and sliding a landscape past it is the game insisting on movement the text does
+not have.
+
+**A scene may be held.** The camera does not translate; word progress advances the
+*tableau* instead. The serpent leans in, the fruit is taken, the garden closes. Still
+entirely player-paced, still nothing on a clock, still driven by the same completed words
+-- what changes is what those words move.
+
+Two things fall out of this that are worth stating.
+
+**It is the natural rest.** A held scene has no lateral scroll at all, and lateral scroll
+is the largest contributor to the motion aftereffect described in
+[motion and comfort](12-motion-and-comfort.md). So the passages that most want to stand
+still are also the ones that give the eyes a break, and a long session acquires a rhythm
+of travelling and stopping rather than one unbroken slide.
+
+**The scribe never becomes anyone.** He is a novice copying a manuscript, in every book,
+including the Gospels -- the owner asked, and the answer matters. It is why followers
+work: they join *him*, an outsider who copied their passage, rather than him becoming
+them. And it is why a descent into the earth is something the **page** does while he
+watches, not something he performs. He is illuminating it, which is what a scriptorium is
+for.
+
 ## Set pieces
 
 A **set piece** is a one-off scripted flourish for a specific passage — optional per
