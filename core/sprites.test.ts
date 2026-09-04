@@ -35,12 +35,31 @@ import {
   toSilhouette,
 } from './sprites.js';
 
+/**
+ * The tiles a level's floor can be built from. Every pixel of one is painted,
+ * because the sky is drawn behind the scenery and a transparent pixel here is a
+ * hole the scribe walks over.
+ */
+const SOLID_TILES: readonly string[] = [
+  'tile_stone', 'tile_grass', 'tile_sand',
+  'tile_water', 'tile_brick', 'tile_bone', 'tile_rubble',
+];
+
+/**
+ * The tiles that stand in the middle and far distance, where the sky showing
+ * through is the whole point: a ridge line is the shape of what it leaves out.
+ */
+const DISTANCE_TILES: readonly string[] = [
+  'tile_dune', 'tile_wave', 'tile_peak', 'tile_roofs',
+  'tile_pillars', 'tile_arch', 'tile_foliage', 'tile_cloud',
+];
+
 /** Everything the game names. A missing id is a sprite that cannot be drawn. */
 const REQUIRED: readonly string[] = [
   'scribe_idle', 'scribe_walk', 'scribe_strike', 'scribe_hop',
   'nib', 'ink_burst', 'bat', 'skeleton', 'burst', 'blot_cloud',
   'candle', 'ink_pot', 'heart_full', 'heart_empty',
-  'tile_stone', 'tile_grass', 'tile_sand',
+  ...SOLID_TILES, ...DISTANCE_TILES,
 ];
 
 function art(id: string) {
@@ -56,6 +75,46 @@ function inked(id: string, frame: number): number {
     for (let x = 0; x < sprite.w; x++) if (pixelAt(sprite, frame, x, y) !== NONE) count += 1;
   }
   return count;
+}
+
+/** The row a column's ink starts on, or `SPRITE_SIZE` if nothing is painted in it. */
+function topOf(id: string, x: number): number {
+  const sprite = art(id);
+  for (let y = 0; y < sprite.h; y++) if (pixelAt(sprite, 0, x, y) !== NONE) return y;
+  return sprite.h;
+}
+
+/** How many painted pixels a row has. */
+function widthAt(id: string, y: number): number {
+  const sprite = art(id);
+  let count = 0;
+  for (let x = 0; x < sprite.w; x++) if (pixelAt(sprite, 0, x, y) !== NONE) count += 1;
+  return count;
+}
+
+/**
+ * How many separate crests a distance tile has: runs of columns whose ink starts
+ * on the highest row in the tile.
+ *
+ * The one measurable difference between sand and water. A dune is a single slow
+ * swell and a wave is a fast repeating one, and at 16 pixels that frequency is
+ * the whole of what tells them apart -- paint a dune blue and it is still a hill.
+ */
+function crests(id: string): number {
+  const tops = Array.from({ length: SPRITE_SIZE }, (_, x) => topOf(id, x));
+  const highest = Math.min(...tops);
+  let runs = 0;
+  let inRun = false;
+  for (const top of tops) {
+    if (top === highest && !inRun) runs += 1;
+    inRun = top === highest;
+  }
+  return runs;
+}
+
+/** The ink character a named art role is written with. */
+function ink(role: string): string {
+  return INK_CHARS.charAt(PALETTE_ROLES.indexOf(role));
 }
 
 test('every sprite the game names exists and decodes to a full 16x16 grid', () => {
@@ -207,15 +266,383 @@ test('the blot-cloud grows from far, to overhead, to dripping', () => {
   assert.ok(bottom.includes('K'));
 });
 
-test('tiles fill their cell, so a floor has no holes in it', () => {
-  for (const id of ['tile_stone', 'tile_grass', 'tile_sand']) {
+test('ground tiles fill their cell, and distance tiles deliberately do not', () => {
+  for (const id of SOLID_TILES) {
     assert.equal(inked(id, 0), SPRITE_SIZE * SPRITE_SIZE, `${id} has a transparent pixel`);
+  }
+  for (const id of DISTANCE_TILES) {
+    assert.ok(inked(id, 0) < SPRITE_SIZE * SPRITE_SIZE, `${id} lets no sky through, so it is a floor`);
+    assert.ok(inked(id, 0) > 0, `${id} is nothing but sky`);
+  }
+});
+
+test('a dark in the distance is drawn in outline, because shade is the sky', () => {
+  // `core/draw.ts` lays a themed rect in the `shade` role behind the parallax,
+  // so a dark drawn in `shade` is invisible against the sky it stands in front
+  // of -- a shadowed mountain face painted that way is a mountain cut in half.
+  // The one exception is deliberate and is the same fact used forwards: the dabs
+  // in the canopy are the sky, seen through the leaves.
+  const sky = ink('shade');
+  for (const id of DISTANCE_TILES) {
+    if (id === 'tile_foliage') continue;
+    assert.ok(!toAscii(art(id), 0).includes(sky), `${id} draws in the sky's own colour`);
+  }
+  assert.ok(toAscii(art('tile_foliage'), 0).includes(sky));
+});
+
+test('no two tiles are the same picture', () => {
+  // The reason the art below exists. Ten themes over one silhouette is ten
+  // lightings of the same room, and a tile that duplicates another is a theme
+  // that has not actually been given anywhere to be.
+  const seen = new Map<string, string>();
+  for (const id of [...SOLID_TILES, ...DISTANCE_TILES]) {
+    const drawn = toAscii(art(id), 0);
+    const first = seen.get(drawn);
+    assert.equal(first, undefined, `${id} is ${String(first)} redrawn`);
+    seen.set(drawn, id);
   }
 });
 
 test('the skeleton keeps its skull still and rattles the rest', () => {
   assert.notEqual(toSilhouette(art('skeleton'), 0), toSilhouette(art('skeleton'), 1));
   assert.ok(inked('skeleton', 0) > SPRITE_SIZE, 'the skeleton is too sparse to read');
+});
+
+// --- the tiles --------------------------------------------------------------
+
+test('water is a lit surface, and every mark in it runs across', () => {
+  // Horizontal by construction. A surface is the one thing water has that stone
+  // has not, and a dash running any other way reads as a crack.
+  assert.equal(toAscii(art('tile_water'), 0), [
+    'GGGGGGGGGGGGGGGG',
+    'GGGWWGGGGGWWGGGG',
+    'gggggggggggggggg',
+    'ggGGGGGgggGGGGGg',
+    'gggggggggggggggg',
+    'gggggggggggggggg',
+    'GGGGgggGGGGGgggG',
+    'gggggggggggggggg',
+    'gggggggggggggggg',
+    'ggGGGGGGgggGGGgg',
+    'gggggggggggggggg',
+    'gggggggggggggggg',
+    'GGgggGGGGGgggGGG',
+    'gggggggggggggggg',
+    'gggggggggggggggg',
+    'ggGGGGgggGGGGGgg',
+  ].join('\n'));
+});
+
+test('brick repeats on a bond, and rubble deliberately does not', () => {
+  assert.equal(toAscii(art('tile_brick'), 0), [
+    'KKKKKKKKKKKKKKKK',
+    'LLLLLLLKLLLLLLLL',
+    'MMMMMMMKMMMMMMMM',
+    'DDDDDDDKDDDDDDDD',
+    'KKKKKKKKKKKKKKKK',
+    'LLLKLLLLLLLKLLLL',
+    'MMMKMMMMMMMKMMMM',
+    'DDDKDDDDDDDKDDDD',
+    'KKKKKKKKKKKKKKKK',
+    'LLLLLLLKLLLLLLLL',
+    'MMMMMMMKMMMMMMMM',
+    'DDDDDDDKDDDDDDDD',
+    'KKKKKKKKKKKKKKKK',
+    'LLLKLLLLLLLKLLLL',
+    'MMMKMMMMMMMKMMMM',
+    'DDDKDDDDDDDKDDDD',
+  ].join('\n'));
+
+  // Brick is a bond: the courses agree, so the second half of the cell is the
+  // first half again. That regularity is the whole difference from the stone
+  // tile, which is three tall courses jointed wherever the mason found one.
+  const half = SPRITE_SIZE / 2;
+  const brick = toAscii(art('tile_brick'), 0).split('\n');
+  for (const [y, row] of brick.entries()) {
+    if (y + half < brick.length) assert.equal(row, brick[y + half], 'the bond does not repeat');
+  }
+  assert.notEqual(toAscii(art('tile_brick'), 0), toAscii(art('tile_stone'), 0));
+});
+
+test('rubble is broken, which is to say its courses do not line up', () => {
+  assert.equal(toAscii(art('tile_rubble'), 0), [
+    'KGGGKKKKGGGGKKKK',
+    'KgggKGGGggggKKGG',
+    'KgggKgggggggKKgg',
+    'KKKKKgggKKKKKKgg',
+    'KKGGGGKKKKKGGGKK',
+    'KKggggKGGGKgggKK',
+    'KKggggKgggKgggKK',
+    'KKKKKKKgggKKKKKK',
+    'GGGKKKKKKGGGKKKK',
+    'gggKGGGGKgggKGGG',
+    'gggKggggKgggKggg',
+    'KKKKggggKKKKKggg',
+    'KGGGGKKKKKGGGKKK',
+    'KggggKGGGKgggKGG',
+    'KggggKgggKgggKgg',
+    'KKKKKKgggKKKKKgg',
+  ].join('\n'));
+
+  // If the courses ever agreed this would be a second brick wall in a different
+  // palette. Chips that begin and end on different rows are the only thing
+  // keeping it broken.
+  const half = SPRITE_SIZE / 2;
+  const rubble = toAscii(art('tile_rubble'), 0).split('\n');
+  assert.notEqual(rubble[0], rubble[half]);
+});
+
+test('bone is stacked bone: bright at the joint, dull along the shaft', () => {
+  // Deliberately not skulls. A face at this size pulls the eye straight off the
+  // rail, and the scenery's whole job is to say where the scribe is and then
+  // stay behind him.
+  assert.equal(toAscii(art('tile_bone'), 0), [
+    'DDDDDDDDDDDDDDDD',
+    'WWDDDDDDWWDDDDDD',
+    'WWLLLLLLWWLLLLLL',
+    'WWDDDDDDWWDDDDDD',
+    'DDDDDDDDDDDDDDDD',
+    'DDDDWWDDDDDDWWDD',
+    'LLLLWWLLLLLLWWLL',
+    'DDDDWWDDDDDDWWDD',
+    'DDDDDDDDDDDDDDDD',
+    'WWDDDDDDWWDDDDDD',
+    'WWLLLLLLWWLLLLLL',
+    'WWDDDDDDWWDDDDDD',
+    'DDDDDDDDDDDDDDDD',
+    'DDDDWWDDDDDDWWDD',
+    'LLLLWWLLLLLLWWLL',
+    'DDDDWWDDDDDDWWDD',
+  ].join('\n'));
+  const drawn = toAscii(art('tile_bone'), 0);
+  assert.ok(drawn.includes(ink('highlight')), 'the joints have to catch the light');
+  assert.ok(drawn.includes(ink('light')), 'the shaft has to be duller than the joints');
+});
+
+test('the dune crests once in the cell and troughs at the seam', () => {
+  assert.equal(toAscii(art('tile_dune'), 0), [
+    '................',
+    '................',
+    '................',
+    '......GGG.......',
+    '....GGGGGG......',
+    '...GGGGGGGGG....',
+    '.GGGGGGGGGGGGGG.',
+    'GGGGGGGGGGGGGGGG',
+    'gggggggggggggggg',
+    'gggggggggggggggg',
+    'gggggggggggggggg',
+    'gggggggGGGGGgggg',
+    'gggggggggggggggg',
+    'gggggggggggggggg',
+    'gggggggggggggggg',
+    'gggggggggggggggg',
+  ].join('\n'));
+
+  // Tiles repeat, so the shape has to meet its own left and right edge. A crest
+  // that stopped short at the seam would run as a row of steps.
+  assert.equal(topOf('tile_dune', 0), topOf('tile_dune', SPRITE_SIZE - 1));
+  assert.equal(crests('tile_dune'), 1);
+});
+
+test('waves crest more often than dunes, and carry foam where they break', () => {
+  assert.equal(toAscii(art('tile_wave'), 0), [
+    '................',
+    '................',
+    '................',
+    '................',
+    '...WW......WW...',
+    '..WGGW....WGGW..',
+    '.WGGGGW..WGGGGW.',
+    'WGGGGGGWWGGGGGGW',
+    'GGGGGGGGGGGGGGGG',
+    'gggggggggggggggg',
+    'gggggggggggggggg',
+    'ggGGGGggggGGGGgg',
+    'gggggggggggggggg',
+    'gggggGGGGGGggggg',
+    'gggggggggggggggg',
+    'gggggggggggggggg',
+  ].join('\n'));
+
+  assert.equal(topOf('tile_wave', 0), topOf('tile_wave', SPRITE_SIZE - 1));
+  assert.ok(crests('tile_wave') > crests('tile_dune'), 'water at the frequency of sand is a hill');
+  assert.ok(toAscii(art('tile_wave'), 0).includes(ink('highlight')), 'no foam on the crest');
+});
+
+test('the peak is capped, shadowed down one side, and never overhangs', () => {
+  assert.equal(toAscii(art('tile_peak'), 0), [
+    '................',
+    '................',
+    '.......WW.......',
+    '.......WW.......',
+    '......WWWW......',
+    '.....WWWWWW.....',
+    '.....LWWWWM.....',
+    '....LLWWWWMM....',
+    '...LLLLLLMMMM...',
+    '...LLLLLLMMMM...',
+    '..LLLLLLLMMMMM..',
+    '.LLLLLLLLMMMMMM.',
+    '.LLLLLLLLMMMMMM.',
+    'LLLLLLLLLMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+  ].join('\n'));
+
+  // A mountain that got narrower on the way down would be a spike balanced on
+  // its point, so the painted width may never shrink as the cell descends.
+  let previous = 0;
+  for (let y = 0; y < SPRITE_SIZE; y++) {
+    const width = widthAt('tile_peak', y);
+    assert.ok(width >= previous, 'the peak overhangs itself');
+    previous = width;
+  }
+  const drawn = toAscii(art('tile_peak'), 0);
+  assert.ok(drawn.includes(ink('highlight')), 'the cap is what makes it a mountain');
+  assert.ok(drawn.includes(ink('light')) && drawn.includes(ink('mid')), 'a lit face and a shadowed one');
+});
+
+test('the skyline has something taller than the roofs standing in it', () => {
+  assert.equal(toAscii(art('tile_roofs'), 0), [
+    '................',
+    '................',
+    '....L.L.........',
+    '....LLL.........',
+    '....MMM.........',
+    '....MMM...LLLL..',
+    'LLLLMMM...MMMM..',
+    'MMMMMMM...MMMMLL',
+    'MMMMMMMLLLMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+    'MMKMMMMKMMMMKMMM',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+  ].join('\n'));
+
+  // Roofs at one height read as a wall. The tower is what says a city was built
+  // here rather than fortified, so something has to stand clear of the rest.
+  const tops = Array.from({ length: SPRITE_SIZE }, (_, x) => topOf('tile_roofs', x));
+  assert.ok(Math.min(...tops) < topOf('tile_roofs', 0), 'nothing rises above the near roof');
+});
+
+test('the colonnade stands its columns clear of the sky', () => {
+  assert.equal(toAscii(art('tile_pillars'), 0), [
+    'LLLLLLLLLLLLLLLL',
+    'MMMMMMMMMMMMMMMM',
+    'KKKKKKKKKKKKKKKK',
+    '.LLLLLL..LLLLLL.',
+    '..LMMK....LMMK..',
+    '..LMMK....LMMK..',
+    '..LMMK....LMMK..',
+    '..LMMK....LMMK..',
+    '..LMMK....LMMK..',
+    '..LMMK....LMMK..',
+    '..LMMK....LMMK..',
+    '..LMMK....LMMK..',
+    '..LMMK....LMMK..',
+    '.LMMMMK..LMMMMK.',
+    '.MMMMMM..MMMMMM.',
+    'MMMMMMMMMMMMMMMM',
+  ].join('\n'));
+
+  // The sky between them is what makes them columns instead of stripes, and the
+  // shafts run the full height so a band deeper than one tile stacks into a
+  // storey rather than into a fence.
+  const shaft = toSilhouette(art('tile_pillars'), 0).split('\n')[SPRITE_SIZE / 2] ?? '';
+  assert.ok(shaft.includes('.'), 'no daylight between the columns');
+  assert.ok(shaft.includes(INK_CHARS.charAt(1)), 'no columns');
+  assert.equal(widthAt('tile_pillars', 0), SPRITE_SIZE, 'the architrave has to run right across');
+});
+
+test('the arcade is an opening cut out of a wall, not a wall drawn around one', () => {
+  assert.equal(toAscii(art('tile_arch'), 0), [
+    'LLLLLLLLLLLLLLLL',
+    'MMMMMMMMMMMMMMMM',
+    'MMM..MMMMMM..MMM',
+    'MM....MMMM....MM',
+    'M......MM......M',
+    'M......MM......M',
+    'M......MM......M',
+    'M......MM......M',
+    'M......MM......M',
+    'M......MM......M',
+    'M......MM......M',
+    'M......MM......M',
+    'M......MM......M',
+    'M......MM......M',
+    'M......MM......M',
+    'MMMMMMMMMMMMMMMM',
+  ].join('\n'));
+
+  // What reads at this size is the daylight, not the moulding: the arch is the
+  // shape of what is missing. So the wall is solid top and bottom and the middle
+  // of the cell is mostly sky.
+  assert.equal(widthAt('tile_arch', 0), SPRITE_SIZE);
+  assert.equal(widthAt('tile_arch', SPRITE_SIZE - 1), SPRITE_SIZE);
+  assert.ok(widthAt('tile_arch', SPRITE_SIZE / 2) < SPRITE_SIZE / 2, 'the arches are too narrow to read');
+});
+
+test('the canopy is scalloped along the top and dense underneath', () => {
+  assert.equal(toAscii(art('tile_foliage'), 0), [
+    '....GG......GG..',
+    '...GGGG....GGGG.',
+    '..GGGGGG..GGGGGG',
+    '.GGGGGGGGGGGGGG.',
+    'gggggggggggggggg',
+    'gggDggggggggDggg',
+    'gggggggggggggggg',
+    'gDgggggggDgggggg',
+    'gggggggggggggggg',
+    'ggggggDgggggggDg',
+    'gggggggggggggggg',
+    'gggDgggggggggDgg',
+    'gggggggggggggggg',
+    'gDggggggggDggggg',
+    'gggggggggggggggg',
+    'ggggggggDgggggDg',
+  ].join('\n'));
+
+  // Leaf mass, seen from below and far off: broken at the crowns, solid beneath.
+  assert.ok(widthAt('tile_foliage', 0) < SPRITE_SIZE, 'the crowns have no sky between them');
+  assert.equal(widthAt('tile_foliage', SPRITE_SIZE - 1), SPRITE_SIZE, 'the canopy is see-through');
+});
+
+test('the cloud is lit along the top and tapers away underneath', () => {
+  assert.equal(toAscii(art('tile_cloud'), 0), [
+    '................',
+    '...LLLL.........',
+    '..LLLLLLL...LLL.',
+    '.LLLLLLLLL.LLLLL',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMM....',
+    '.MMMMMMMM.......',
+    '..MMMM..........',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ].join('\n'));
+
+  // The taper is the whole trick. A cloud with a flat bottom is a shelf, and a
+  // band of shelves is a ceiling -- exactly wrong for the two themes that want
+  // it, one of which is the sky opening and the other the sky closing.
+  assert.equal(widthAt('tile_cloud', SPRITE_SIZE - 1), 0, 'the cloud reaches the floor of its band');
+  let widest = 0;
+  let lowest = 0;
+  for (let y = 0; y < SPRITE_SIZE; y++) {
+    const width = widthAt('tile_cloud', y);
+    widest = Math.max(widest, width);
+    if (width > 0) lowest = width;
+  }
+  assert.ok(lowest < widest, 'the underside is as wide as the cloud, so it is a slab');
 });
 
 // --- accessors --------------------------------------------------------------

@@ -13,7 +13,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { PALETTE_ROLES, SPRITES, spriteFor } from './sprites.js';
+import { NONE, PALETTE_ROLES, SPRITES, spriteFor } from './sprites.js';
 import {
   DEFAULT_THEME,
   WORLDS,
@@ -102,6 +102,50 @@ test('every tile a world names is a sprite that exists', () => {
     for (const layer of world.parallax) {
       assert.ok(spriteFor(layer.tileId) !== null, `${world.id}/${layer.id} draws a missing tile`);
     }
+  }
+});
+
+test('the tile a world stands on has no holes in it', () => {
+  // The sky is a themed rect drawn behind the parallax, so a transparent pixel
+  // in the ground tile is a hole the scribe walks over and the sky shows through
+  // his feet. The distance tiles are allowed their sky; the floor is not.
+  for (const world of WORLDS.values()) {
+    const tile = spriteFor(world.groundTile);
+    assert.ok(tile !== null, `${world.id} stands on a missing tile`);
+    for (const frame of tile.frames) {
+      for (const index of frame) {
+        assert.notEqual(index, NONE, `${world.id} stands on ${world.groundTile}, which has a hole in it`);
+      }
+    }
+  }
+});
+
+test('NO TWO THEMES STACK THE SAME THREE TILES', () => {
+  // The whole reason there is more than one tileset. A theme is a palette *and*
+  // a place, and a palette alone cannot tell them apart: the sea drawn on the
+  // abbey's arcade is the abbey in blue, and a player who has just been sent
+  // through the flood is looking at a cloister.
+  //
+  // Recolouring still carries everything that is honestly the same place under a
+  // different light -- the abbey, the temple and the tomb all stand on the same
+  // cut stone. What this asserts is only that no two themes are the same picture
+  // all the way down.
+  const stacks = new Map<string, string>();
+  for (const world of WORLDS.values()) {
+    const stack = world.parallax.map((layer) => layer.tileId).join(' / ');
+    const first = stacks.get(stack);
+    assert.equal(first, undefined, `${world.id} is ${String(first)} recoloured: ${stack}`);
+    stacks.set(stack, world.id);
+  }
+});
+
+test('a theme is never one tile at three depths', () => {
+  // Three bands of the same picture at three speeds is not depth, it is one
+  // backdrop sliding over itself. Every theme has to differ somewhere between
+  // the horizon and the scribe's feet.
+  for (const world of WORLDS.values()) {
+    const distinct = new Set(world.parallax.map((layer) => layer.tileId));
+    assert.ok(distinct.size >= 2, `${world.id} draws one tile at every depth`);
   }
 });
 

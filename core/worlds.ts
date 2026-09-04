@@ -146,10 +146,21 @@ function makeWorld(id: string, ink: ThemeInk, far: string, mid: string, ground: 
 /**
  * The ten themes, in the order docs/design/05-scenery-warps.md lists them.
  *
- * Three tilesets carry all ten, because a tile is recoloured by the theme rather
- * than redrawn. More tiles -- water, brick, bone -- are the obvious next art,
- * and each is a new entry in `core/sprites.ts` plus a name here, with nothing
- * else to change.
+ * Each row chooses eleven colours and three tiles: what stands in the far
+ * distance, what stands in the middle, and what the scribe walks on.
+ *
+ * The two levers cost very different amounts, and choosing between them is the
+ * whole craft of this table. A recolour is free -- `tile_stone` is cloister grey
+ * in the abbey and ochre in the wilderness with no second tileset -- so it
+ * carries every theme that is honestly the same *place* under a different light:
+ * the abbey, the temple and the tomb all stand on cut stone, and they differ by
+ * candle amber, deep red and cold blue. New art is for what a recolour cannot
+ * reach. The sea is not the abbey in blue, because the abbey stands in an arcade
+ * and the sea rolls, and no palette turns an arch into a wave.
+ *
+ * So no two themes stack the same three tiles, and `worlds.test.ts` asserts it.
+ * That assertion is the reason the tiles exist: ten palettes over one silhouette
+ * is ten lightings of the same room.
  */
 export const WORLDS: ReadonlyMap<string, World> = new Map(
   [
@@ -157,61 +168,71 @@ export const WORLDS: ReadonlyMap<string, World> = new Map(
       outline: 0x14121a, shade: 0x2e2b38, mid: 0x4a4655, light: 0x6f6a7d, highlight: 0xd8d3c4,
       robe: 0x5a4632, robeShade: 0x3a2c20, accent: 0xe8a02c, flame: 0xffe6a8,
       groundTop: 0x5b5566, groundBody: 0x36323f,
-    }, 'tile_stone', 'tile_stone', 'tile_stone'),
+      // The cloister: an arcade in the distance, cut stone underfoot.
+    }, 'tile_arch', 'tile_stone', 'tile_stone'),
 
     makeWorld('garden', {
       outline: 0x0f1a10, shade: 0x1f3a22, mid: 0x2f5c33, light: 0x4c8c46, highlight: 0xd8f0b0,
       robe: 0x6a4a2a, robeShade: 0x402c18, accent: 0xf0c64a, flame: 0xfff3c0,
       groundTop: 0x4e9440, groundBody: 0x2b5c2a,
-    }, 'tile_stone', 'tile_grass', 'tile_grass'),
+      // Eden: canopy over canopy, and grass to walk on.
+    }, 'tile_foliage', 'tile_foliage', 'tile_grass'),
 
     makeWorld('desert', {
       outline: 0x2a1c10, shade: 0x6b4a24, mid: 0xa8763a, light: 0xd9a860, highlight: 0xf6e3b6,
       robe: 0x8a6a3a, robeShade: 0x5a4424, accent: 0xf0b03a, flame: 0xfff0c8,
       groundTop: 0xe0c07a, groundBody: 0xbb9450,
-    }, 'tile_sand', 'tile_sand', 'tile_sand'),
+      // Wandering: dunes to the horizon, and more of them nearer.
+    }, 'tile_dune', 'tile_dune', 'tile_sand'),
 
     makeWorld('sea', {
       outline: 0x081625, shade: 0x14324e, mid: 0x1f5a80, light: 0x3a8fb5, highlight: 0xdff2f7,
       robe: 0x4a4a6a, robeShade: 0x2c2c44, accent: 0xe8c86a, flame: 0xfffbe0,
       groundTop: 0x2f6f8e, groundBody: 0x18415c,
-    }, 'tile_stone', 'tile_sand', 'tile_sand'),
+      // The deep, from the shore: surf far out, open water, wet sand.
+    }, 'tile_wave', 'tile_water', 'tile_sand'),
 
     makeWorld('mountain', {
       outline: 0x14161c, shade: 0x2c313c, mid: 0x4a505e, light: 0x767d8c, highlight: 0xdde1e8,
       robe: 0x53414f, robeShade: 0x33262f, accent: 0xe2622c, flame: 0xffb14a,
       groundTop: 0x5a6070, groundBody: 0x353a46,
-    }, 'tile_stone', 'tile_stone', 'tile_stone'),
+      // Sinai: the peak behind, a rock face nearer, scree underfoot.
+    }, 'tile_peak', 'tile_stone', 'tile_rubble'),
 
     makeWorld('storm', {
       outline: 0x100b1c, shade: 0x241a3c, mid: 0x3d2c5e, light: 0x5f4a86, highlight: 0xe6dcff,
       robe: 0x4a3a5c, robeShade: 0x2a2038, accent: 0xf2e14a, flame: 0xffffd8,
       groundTop: 0x40315e, groundBody: 0x241a38,
-    }, 'tile_stone', 'tile_stone', 'tile_grass'),
+      // Jonah: cloud on top of the sea, and the sea all the way down.
+    }, 'tile_cloud', 'tile_wave', 'tile_water'),
 
     makeWorld('city', {
       outline: 0x2a1e18, shade: 0x6b5442, mid: 0x9c7c5e, light: 0xc9a882, highlight: 0xf4e6cf,
       robe: 0x6d4b34, robeShade: 0x412c1e, accent: 0xc0392b, flame: 0xf0a05a,
       groundTop: 0xb08f6a, groundBody: 0x7c6046,
-    }, 'tile_stone', 'tile_stone', 'tile_stone'),
+      // Jerusalem: a skyline over the wall, and the wall's own brick paved flat.
+    }, 'tile_roofs', 'tile_brick', 'tile_brick'),
 
     makeWorld('temple', {
       outline: 0x1d0f10, shade: 0x4a1e20, mid: 0x7d3236, light: 0xb05a4a, highlight: 0xffe8c8,
       robe: 0x7a2430, robeShade: 0x4a1420, accent: 0xf2c14e, flame: 0xfff2b0,
       groundTop: 0x8a5a3a, groundBody: 0x5a3424,
-    }, 'tile_stone', 'tile_stone', 'tile_stone'),
+      // The sanctuary: a colonnade twice over, receding, on a stone floor.
+    }, 'tile_pillars', 'tile_pillars', 'tile_stone'),
 
     makeWorld('tomb', {
       outline: 0x05070c, shade: 0x121a28, mid: 0x1e2c42, light: 0x36506e, highlight: 0xb8d0e0,
       robe: 0x2a2c3a, robeShade: 0x181a24, accent: 0x6ea8c8, flame: 0xd8f0ff,
       groundTop: 0x24344c, groundBody: 0x121a28,
-    }, 'tile_stone', 'tile_stone', 'tile_stone'),
+      // The catacomb: a wall of bone behind the crypt wall, broken floor.
+    }, 'tile_bone', 'tile_stone', 'tile_rubble'),
 
     makeWorld('apocalypse', {
       outline: 0x05040a, shade: 0x1a1a22, mid: 0x4a4438, light: 0xbfae7a, highlight: 0xfffef2,
       robe: 0xe8e0c8, robeShade: 0x9c9478, accent: 0xffd75e, flame: 0xffffff,
       groundTop: 0xc9b26a, groundBody: 0x6e5f38,
-    }, 'tile_stone', 'tile_stone', 'tile_stone'),
+      // The end: nothing but cloud, opened, standing over white stone.
+    }, 'tile_cloud', 'tile_cloud', 'tile_stone'),
   ].map((w) => [w.id, w]),
 );
 

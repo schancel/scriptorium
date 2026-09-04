@@ -898,6 +898,342 @@ const TILE_SAND: readonly string[] = [
   'gggGgggggggggggg',
 ];
 
+/**
+ * Water, in a calm swell: a lit surface with ripples receding into the body.
+ *
+ * Horizontal by construction. Every mark in it runs across the tile, because a
+ * surface is the one thing water has that stone has not, and a dash running any
+ * other way reads as a crack.
+ */
+const TILE_WATER: readonly string[] = [
+  'GGGGGGGGGGGGGGGG',
+  'GGGWWGGGGGWWGGGG',
+  'gggggggggggggggg',
+  'ggGGGGGgggGGGGGg',
+  'gggggggggggggggg',
+  'gggggggggggggggg',
+  'GGGGgggGGGGGgggG',
+  'gggggggggggggggg',
+  'gggggggggggggggg',
+  'ggGGGGGGgggGGGgg',
+  'gggggggggggggggg',
+  'gggggggggggggggg',
+  'GGgggGGGGGgggGGG',
+  'gggggggggggggggg',
+  'gggggggggggggggg',
+  'ggGGGGgggGGGGGgg',
+];
+
+/**
+ * Brick, in a running bond: four courses, each offset half a brick.
+ *
+ * The whole difference from `tile_stone` is the size of the unit and the
+ * regularity of the joint -- stone is three tall courses with a joint wherever
+ * the mason found one, brick is four short courses that line up everywhere.
+ * That is what reads as a city wall rather than as a quarry face.
+ */
+const TILE_BRICK: readonly string[] = [
+  'KKKKKKKKKKKKKKKK',
+  'LLLLLLLKLLLLLLLL',
+  'MMMMMMMKMMMMMMMM',
+  'DDDDDDDKDDDDDDDD',
+  'KKKKKKKKKKKKKKKK',
+  'LLLKLLLLLLLKLLLL',
+  'MMMKMMMMMMMKMMMM',
+  'DDDKDDDDDDDKDDDD',
+  'KKKKKKKKKKKKKKKK',
+  'LLLLLLLKLLLLLLLL',
+  'MMMMMMMKMMMMMMMM',
+  'DDDDDDDKDDDDDDDD',
+  'KKKKKKKKKKKKKKKK',
+  'LLLKLLLLLLLKLLLL',
+  'MMMKMMMMMMMKMMMM',
+  'DDDKDDDDDDDKDDDD',
+];
+
+/**
+ * Bone: long bones stacked the way an ossuary stacks them, ends outward.
+ *
+ * Bright at the joints and dull along the shaft, because that is how a femur
+ * catches light and it is the only cue four pixels can carry. Deliberately not
+ * skulls: a face at this size pulls the eye straight off the rail, and the
+ * scenery's whole job is to say where the scribe is and then stay behind him.
+ */
+const TILE_BONE: readonly string[] = [
+  'DDDDDDDDDDDDDDDD',
+  'WWDDDDDDWWDDDDDD',
+  'WWLLLLLLWWLLLLLL',
+  'WWDDDDDDWWDDDDDD',
+  'DDDDDDDDDDDDDDDD',
+  'DDDDWWDDDDDDWWDD',
+  'LLLLWWLLLLLLWWLL',
+  'DDDDWWDDDDDDWWDD',
+  'DDDDDDDDDDDDDDDD',
+  'WWDDDDDDWWDDDDDD',
+  'WWLLLLLLWWLLLLLL',
+  'WWDDDDDDWWDDDDDD',
+  'DDDDDDDDDDDDDDDD',
+  'DDDDWWDDDDDDWWDD',
+  'LLLLWWLLLLLLWWLL',
+  'DDDDWWDDDDDDWWDD',
+];
+
+/**
+ * Rubble: broken chips, with nothing squared about them.
+ *
+ * The chips begin and end on different rows, and that is the only thing keeping
+ * this from being a second brick wall. Courses that agree with each other read
+ * as masonry whatever colours a theme lends them; courses that do not read as
+ * something that fell down.
+ */
+const TILE_RUBBLE: readonly string[] = [
+  'KGGGKKKKGGGGKKKK',
+  'KgggKGGGggggKKGG',
+  'KgggKgggggggKKgg',
+  'KKKKKgggKKKKKKgg',
+  'KKGGGGKKKKKGGGKK',
+  'KKggggKGGGKgggKK',
+  'KKggggKgggKgggKK',
+  'KKKKKKKgggKKKKKK',
+  'GGGKKKKKKGGGKKKK',
+  'gggKGGGGKgggKGGG',
+  'gggKggggKgggKggg',
+  'KKKKggggKKKKKggg',
+  'KGGGGKKKKKGGGKKK',
+  'KggggKGGGKgggKGG',
+  'KggggKgggKgggKgg',
+  'KKKKKKgggKKKKKgg',
+];
+
+// --- the middle and far distance --------------------------------------------
+
+/**
+ * Everything above is ground: every pixel painted, because a floor with a hole
+ * in it shows the sky through the scribe's feet. Everything below is *distance*,
+ * and there the transparent pixels are the point -- `core/draw.ts` lays a themed
+ * sky rect behind the parallax, so an unpainted pixel here is that sky showing
+ * through a ridge line.
+ *
+ * Two things to know before editing one:
+ *
+ *  - **They are drawn tiled**, so a shape has to meet its own left and right
+ *    edge. A dune crests in the middle of the cell and troughs at the seam; a
+ *    colonnade puts whole columns inside the cell and nothing across the join.
+ *  - **`shade` is the sky's own role.** A dark drawn in `shade` is invisible
+ *    against the sky it stands in front of, which is why the darks down here are
+ *    `outline` -- a column has a black edge rather than a grey one.
+ *
+ * And all of them are quiet on purpose. A parallax band is a backdrop drawn at
+ * under half opacity behind the one line of text the player is reading. A tile
+ * busy enough to be interesting at this distance is a tile competing with the
+ * rail, which is the one thing scenery may never do.
+ */
+
+/** A dune: one crest to a cell, troughing at the seam so a row of them rolls. */
+const TILE_DUNE: readonly string[] = [
+  '................',
+  '................',
+  '................',
+  '......GGG.......',
+  '....GGGGGG......',
+  '...GGGGGGGGG....',
+  '.GGGGGGGGGGGGGG.',
+  'GGGGGGGGGGGGGGGG',
+  'gggggggggggggggg',
+  'gggggggggggggggg',
+  'gggggggggggggggg',
+  'gggggggGGGGGgggg',
+  'gggggggggggggggg',
+  'gggggggggggggggg',
+  'gggggggggggggggg',
+  'gggggggggggggggg',
+];
+
+/**
+ * Waves: two crests to a cell, each capped with foam.
+ *
+ * Twice the frequency of the dune and half its height, which is the whole
+ * difference between water and sand at this size -- a slow single swell reads as
+ * a hill however blue you paint it. The foam is the `highlight` role, so it is
+ * white in the sea and lightning-lit in the storm.
+ */
+const TILE_WAVE: readonly string[] = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '...WW......WW...',
+  '..WGGW....WGGW..',
+  '.WGGGGW..WGGGGW.',
+  'WGGGGGGWWGGGGGGW',
+  'GGGGGGGGGGGGGGGG',
+  'gggggggggggggggg',
+  'gggggggggggggggg',
+  'ggGGGGggggGGGGgg',
+  'gggggggggggggggg',
+  'gggggGGGGGGggggg',
+  'gggggggggggggggg',
+  'gggggggggggggggg',
+];
+
+/**
+ * A peak, snow-capped, with its east face in shadow.
+ *
+ * The cap is what makes it a mountain rather than a triangle, and the shadow on
+ * one side is what makes it a solid rather than a cut-out. Both are two colours'
+ * worth of work and there is no third.
+ */
+const TILE_PEAK: readonly string[] = [
+  '................',
+  '................',
+  '.......WW.......',
+  '.......WW.......',
+  '......WWWW......',
+  '.....WWWWWW.....',
+  '.....LWWWWM.....',
+  '....LLWWWWMM....',
+  '...LLLLLLMMMM...',
+  '...LLLLLLMMMM...',
+  '..LLLLLLLMMMMM..',
+  '.LLLLLLLLMMMMMM.',
+  '.LLLLLLLLMMMMMM.',
+  'LLLLLLLLLMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+];
+
+/**
+ * A skyline: flat roofs at three heights, and a tower with its merlons showing.
+ *
+ * The tower is the tile's one piece of detail and it earns it -- roofs alone at
+ * three heights read as a wall, and the notched top of something taller than the
+ * rest is what says a city was built here rather than fortified.
+ */
+const TILE_ROOFS: readonly string[] = [
+  '................',
+  '................',
+  '....L.L.........',
+  '....LLL.........',
+  '....MMM.........',
+  '....MMM...LLLL..',
+  'LLLLMMM...MMMM..',
+  'MMMMMMM...MMMMLL',
+  'MMMMMMMLLLMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMKMMMMKMMMMKMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+];
+
+/**
+ * A colonnade: two columns under an architrave, lit down one side.
+ *
+ * The columns run the full height of the cell so that a band deeper than one
+ * tile stacks into a storey rather than into a fence, and the sky between them
+ * is what makes them columns instead of stripes.
+ */
+const TILE_PILLARS: readonly string[] = [
+  'LLLLLLLLLLLLLLLL',
+  'MMMMMMMMMMMMMMMM',
+  'KKKKKKKKKKKKKKKK',
+  '.LLLLLL..LLLLLL.',
+  '..LMMK....LMMK..',
+  '..LMMK....LMMK..',
+  '..LMMK....LMMK..',
+  '..LMMK....LMMK..',
+  '..LMMK....LMMK..',
+  '..LMMK....LMMK..',
+  '..LMMK....LMMK..',
+  '..LMMK....LMMK..',
+  '..LMMK....LMMK..',
+  '.LMMMMK..LMMMMK.',
+  '.MMMMMM..MMMMMM.',
+  'MMMMMMMMMMMMMMMM',
+];
+
+/**
+ * An arcade: two round-headed arches and the piers between them.
+ *
+ * The cloister, which is the abbey's own architecture and the reason the default
+ * theme no longer stands in front of a plain wall. What reads at this size is
+ * not the moulding but the *opening* -- daylight in the shape of an arch -- so
+ * the arch is cut out of the wall and nothing else is drawn.
+ */
+const TILE_ARCH: readonly string[] = [
+  'LLLLLLLLLLLLLLLL',
+  'MMMMMMMMMMMMMMMM',
+  'MMM..MMMMMM..MMM',
+  'MM....MMMM....MM',
+  'M......MM......M',
+  'M......MM......M',
+  'M......MM......M',
+  'M......MM......M',
+  'M......MM......M',
+  'M......MM......M',
+  'M......MM......M',
+  'M......MM......M',
+  'M......MM......M',
+  'M......MM......M',
+  'M......MM......M',
+  'MMMMMMMMMMMMMMMM',
+];
+
+/**
+ * A canopy: two crowns of leaf, scalloped along the top and dense below.
+ *
+ * The dabs in the mass are the `shade` role, which is the sky's own colour, so
+ * they read as chinks of light through the leaves rather than as dark spots on
+ * them. It is the one place in this file where drawing in the sky's colour is
+ * the effect and not the mistake.
+ */
+const TILE_FOLIAGE: readonly string[] = [
+  '....GG......GG..',
+  '...GGGG....GGGG.',
+  '..GGGGGG..GGGGGG',
+  '.GGGGGGGGGGGGGG.',
+  'gggggggggggggggg',
+  'gggDggggggggDggg',
+  'gggggggggggggggg',
+  'gDgggggggDgggggg',
+  'gggggggggggggggg',
+  'ggggggDgggggggDg',
+  'gggggggggggggggg',
+  'gggDgggggggggDgg',
+  'gggggggggggggggg',
+  'gDggggggggDggggg',
+  'gggggggggggggggg',
+  'ggggggggDgggggDg',
+];
+
+/**
+ * A cloud bank: lit along the top, tapering away underneath.
+ *
+ * The taper is the whole trick. A cloud with a flat bottom is a shelf, and a
+ * band of shelves is a ceiling -- which is exactly wrong for the two themes that
+ * want it, one of which is the sky opening and the other the sky closing.
+ */
+const TILE_CLOUD: readonly string[] = [
+  '................',
+  '...LLLL.........',
+  '..LLLLLLL...LLL.',
+  '.LLLLLLLLL.LLLLL',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMM....',
+  '.MMMMMMMM.......',
+  '..MMMM..........',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+];
+
 // --- the sheet --------------------------------------------------------------
 
 /**
@@ -922,9 +1258,23 @@ export const SPRITES: ReadonlyMap<string, PixelSprite> = new Map(
     sprite('ink_pot', [INK_POT]),
     sprite('heart_full', [HEART_FULL]),
     sprite('heart_empty', [HEART_EMPTY]),
+    // Ground: every pixel painted, so a floor has no holes in it.
     sprite('tile_stone', [TILE_STONE]),
     sprite('tile_grass', [TILE_GRASS]),
     sprite('tile_sand', [TILE_SAND]),
+    sprite('tile_water', [TILE_WATER]),
+    sprite('tile_brick', [TILE_BRICK]),
+    sprite('tile_bone', [TILE_BONE]),
+    sprite('tile_rubble', [TILE_RUBBLE]),
+    // Distance: the sky shows through what is not painted.
+    sprite('tile_dune', [TILE_DUNE]),
+    sprite('tile_wave', [TILE_WAVE]),
+    sprite('tile_peak', [TILE_PEAK]),
+    sprite('tile_roofs', [TILE_ROOFS]),
+    sprite('tile_pillars', [TILE_PILLARS]),
+    sprite('tile_arch', [TILE_ARCH]),
+    sprite('tile_foliage', [TILE_FOLIAGE]),
+    sprite('tile_cloud', [TILE_CLOUD]),
   ].map((s) => [s.id, s]),
 );
 
