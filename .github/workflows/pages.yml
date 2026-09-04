@@ -29,8 +29,18 @@ jobs:
       - run: npm install --no-audit --no-fund
       - name: Build
         run: make build
+      # Stage only what the site needs. Uploading '.' would ship node_modules
+      # and the whole git-tracked repo, which is slow and hits artifact limits.
+      - name: Stage site
+        run: |
+          mkdir -p _site
+          cp index.html _site/ 2>/dev/null || { echo "no index.html yet -- nothing to deploy"; exit 1; }
+          cp -r build _site/
+          cp -r data _site/
+          touch _site/.nojekyll
+          du -sh _site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
-        with: { path: '.' }
+        with: { path: '_site' }
       - id: deployment
         uses: actions/deploy-pages@v4
