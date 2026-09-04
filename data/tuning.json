@@ -56,7 +56,10 @@
     "report_key_min_attempts": 12,
     "report_worst_key_rate": 0.12,
     "first_run_note_keys": 8,
-    "scene_blend_verses": 2
+    "scene_blend_verses": 2,
+    "follower_spacing_px": 20,
+    "follower_line_max": 6,
+    "follower_walk_ms": 120
   },
   "meta": {
     "grey_snap_ms": {
@@ -286,6 +289,18 @@
     "scene_blend_verses": {
       "unit": "verses",
       "description": "Width of the window a scene change's colour eases across, centred on the boundary verse. The tiles cut at the boundary; the palette moves over this many verses around it, driven by how far through them the player has typed and never by a clock. At zero the world changes between one verse and the next; much above three and Genesis 1 is one long crossfade with no places in it. See [scenery](05-scenery-warps.md#between-two-scenes-the-palette-moves-and-the-tiles-cut)."
+    },
+    "follower_spacing_px": {
+      "unit": "px",
+      "description": "Gap between two figures in the line walking behind the scribe. Wider than the 16px sprite, so no two overlap; much wider and the line runs off the left of the screen before the cap is reached. See [followers](11-followers.md#the-cap-and-what-is-shown-instead)."
+    },
+    "follower_line_max": {
+      "unit": "figures",
+      "description": "How many followers walk. Past this the earliest on the route walk on ahead and a count stands at the tail of the line instead -- a screen filling with figures is scenery competing with the text it exists to serve."
+    },
+    "follower_walk_ms": {
+      "unit": "ms",
+      "description": "Frame duration of a follower's two-frame walk, and the stagger between one figure and the next, so the line does not march in lockstep. It matches the scribe's own stride because they are walking with him."
     }
   },
   "_generated_from": "docs/design/07-tuning.md"

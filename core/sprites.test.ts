@@ -15,6 +15,12 @@ import assert from 'node:assert/strict';
 
 import {
   BURST_FRAMES,
+  FOLLOWER_BODIES,
+  FOLLOWER_CLOTHS,
+  FOLLOWER_IDLE_FIRST,
+  FOLLOWER_MARKS,
+  followerBodyId,
+  followerMarkId,
   CANDLE_UNLIT_FRAME,
   HOP_BOUNCE,
   HOP_CONTACT,
@@ -1103,4 +1109,515 @@ test('the ink lands as a blot and then spreads, and it is ink rather than fire',
     '..K..........K..',
     '................',
   ].join('\n'));
+});
+
+// --- the followers ----------------------------------------------------------
+//
+// docs/design/11-followers.md#art-without-ten-bespoke-sprites. Nineteen figures
+// walk behind the scribe and there are no nineteen bespoke sprites: three body
+// silhouettes, each recoloured into three cloths from the theme's own palette,
+// and one small mark apiece laid over the top. The mark is what the eye reads;
+// the body is shared with the scribe, so they look like people walking with him.
+//
+// The pictures below are the composite -- body under mark, exactly as the frame
+// draws it in two commands -- because the composite is what a player sees and a
+// mark that reads beautifully on its own and lands on the figure's face is still
+// wrong. Two mechanical properties are asserted underneath them, and between
+// them they are why the composites can be trusted: no mark touches its body, and
+// every body puts its feet on the same row in every frame.
+
+/** Body under mark, as `core/draw.ts` stacks the two sprite commands. */
+function composed(bodyId: string, markId: string, frame: number): string {
+  const body = art(bodyId);
+  const mark = art(markId);
+  const rows: string[] = [];
+  for (let y = 0; y < SPRITE_SIZE; y++) {
+    let row = '';
+    for (let x = 0; x < SPRITE_SIZE; x++) {
+      const over = pixelAt(mark, 0, x, y);
+      row += INK_CHARS.charAt(over === NONE ? pixelAt(body, frame, x, y) : over);
+    }
+    rows.push(row);
+  }
+  return rows.join('\n');
+}
+
+/** Every figure the roster names: passage, body, cloth, mark, and the picture. */
+const FIGURES: readonly (readonly [string, string, string, string, readonly string[]])[] = [
+  // Genesis 1 -- Eve, carrying a shoot.
+  ['Genesis 1', 'bare', 'light', 'shoot', [
+    '................',
+    '.....KKKKK......',
+    '....KWWWWWKK..G.',
+    '....KWWWWWWKGGG.',
+    '....KSSSSSSK.GG.',
+    '....KSSKSKSK..GG',
+    '....KSSSSSSK..G.',
+    '.....KSSSSK...G.',
+    '....KKLLLLKK..G.',
+    '...KLLLLLLLLK.G.',
+    '..KLLLLLLLLLLKG.',
+    '..KLLLLLLLLLLKG.',
+    '...KLLLLLLLLK.G.',
+    '...KLK....KLK.G.',
+    '..KKK......KKKG.',
+    '................',
+  ]],
+  // Genesis 3 -- Adam, carrying a hoe.
+  ['Genesis 3', 'bare', 'robe', 'hoe', [
+    '................',
+    '.....KKKKK......',
+    '....KrrrrrKK..M.',
+    '....KrrrrrrK..M.',
+    '....KSSSSSSK..M.',
+    '....KSSKSKSK..M.',
+    '....KSSSSSSK..M.',
+    '.....KSSSSK...M.',
+    '....KKRRRRKK..M.',
+    '...KRRRRRRRRK.M.',
+    '..KRRRRRRRRRRKM.',
+    '..KRRRRRRRRRRKM.',
+    '...KRRRRRRRRK.M.',
+    '...KRK....KRK.DD',
+    '..KKK......KKKDD',
+    '................',
+  ]],
+  // Genesis 22 -- Abraham, carrying a horn.
+  ['Genesis 22', 'hooded', 'mid', 'horn', [
+    '................',
+    '.....KKKKK......',
+    '....KDDDDDKK....',
+    '....KDDDDDDK..L.',
+    '....KDSSSSDK.LWL',
+    '....KDSKSKDKLW.L',
+    '....KDSSSSDKLW.L',
+    '.....KSSSSK.LWL.',
+    '....KKMMMMKKLL..',
+    '...KMMMMMMMMK...',
+    '..KMMMMMMMMMMK..',
+    '..KMMMMMMMMMMK..',
+    '...KMMMMMMMMK...',
+    '...KMK....KMK...',
+    '..KKK......KKK..',
+    '................',
+  ]],
+  // Exodus 3 -- Moses, carrying a staff.
+  ['Exodus 3', 'hooded', 'robe', 'staff', [
+    '................',
+    '.....KKKKK...MM.',
+    '....KrrrrrKK.MM.',
+    '....KrrrrrrK..M.',
+    '....KrSSSSrK..M.',
+    '....KrSKSKrK..M.',
+    '....KrSSSSrK..M.',
+    '.....KSSSSK...M.',
+    '....KKRRRRKK..M.',
+    '...KRRRRRRRRK.M.',
+    '..KRRRRRRRRRRKM.',
+    '..KRRRRRRRRRRKM.',
+    '...KRRRRRRRRK.M.',
+    '...KRK....KRK.M.',
+    '..KKK......KKKM.',
+    '................',
+  ]],
+  // Exodus 12 -- the firstborn, carrying a lamb.
+  ['Exodus 12', 'child', 'light', 'lamb', [
+    '................',
+    '................',
+    '................',
+    '................',
+    '.....KKKKK...WW.',
+    '....KWWWWWWKWWWW',
+    '....KSSSSSSKWWWW',
+    '....KSKSSKSKW..W',
+    '....KSSSSSSKW..W',
+    '.....KSSSSK.....',
+    '....KKLLLLKK....',
+    '...KLLLLLLLLK...',
+    '...KLLLLLLLLK...',
+    '...KLK....KLK...',
+    '..KKK......KKK..',
+    '................',
+  ]],
+  // Exodus 16 -- the gatherer, carrying a pot.
+  ['Exodus 16', 'bare', 'mid', 'pot', [
+    '................',
+    '.....KKKKK......',
+    '....KDDDDDKK....',
+    '....KDDDDDDK.DD.',
+    '....KSSSSSSKDDDD',
+    '....KSSKSKSKDWWD',
+    '....KSSSSSSKDWWD',
+    '.....KSSSSK.DWWD',
+    '....KKMMMMKKDDDD',
+    '...KMMMMMMMMK...',
+    '..KMMMMMMMMMMK..',
+    '..KMMMMMMMMMMK..',
+    '...KMMMMMMMMK...',
+    '...KMK....KMK...',
+    '..KKK......KKK..',
+    '................',
+  ]],
+  // Numbers 21 -- the one who looked, carrying a serpent.
+  ['Numbers 21', 'hooded', 'light', 'serpent', [
+    '................',
+    '.....KKKKK..AAA.',
+    '....KWWWWWKKA..A',
+    '....KWWWWWWK.AA.',
+    '....KWSSSSWKAA..',
+    '....KWSKSKWK.A..',
+    '....KWSSSSWK..A.',
+    '.....KSSSSK...A.',
+    '....KKLLLLKK..A.',
+    '...KLLLLLLLLK.A.',
+    '..KLLLLLLLLLLKA.',
+    '..KLLLLLLLLLLKA.',
+    '...KLLLLLLLLK.A.',
+    '...KLK....KLK.A.',
+    '..KKK......KKKA.',
+    '................',
+  ]],
+  // Psalm 22 -- the psalmist, carrying a harp.
+  ['Psalm 22', 'hooded', 'robe', 'harp', [
+    '................',
+    '.....KKKKK......',
+    '....KrrrrrKK..MM',
+    '....KrrrrrrK.MLM',
+    '....KrSSSSrKMLLM',
+    '....KrSKSKrKMLLM',
+    '....KrSSSSrKMLLM',
+    '.....KSSSSK.MMMM',
+    '....KKRRRRKK....',
+    '...KRRRRRRRRK...',
+    '..KRRRRRRRRRRK..',
+    '..KRRRRRRRRRRK..',
+    '...KRRRRRRRRK...',
+    '...KRK....KRK...',
+    '..KKK......KKK..',
+    '................',
+  ]],
+  // Psalm 23 -- the shepherd, carrying a crook.
+  ['Psalm 23', 'bare', 'mid', 'crook', [
+    '................',
+    '.....KKKKK..MMM.',
+    '....KDDDDDKKM.M.',
+    '....KDDDDDDKMMM.',
+    '....KSSSSSSK..M.',
+    '....KSSKSKSK..M.',
+    '....KSSSSSSK..M.',
+    '.....KSSSSK...M.',
+    '....KKMMMMKK..M.',
+    '...KMMMMMMMMK.M.',
+    '..KMMMMMMMMMMKM.',
+    '..KMMMMMMMMMMKM.',
+    '...KMMMMMMMMK.M.',
+    '...KMK....KMK.M.',
+    '..KKK......KKKM.',
+    '................',
+  ]],
+  // Jonah 1 -- Jonah, carrying a fish.
+  ['Jonah 1', 'hooded', 'robe', 'fish', [
+    '................',
+    '.....KKKKK......',
+    '....KrrrrrKK....',
+    '....KrrrrrrK....',
+    '....KrSSSSrK...D',
+    '....KrSKSKrKDDDD',
+    '....KrSSSSrKDD.D',
+    '.....KSSSSK.DDDD',
+    '....KKRRRRKK...D',
+    '...KRRRRRRRRK...',
+    '..KRRRRRRRRRRK..',
+    '..KRRRRRRRRRRK..',
+    '...KRRRRRRRRK...',
+    '...KRK....KRK...',
+    '..KKK......KKK..',
+    '................',
+  ]],
+  // Matthew 12 -- the man with the withered hand, carrying a reed.
+  ['Matthew 12', 'bare', 'light', 'reed', [
+    '................',
+    '.....KKKKK......',
+    '....KWWWWWKK...G',
+    '....KWWWWWWK..G.',
+    '....KSSSSSSK.G..',
+    '....KSSKSKSKG...',
+    '....KSSSSSSKG...',
+    '.....KSSSSK..G..',
+    '....KKLLLLKK..G.',
+    '...KLLLLLLLLK.G.',
+    '..KLLLLLLLLLLKG.',
+    '..KLLLLLLLLLLKG.',
+    '...KLLLLLLLLK.G.',
+    '...KLK....KLK.G.',
+    '..KKK......KKKG.',
+    '................',
+  ]],
+  // Matthew 27 -- Simon of Cyrene, carrying a beam.
+  ['Matthew 27', 'hooded', 'mid', 'beam', [
+    '................',
+    '.....KKKKK....M.',
+    '....KDDDDDKK..M.',
+    '....KDDDDDDKMMMM',
+    '....KDSSSSDK..M.',
+    '....KDSKSKDK..M.',
+    '....KDSSSSDK..M.',
+    '.....KSSSSK...M.',
+    '....KKMMMMKK..M.',
+    '...KMMMMMMMMK.M.',
+    '..KMMMMMMMMMMKM.',
+    '..KMMMMMMMMMMK..',
+    '...KMMMMMMMMK...',
+    '...KMK....KMK...',
+    '..KKK......KKK..',
+    '................',
+  ]],
+  // John 1 -- John the Baptist, carrying a scroll.
+  ['John 1', 'bare', 'robe', 'scroll', [
+    '................',
+    '.....KKKKK......',
+    '....KrrrrrKK....',
+    '....KrrrrrrKWWWW',
+    '....KSSSSSSKWDDW',
+    '....KSSKSKSKWDDW',
+    '....KSSSSSSKWDDW',
+    '.....KSSSSK.WWWW',
+    '....KKRRRRKK....',
+    '...KRRRRRRRRK...',
+    '..KRRRRRRRRRRK..',
+    '..KRRRRRRRRRRK..',
+    '...KRRRRRRRRK...',
+    '...KRK....KRK...',
+    '..KKK......KKK..',
+    '................',
+  ]],
+  // John 3 -- Nicodemus, carrying a lamp.
+  ['John 3', 'hooded', 'light', 'lamp', [
+    '................',
+    '.....KKKKK......',
+    '....KWWWWWKK..D.',
+    '....KWWWWWWK..D.',
+    '....KWSSSSWKDDDD',
+    '....KWSKSKWKDFFD',
+    '....KWSSSSWKDFFD',
+    '.....KSSSSK.DDDD',
+    '....KKLLLLKK....',
+    '...KLLLLLLLLK...',
+    '..KLLLLLLLLLLK..',
+    '..KLLLLLLLLLLK..',
+    '...KLLLLLLLLK...',
+    '...KLK....KLK...',
+    '..KKK......KKK..',
+    '................',
+  ]],
+  // John 6 -- the boy with the loaves, carrying a basket.
+  ['John 6', 'child', 'mid', 'basket', [
+    '................',
+    '................',
+    '................',
+    '................',
+    '.....KKKKK..LLL.',
+    '....KDDDDDDKMMMM',
+    '....KSSSSSSKMLLM',
+    '....KSKSSKSKMLLM',
+    '....KSSSSSSKMMM.',
+    '.....KSSSSK.....',
+    '....KKMMMMKK....',
+    '...KMMMMMMMMK...',
+    '...KMMMMMMMMK...',
+    '...KMK....KMK...',
+    '..KKK......KKK..',
+    '................',
+  ]],
+  // John 8 -- the woman he did not condemn, carrying a stone.
+  ['John 8', 'bare', 'light', 'stone', [
+    '................',
+    '.....KKKKK......',
+    '....KWWWWWKK....',
+    '....KWWWWWWK....',
+    '....KSSSSSSK....',
+    '....KSSKSKSK....',
+    '....KSSSSSSK....',
+    '.....KSSSSK.....',
+    '....KKLLLLKK....',
+    '...KLLLLLLLLK...',
+    '..KLLLLLLLLLLK..',
+    '..KLLLLLLLLLLK..',
+    '...KLLLLLLLLK.DD',
+    '...KLK....KLKDDD',
+    '..KKK......KKKDD',
+    '................',
+  ]],
+  // John 10 -- the doorkeeper, carrying a key.
+  ['John 10', 'hooded', 'mid', 'key', [
+    '................',
+    '.....KKKKK......',
+    '....KDDDDDKK.AA.',
+    '....KDDDDDDKA..A',
+    '....KDSSSSDKA..A',
+    '....KDSKSKDK.AA.',
+    '....KDSSSSDK..A.',
+    '.....KSSSSK...AA',
+    '....KKMMMMKK..A.',
+    '...KMMMMMMMMK...',
+    '..KMMMMMMMMMMK..',
+    '..KMMMMMMMMMMK..',
+    '...KMMMMMMMMK...',
+    '...KMK....KMK...',
+    '..KKK......KKK..',
+    '................',
+  ]],
+  // John 19 -- Joseph of Arimathaea, carrying a linen.
+  ['John 19', 'hooded', 'robe', 'linen', [
+    '................',
+    '.....KKKKK......',
+    '....KrrrrrKK....',
+    '....KrrrrrrK....',
+    '....KrSSSSrK....',
+    '....KrSKSKrK....',
+    '....KrSSSSrKWWWW',
+    '.....KSSSSK.WWWW',
+    '....KKRRRRKKWWWW',
+    '...KRRRRRRRRK...',
+    '..KRRRRRRRRRRK..',
+    '..KRRRRRRRRRRK..',
+    '...KRRRRRRRRK...',
+    '...KRK....KRK...',
+    '..KKK......KKK..',
+    '................',
+  ]],
+  // Revelation 22 -- the one who came to the water, carrying a cup.
+  ['Revelation 22', 'bare', 'light', 'cup', [
+    '................',
+    '.....KKKKK......',
+    '....KWWWWWKK....',
+    '....KWWWWWWKAAAA',
+    '....KSSSSSSKALLA',
+    '....KSSKSKSKAAAA',
+    '....KSSSSSSK.AA.',
+    '.....KSSSSK..AA.',
+    '....KKLLLLKKAAAA',
+    '...KLLLLLLLLK...',
+    '..KLLLLLLLLLLK..',
+    '..KLLLLLLLLLLK..',
+    '...KLLLLLLLLK...',
+    '...KLK....KLK...',
+    '..KKK......KKK..',
+    '................',
+  ]],
+];
+
+test('every figure on the route reads as a person carrying one thing', () => {
+  for (const [ref, body, cloth, mark, picture] of FIGURES) {
+    assert.equal(
+      composed(followerBodyId(body, cloth), followerMarkId(mark), 0),
+      picture.join('\n'),
+      `the figure for ${ref} is not the picture committed here`,
+    );
+  }
+});
+
+test('a mark never lands on the body it is there to identify', () => {
+  // The whole economy of the art depends on this: the mark is drawn as a second
+  // command over the first, so a mark that overlapped would rub out the figure
+  // rather than be carried by it. It holds for every body, every frame, and
+  // every mark -- 3 x 3 x 4 x 19 of them -- because it is a fact about which
+  // columns each is allowed to use, not about the pairs the roster happens to
+  // name today.
+  for (const body of FOLLOWER_BODIES) {
+    for (const cloth of FOLLOWER_CLOTHS) {
+      const figure = art(followerBodyId(body, cloth));
+      for (const mark of FOLLOWER_MARKS) {
+        const carried = art(followerMarkId(mark));
+        for (let frame = 0; frame < figure.frames.length; frame++) {
+          for (let y = 0; y < SPRITE_SIZE; y++) {
+            for (let x = 0; x < SPRITE_SIZE; x++) {
+              const clash = pixelAt(carried, 0, x, y) !== NONE
+                && pixelAt(figure, frame, x, y) !== NONE;
+              assert.ok(
+                !clash,
+                `${mark} covers ${body}/${cloth} at (${String(x)}, ${String(y)}) on frame ${String(frame)}`,
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+});
+
+test('a follower keeps his feet on one row, walking or standing', () => {
+  // `core/followers.ts` promises that a follower's y is a constant -- feet on the
+  // ground line and never off it -- which is only true if the *art* settles
+  // inside the cell rather than by moving the sprite. So the lowest painted row
+  // is the same in all four frames of every body.
+  for (const body of FOLLOWER_BODIES) {
+    for (const cloth of FOLLOWER_CLOTHS) {
+      const id = followerBodyId(body, cloth);
+      const figure = art(id);
+      const floors = figure.frames.map((_, frame) => {
+        let lowest = -1;
+        for (let y = 0; y < SPRITE_SIZE; y++) {
+          for (let x = 0; x < SPRITE_SIZE; x++) {
+            if (pixelAt(figure, frame, x, y) !== NONE) lowest = y;
+          }
+        }
+        return lowest;
+      });
+      assert.equal(new Set(floors).size, 1, `${id} moves its feet: rows ${floors.join(', ')}`);
+    }
+  }
+});
+
+test('a follower is the scribe without the quill, so the line reads as one company', () => {
+  // The hooded body is not drawn: it is the scribe's own frames with the three
+  // roles the quill is inked in taken out. That coupling is deliberate -- edit
+  // the scribe and the people walking with him change too -- so it is asserted
+  // rather than left as a comment in the art.
+  const scribe = art('scribe_idle');
+  const follower = art(followerBodyId('hooded', 'robe'));
+  const quill = new Set([ink('highlight'), ink('light'), ink('accent')]);
+  for (let y = 0; y < SPRITE_SIZE; y++) {
+    for (let x = 0; x < SPRITE_SIZE; x++) {
+      const his = INK_CHARS.charAt(pixelAt(scribe, 0, x, y));
+      const theirs = INK_CHARS.charAt(pixelAt(follower, FOLLOWER_IDLE_FIRST, x, y));
+      assert.equal(theirs, quill.has(his) ? INK_CHARS.charAt(NONE) : his,
+        `the hooded follower differs from the scribe at (${String(x)}, ${String(y)})`);
+    }
+  }
+});
+
+test('taking the hood off opens the face and leaves the hair', () => {
+  // The bare head is derived from the hooded one by a single rule, so the check
+  // is that the rule did what it says: skin where the hood was beside the face,
+  // and robe-shade still there above it.
+  const hooded = art(followerBodyId('hooded', 'robe'));
+  const bare = art(followerBodyId('bare', 'robe'));
+  const hair = toAscii(bare, 0).split('\n')[2] ?? '';
+  const face = toAscii(bare, 0).split('\n')[5] ?? ''; // tuning-exempt: a row of the art in core/sprites.ts
+  assert.ok(hair.includes(ink('robeShade')), `no hair on the bare head: ${hair}`);
+  assert.ok(!face.includes(ink('robeShade')), `the hood is still beside the face: ${face}`);
+  // And nothing else moved: the two bodies differ only in the head.
+  const hoodedRows = toAscii(hooded, 0).split('\n');
+  const bareRows = toAscii(bare, 0).split('\n');
+  for (let y = 8; y < SPRITE_SIZE; y++) { // tuning-exempt: the first row below the neck
+    assert.equal(bareRows[y], hoodedRows[y], `the bodies differ below the neck at row ${String(y)}`);
+  }
+});
+
+test('the child is shorter than the adults and stands on the same line', () => {
+  const adult = art(followerBodyId('hooded', 'robe'));
+  const child = art(followerBodyId('child', 'robe'));
+  const headOf = (sprite: typeof adult): number => {
+    for (let y = 0; y < SPRITE_SIZE; y++) {
+      for (let x = 0; x < SPRITE_SIZE; x++) if (pixelAt(sprite, 0, x, y) !== NONE) return y;
+    }
+    return SPRITE_SIZE;
+  };
+  assert.ok(headOf(child) > headOf(adult), 'the child is not shorter than the adults');
+  assert.equal(
+    toAscii(child, 0).split('\n')[14], // tuning-exempt: the row the feet stand on
+    toAscii(adult, 0).split('\n')[14], // tuning-exempt: the row the feet stand on
+    'the child does not stand on the same line',
+  );
 });

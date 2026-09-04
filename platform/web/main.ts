@@ -53,6 +53,10 @@ import {
 } from '../../core/scenes.js';
 import { setpieceState, type SetpieceState } from '../../core/setpieces.js';
 import {
+  followerLine, loadFollowers, party as gatheredParty,
+  type Follower, type FollowerLine, type Roster,
+} from '../../core/followers.js';
+import {
   arriveAt, completePassage, createMap, discoverSecret, flashbacksFrom,
   loadRoute, mapThreads, mapView, nodeRefs, requiredRefs, routeComplete, standingOffRoute,
   type MapState, type Route, type RouteEdge,
@@ -238,6 +242,7 @@ const DATA_NAMES = {
   themes: 'themes',
   tunes: 'tunes',
   text: 'the text',
+  followers: 'the company',
 } as const;
 
 /**
@@ -816,6 +821,7 @@ function frameFor(
   note: string | null,
   doorway: string | null,
   report: ReportMemory,
+  followers: FollowerLine,
 ): FrameState {
   const candle = `${String(level.chunkIndex + 1)}/${String(level.chunks.length)}`;
   return {
@@ -838,6 +844,10 @@ function frameFor(
     // made of noise. See docs/design/08-stats.md#the-report-card.
     report,
     scene: sceneStateFor(level, damage, cloud, tuning),
+    // Everyone he has picked up on the way. Handed in rather than reached for,
+    // because this function is a projection and the party is derived from the
+    // record -- see docs/design/11-followers.md#derived-never-stored.
+    followers,
     // Drawn over everything, every frame, for as long as a fallback is in use.
     notice: noticeLines(),
     // Absent on all but a handful of frames in a player's life -- and absent is
@@ -930,6 +940,21 @@ async function boot(): Promise<void> {
     route = loadRoute(await fetchJson('data/routes/pilgrimage.json'));
   } catch {
     usingFallback(DATA_NAMES.route);
+  }
+
+  /**
+   * Who joins after what.
+   *
+   * Null when the file cannot be read, in which case nobody walks behind him and
+   * the map says nothing about company. That is the right failure: a follower is
+   * a record of somewhere he has been and inventing one from a fallback would be
+   * the game telling him he had been somewhere he had not.
+   */
+  let roster: Roster | null = null;
+  try {
+    roster = loadFollowers(await fetchJson('data/followers.json'));
+  } catch {
+    usingFallback(DATA_NAMES.followers);
   }
 
   const songbook = await loadSongbook();
@@ -1433,11 +1458,29 @@ async function boot(): Promise<void> {
     return arriveAt(state, here);
   }
 
+  /**
+   * The company, derived from the same map state the panel is drawn from.
+   *
+   * Nothing is stored: `completed` and `discovered` are already on the record
+   * and the party is the union of them, intersected with the passages the route
+   * names. There is no third list to fall out of step with the other two.
+   * See docs/design/11-followers.md#derived-never-stored.
+   */
+  function company(): readonly Follower[] {
+    if (route === null || roster === null) return [];
+    return gatheredParty(roster, route, mapState());
+  }
+
+  /** The company as the screen draws it: capped, nearest first, plus a count. */
+  function partyLine(): FollowerLine {
+    return followerLine(company(), tuning);
+  }
+
   function routeView(): RouteView {
     if (route === null) {
       return {
         routeId: '', complete: false, finished: 0, stops: 0,
-        nodes: [], threads: [], standing: null, error: ROUTE_MISSING,
+        nodes: [], threads: [], standing: null, party: [], error: ROUTE_MISSING,
       };
     }
     const state = mapState();
@@ -1447,6 +1490,14 @@ async function boot(): Promise<void> {
       // Null while he is on a node; the chapter itself while he is not, which
       // is what the map says in place of marking anything.
       standing: standingOffRoute(route, state),
+      // The company, from the same state everything else on this panel is drawn
+      // from, so the two lists cannot disagree. `walking` marks the ones the
+      // capped line on screen is currently showing.
+      party: (() => {
+        const gathered = company();
+        const shown = new Set(followerLine(gathered, tuning).walking.map((f) => f.ref));
+        return gathered.map((f) => ({ ref: f.ref, who: f.who, walking: shown.has(f.ref) }));
+      })(),
       finished: mapView(route, state).filter((n) => n.kind === 'stop' && n.completed).length,
       stops: requiredRefs(route).length,
       nodes: mapView(route, state)
@@ -1655,6 +1706,7 @@ async function boot(): Promise<void> {
         gilding: level.gilding,
         points: levelScore(),
         scene: w.fromScene,
+        followers: partyLine(),
         notice: noticeLines(),
         warp: view,
       },
@@ -1875,6 +1927,7 @@ async function boot(): Promise<void> {
         spaceThumb: level.spaceThumb,
         keySet: level.keySet,
         scene: sceneStateFor(level, damage, cloud, tuning),
+        followers: partyLine(),
         notice: noticeLines(),
       },
       rail: { offset, targetOffset: offset },
@@ -2550,7 +2603,7 @@ async function boot(): Promise<void> {
         drawFrame(
           frameFor(
             level, damage, cloud, tuning, levelScore(), noteText(coach), doorwayPrompt(),
-            reportMemory(),
+            reportMemory(), partyLine(),
           ),
           level.rail,
           tuning,

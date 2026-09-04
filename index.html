@@ -156,12 +156,18 @@
   /* The map: a list of passages, and a list of the threads between them. The
      thread's note is the point of the whole screen -- without it the map is a
      reading order rather than a route. */
-  #map-nodes, #map-threads { margin: 0; padding: 0; list-style: none; font-size: .9rem; }
-  #map-nodes li, #map-threads li {
+  #map-nodes, #map-threads, #map-party { margin: 0; padding: 0; list-style: none; font-size: .9rem; }
+  #map-nodes li, #map-threads li, #map-party li {
     display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap;
     padding: .25rem 0; border-bottom: 1px solid rgba(122, 107, 80, .18);
   }
-  #map-nodes .what, #map-threads .what { flex: 1; min-width: 10rem; }
+  #map-nodes .what, #map-threads .what, #map-party .what { flex: 1; min-width: 10rem; }
+  /* Who is with you. The passage on the left, the person on the right, in the
+     same order the passages above are in. A figure the capped line is not
+     showing is dimmed rather than dropped: the limit is on the screen, not on
+     the record. docs/design/11-followers.md#on-the-map */
+  #map-party .how { min-width: 8rem; color: var(--dim); font-size: .85rem; }
+  #map-party li.locked .what { color: var(--dim); }
   #map-nodes .how { color: var(--dim); font-size: .85rem; }
   #map-nodes li.here { color: var(--gold); }
   #map-nodes li.here .how { color: var(--gold); }
@@ -300,6 +306,10 @@
 
     <h3>Passages</h3>
     <ul id="map-nodes"></ul>
+
+    <h3>Who is with you</h3>
+    <p class="dim" id="map-party-note"></p>
+    <ul id="map-party"></ul>
 
     <h3>Threads</h3>
     <ul id="map-threads"></ul>

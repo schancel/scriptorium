@@ -185,6 +185,20 @@ export interface RouteThreadView {
   readonly travelled: boolean;
 }
 
+/**
+ * One figure walking with the player, as the map names it.
+ *
+ * The *only* place a follower is named. Nothing is ever written over one in the
+ * world -- they are silhouettes that walk, and a label is the beginning of a
+ * HUD. See docs/design/11-followers.md#on-the-map.
+ */
+export interface RoutePartyView {
+  readonly ref: string;
+  readonly who: string;
+  /** False for a figure the capped line is not currently showing. */
+  readonly walking: boolean;
+}
+
 export interface RouteView {
   readonly routeId: string;
   readonly complete: boolean;
@@ -202,6 +216,14 @@ export interface RouteView {
    * docs/design/04-route.md#standing-off-the-route.
    */
   readonly standing: string | null;
+  /**
+   * Who is walking with him, in the map's own order.
+   *
+   * Derived from the passages finished and the rooms found, so it cannot say
+   * anything the list of passages above it does not already say. Empty is the
+   * honest state of a player who has finished nothing yet.
+   */
+  readonly party: readonly RoutePartyView[];
   /** Non-null when the route file itself could not be read. */
   readonly error: string | null;
 }
@@ -330,6 +352,8 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const mapThreadList = need('map-threads', HTMLUListElement);
   const mapError = need('map-error', HTMLParagraphElement);
   const mapProgress = need('map-progress', HTMLParagraphElement);
+  const mapParty = need('map-party', HTMLUListElement);
+  const mapPartyNote = need('map-party-note', HTMLParagraphElement);
   const mapStanding = need('map-standing', HTMLParagraphElement);
   const mapMenu = need('map-menu', HTMLButtonElement);
   const mapResume = need('map-resume', HTMLButtonElement);
@@ -513,6 +537,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
           : '');
     mapNodes.replaceChildren();
     mapThreadList.replaceChildren();
+    renderParty(view);
 
     for (const node of view.nodes) {
       const row = document.createElement('li');
@@ -567,6 +592,40 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
       echo.textContent = `\u201c${thread.echo}\u201d`;
       row.append(ends, note, echo);
       mapThreadList.append(row);
+    }
+  }
+
+  /**
+   * Who is with him.
+   *
+   * The map is where the company is named and the only place it is: a follower
+   * in the world carries a mark and nothing else, and a name over a walking
+   * figure would be the first line of a second HUD.
+   *
+   * A figure past the cap is marked rather than dropped. The line on screen is
+   * capped so that a crowd cannot compete with the text; the record of who he
+   * has met is not capped at all, and saying so here is the difference between
+   * a limit and a loss.
+   */
+  function renderParty(view: RouteView): void {
+    mapParty.replaceChildren();
+    const walked = view.party.filter((p) => !p.walking).length;
+    mapPartyNote.textContent = view.party.length === 0
+      ? 'Nobody yet. Finish a passage and its figure walks behind you.'
+      : walked === 0
+        ? 'They walk behind you while you type, and do nothing else.'
+        : `${String(walked)} of them walk on ahead, out of shot, so the page stays clear.`;
+    for (const member of view.party) {
+      const row = document.createElement('li');
+      if (!member.walking) row.classList.add('locked');
+      const name = document.createElement('span');
+      name.className = 'what';
+      name.textContent = member.who;
+      const where = document.createElement('span');
+      where.className = 'how';
+      where.textContent = member.ref;
+      row.append(where, name);
+      mapParty.append(row);
     }
   }
 

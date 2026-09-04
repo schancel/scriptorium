@@ -1321,6 +1321,603 @@ const TILE_STARS: readonly string[] = [
   '......W.........',
 ];
 
+// --- the followers ----------------------------------------------------------
+
+/**
+ * The people walking behind the scribe.
+ *
+ * docs/design/11-followers.md#art-without-ten-bespoke-sprites: "Ten hand-drawn
+ * figures is a lot of art for something deliberately in the background, and
+ * detail at 16x16 reads as noise anyway." So there are no bespoke follower
+ * sprites at all. There are **three body silhouettes**, each recoloured into
+ * three cloths from the theme's own palette, and a **mark** laid over the top --
+ * a staff, a crook, a lamb, a scroll. The mark is what the eye reads; the body
+ * is shared.
+ *
+ * Two of the three bodies are the scribe's own frames with the quill taken out
+ * of his hand, computed rather than redrawn, which is the point: a follower is
+ * the same build and the same size as the player, so the line reads as people
+ * walking *with* him rather than as a parade of mascots. Edit the scribe and
+ * they change with him, which is exactly the coupling that should exist.
+ *
+ * Frames are `[walk, walk, idle, idle]` for every body, and every one of them
+ * puts the feet on the same row, so a follower's y never moves: they walk when
+ * he walks and settle when he idles, and nothing about them ever leaves the
+ * ground line. See `core/followers.ts`.
+ */
+
+/**
+ * The ink character a palette role is written with.
+ *
+ * Roles are named rather than indexed here for the same reason the art is
+ * written in ink characters at all: `ink('robeShade')` says which pixel is meant
+ * and `INK_CHARS.charAt(9)` does not.
+ */
+function ink(role: string): string {
+  return INK_CHARS.charAt(PALETTE_ROLES.indexOf(role));
+}
+
+/** Ink for the quill: the three roles it is drawn in, and nothing else. */
+const QUILL_INK = new RegExp(`[${ink('highlight')}${ink('light')}${ink('accent')}]`, 'g');
+
+/** The scribe, without the quill. What is left is a hooded figure walking. */
+function unarmed(rows: readonly string[]): readonly string[] {
+  return rows.map((row) => row.replace(QUILL_INK, INK_CHARS.charAt(NONE)));
+}
+
+/**
+ * Take the hood off.
+ *
+ * The hood is `robeShade` beside the face; hair is `robeShade` above it. So the
+ * rule is one line: on any row that has skin on it, the robe-shade either side
+ * *is* the hood, and turning it to skin opens the face out. Rows with no skin --
+ * the crown of the head -- keep their `robeShade` and become hair.
+ *
+ * Derived rather than drawn because it then holds for every frame including the
+ * settled idle, which sits one pixel lower than the others.
+ */
+function bareheaded(rows: readonly string[]): readonly string[] {
+  const skin = ink('skin');
+  const hood = ink('robeShade');
+  return rows.map((row) => (row.includes(skin) ? row.split(hood).join(skin) : row));
+}
+
+/**
+ * The same figure in another cloth.
+ *
+ * A recolour and not a redraw: the pixels stay where they are and only the two
+ * garment roles change, so three cloths cost nothing but a role swap. Which
+ * three colours those roles resolve to is still the *theme's* business -- a
+ * follower in the wilderness is ochre like everything else there.
+ */
+function inCloth(rows: readonly string[], body: string, shade: string): readonly string[] {
+  const robe = ink('robe');
+  const robeShade = ink('robeShade');
+  return rows.map((row) => row.split(robe).join(body).split(robeShade).join(shade));
+}
+
+/** A child: shorter, with a child's larger head, and the same feet. */
+const CHILD_WALK_0: readonly string[] = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '.....KKKKK......',
+  '....KrrrrrrK....',
+  '....KSSSSSSK....',
+  '....KSKSSKSK....',
+  '....KSSSSSSK....',
+  '.....KSSSSK.....',
+  '....KKRRRRKK....',
+  '...KRRRRRRRRK...',
+  '...KRRRRRRRRK...',
+  '...KRK....KRK...',
+  '..KKK......KKK..',
+  '................',
+];
+
+/** Passing: legs together. */
+const CHILD_WALK_1: readonly string[] = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '.....KKKKK......',
+  '....KrrrrrrK....',
+  '....KSSSSSSK....',
+  '....KSKSSKSK....',
+  '....KSSSSSSK....',
+  '.....KSSSSK.....',
+  '....KKRRRRKK....',
+  '...KRRRRRRRRK...',
+  '...KRRRRRRRRK...',
+  '.....KRRRRK.....',
+  '.....KKKKKK.....',
+  '................',
+];
+
+/** Standing. */
+const CHILD_IDLE_0: readonly string[] = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '.....KKKKK......',
+  '....KrrrrrrK....',
+  '....KSSSSSSK....',
+  '....KSKSSKSK....',
+  '....KSSSSSSK....',
+  '.....KSSSSK.....',
+  '....KKRRRRKK....',
+  '...KRRRRRRRRK...',
+  '...KRRRRRRRRK...',
+  '...KRRRRRRRRK...',
+  '...KKKK..KKKK...',
+  '................',
+];
+
+/** Breathing: the figure settles a pixel; the feet do not move. */
+const CHILD_IDLE_1: readonly string[] = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '.....KKKKK......',
+  '....KrrrrrrK....',
+  '....KSSSSSSK....',
+  '....KSKSSKSK....',
+  '....KSSSSSSK....',
+  '.....KSSSSK.....',
+  '....KKRRRRKK....',
+  '...KRRRRRRRRK...',
+  '...KRRRRRRRRK...',
+  '...KKKK..KKKK...',
+  '................',
+];
+
+/** The three silhouettes, in the order a body id names them. */
+const BODY_FRAMES: ReadonlyMap<string, readonly (readonly string[])[]> = new Map([
+  ['hooded', [SCRIBE_WALK_0, SCRIBE_WALK_1, SCRIBE_IDLE_0, SCRIBE_IDLE_1].map(unarmed)],
+  ['bare', [SCRIBE_WALK_0, SCRIBE_WALK_1, SCRIBE_IDLE_0, SCRIBE_IDLE_1]
+    .map((rows) => bareheaded(unarmed(rows)))],
+  ['child', [CHILD_WALK_0, CHILD_WALK_1, CHILD_IDLE_0, CHILD_IDLE_1]],
+]);
+
+/**
+ * The three cloths, as a pair of art roles.
+ *
+ * Not three palettes: three *roles*, so the colours still come from whichever
+ * theme the passage is set in. A follower is never a colour the world it is
+ * standing in does not already contain.
+ */
+const CLOTHS: ReadonlyMap<string, readonly [string, string]> = new Map([
+  ['robe', [ink('robe'), ink('robeShade')]],
+  ['mid', [ink('mid'), ink('shade')]],
+  ['light', [ink('light'), ink('highlight')]],
+]);
+
+/** Every body silhouette, in every cloth. Three by three, and no more art. */
+export const FOLLOWER_BODIES: readonly string[] = [...BODY_FRAMES.keys()];
+export const FOLLOWER_CLOTHS: readonly string[] = [...CLOTHS.keys()];
+
+/** The sprite id a body and a cloth name together. */
+export function followerBodyId(body: string, cloth: string): string {
+  return `follower_${body}_${cloth}`;
+}
+
+/** The sprite id a mark names. */
+export function followerMarkId(mark: string): string {
+  return `mark_${mark}`;
+}
+
+function followerBodySprites(): PixelSprite[] {
+  const out: PixelSprite[] = [];
+  for (const [body, frames] of BODY_FRAMES) {
+    for (const [cloth, roles] of CLOTHS) {
+      out.push(sprite(
+        followerBodyId(body, cloth),
+        frames.map((rows) => inCloth(rows, roles[0], roles[1])),
+      ));
+    }
+  }
+  return out;
+}
+
+/**
+ * Frame indices into a follower body. Facts about the art in this file, exported
+ * for the same reason `HOP_RISE` is.
+ */
+export const FOLLOWER_WALK_FRAMES = 2;  // tuning-exempt: frame count of the art in this file
+export const FOLLOWER_IDLE_FIRST = 2;   // tuning-exempt: an index into the art in this file
+export const FOLLOWER_IDLE_FRAMES = 2;  // tuning-exempt: frame count of the art in this file
+
+/**
+ * The marks.
+ *
+ * One per passage the route names, drawn in the four columns beside the figure
+ * so that it never covers the body it identifies -- the same corner of the cell
+ * the scribe's quill occupies, which is what makes a follower read as the scribe
+ * carrying something else. Every one of them is a *thing from the passage*: the
+ * staff at the bush, the crook of the psalm, the lamb of the Passover, the
+ * linen Joseph of Arimathaea brought.
+ *
+ * Nothing here is a badge, a count or an icon of a mechanic. A follower is a
+ * record of somewhere the player has been and it is not allowed to say anything
+ * else -- see docs/design/11-followers.md#they-have-no-abilities-deliberately.
+ */
+/* tuning-exempt: every row below is a picture, not a number. */
+const MARK_ROWS: ReadonlyMap<string, readonly string[]> = new Map([
+  // Eve, Genesis 1: a green shoot, of "every herb yielding seed".
+  ['shoot', [
+    '................',
+    '................',
+    '..............G.',
+    '............GGG.',
+    '.............GG.',
+    '..............GG',
+    '..............G.',
+    '..............G.',
+    '..............G.',
+    '..............G.',
+    '..............G.',
+    '..............G.',
+    '..............G.',
+    '..............G.',
+    '..............G.',
+    '................',
+  ]],
+  // Adam, Genesis 3: a hoe, "to till the ground from which he was taken".
+  ['hoe', [
+    '................',
+    '................',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............DD',
+    '..............DD',
+    '................',
+  ]],
+  // Abraham, Genesis 22: the horn of the ram caught in the thicket.
+  ['horn', [
+    '................',
+    '................',
+    '................',
+    '..............L.',
+    '.............LWL',
+    '............LW.L',
+    '............LW.L',
+    '............LWL.',
+    '............LL..',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ]],
+  // Moses, Exodus 3: the staff, which he cast on the ground.
+  ['staff', [
+    '................',
+    '.............MM.',
+    '.............MM.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '................',
+  ]],
+  // The firstborn, Exodus 12: the lamb of the Passover, carried.
+  ['lamb', [
+    '................',
+    '................',
+    '................',
+    '................',
+    '.............WW.',
+    '............WWWW',
+    '............WWWW',
+    '............W..W',
+    '............W..W',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ]],
+  // The gatherer, Exodus 16: the pot with an omer of manna kept in it.
+  ['pot', [
+    '................',
+    '................',
+    '................',
+    '.............DD.',
+    '............DDDD',
+    '............DWWD',
+    '............DWWD',
+    '............DWWD',
+    '............DDDD',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ]],
+  // The one who looked, Numbers 21: the bronze serpent set on a standard.
+  ['serpent', [
+    '................',
+    '............AAA.',
+    '............A..A',
+    '.............AA.',
+    '............AA..',
+    '.............A..',
+    '..............A.',
+    '..............A.',
+    '..............A.',
+    '..............A.',
+    '..............A.',
+    '..............A.',
+    '..............A.',
+    '..............A.',
+    '..............A.',
+    '................',
+  ]],
+  // The psalmist, Psalm 22: a harp.
+  ['harp', [
+    '................',
+    '................',
+    '..............MM',
+    '.............MLM',
+    '............MLLM',
+    '............MLLM',
+    '............MLLM',
+    '............MMMM',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ]],
+  // The shepherd, Psalm 23: the crook.
+  ['crook', [
+    '................',
+    '............MMM.',
+    '............M.M.',
+    '............MMM.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '................',
+  ]],
+  // Jonah, Jonah 1: the fish.
+  ['fish', [
+    '................',
+    '................',
+    '................',
+    '................',
+    '...............D',
+    '............DDDD',
+    '............DD.D',
+    '............DDDD',
+    '...............D',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ]],
+  // The man with the withered hand, Matthew 12: the bruised reed, unbroken.
+  ['reed', [
+    '................',
+    '................',
+    '...............G',
+    '..............G.',
+    '.............G..',
+    '............G...',
+    '............G...',
+    '.............G..',
+    '..............G.',
+    '..............G.',
+    '..............G.',
+    '..............G.',
+    '..............G.',
+    '..............G.',
+    '..............G.',
+    '................',
+  ]],
+  // Simon of Cyrene, Matthew 27: the beam he was compelled to bear.
+  ['beam', [
+    '................',
+    '..............M.',
+    '..............M.',
+    '............MMMM',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '..............M.',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ]],
+  // John the Baptist, John 1: the scroll he answered out of.
+  ['scroll', [
+    '................',
+    '................',
+    '................',
+    '............WWWW',
+    '............WDDW',
+    '............WDDW',
+    '............WDDW',
+    '............WWWW',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ]],
+  // Nicodemus, John 3: a lamp, because he came by night.
+  ['lamp', [
+    '................',
+    '................',
+    '..............D.',
+    '..............D.',
+    '............DDDD',
+    '............DFFD',
+    '............DFFD',
+    '............DDDD',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ]],
+  // The boy, John 6: the basket the five loaves came out of.
+  ['basket', [
+    '................',
+    '................',
+    '................',
+    '................',
+    '............LLL.',
+    '............MMMM',
+    '............MLLM',
+    '............MLLM',
+    '............MMM.',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ]],
+  // The woman, John 8: the stone that was put down and not thrown.
+  ['stone', [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '..............DD',
+    '.............DDD',
+    '..............DD',
+    '................',
+  ]],
+  // The doorkeeper, John 10: the key to the fold.
+  ['key', [
+    '................',
+    '................',
+    '.............AA.',
+    '............A..A',
+    '............A..A',
+    '.............AA.',
+    '..............A.',
+    '..............AA',
+    '..............A.',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ]],
+  // Joseph of Arimathaea, John 19: the linen he brought.
+  ['linen', [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '............WWWW',
+    '............WWWW',
+    '............WWWW',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ]],
+  // Revelation 22: a cup, for "let him take the water of life freely".
+  ['cup', [
+    '................',
+    '................',
+    '................',
+    '............AAAA',
+    '............ALLA',
+    '............AAAA',
+    '.............AA.',
+    '.............AA.',
+    '............AAAA',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ]],
+]);
+
+/** Every mark the roster may name. */
+export const FOLLOWER_MARKS: readonly string[] = [...MARK_ROWS.keys()];
+
+function followerMarkSprites(): PixelSprite[] {
+  return [...MARK_ROWS].map(([mark, rows]) => sprite(followerMarkId(mark), [rows]));
+}
+
 // --- the sheet --------------------------------------------------------------
 
 /**
@@ -1365,6 +1962,11 @@ export const SPRITES: ReadonlyMap<string, PixelSprite> = new Map(
     sprite('tile_cloud', [TILE_CLOUD]),
     sprite('tile_swell', [TILE_SWELL]),
     sprite('tile_stars', [TILE_STARS]),
+    // The line behind the scribe: three silhouettes in three cloths, and one
+    // mark per passage the route names. No bespoke follower art -- see the
+    // header above `unarmed`.
+    ...followerBodySprites(),
+    ...followerMarkSprites(),
   ].map((s) => [s.id, s]),
 );
 

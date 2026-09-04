@@ -45,6 +45,12 @@ import {
   type Strike,
   type StrikeVisual,
 } from './entities.js';
+import {
+  EMPTY_LINE,
+  followerCountX,
+  followerPoses,
+  type FollowerLine,
+} from './followers.js';
 import { setpieceParam, type SetpieceId, type SetpieceState } from './setpieces.js';
 import { CANDLE_UNLIT_FRAME, SPRITE_SIZE } from './sprites.js';
 import { blendThemeId, roleIndex, worldFor, type ParallaxLayer, type World } from './worlds.js';
@@ -171,6 +177,7 @@ const SCENE = {
   layerAlphaSpan: 0.55, // tuning-exempt: art -- and how much nearer depth closes it up
   dropRise: 12,         // tuning-exempt: art -- how far a dropped ink pot floats up
   dropFloor: 0.35,      // tuning-exempt: art -- the pot is never fainter than this
+  partyCountAlpha: 0.7, // tuning-exempt: art -- the count of figures out of shot, quietly
 } as const;
 
 /**
@@ -373,6 +380,21 @@ export interface FrameState {
    * existing frame is byte-for-byte what it was.
    */
   readonly scene?: SceneState;
+  /**
+   * The company walking behind the scribe: everyone whose passage he has
+   * finished, and everyone whose room he has found.
+   *
+   * It rides here rather than on `SceneState`, and that placement is the whole
+   * of docs/design/11-followers.md#no-abilities-made-structural. `SceneState` is
+   * the level the platform *steps*; this is the frame it *draws*. Putting the
+   * party on the frame means the level has no followers field for a mechanic to
+   * read, and the hearts, the smudge, the cloud and the score are all settled
+   * before the party is even assembled.
+   *
+   * Absent means nobody yet, which is every frame of a new player's first
+   * passage, and absent produces byte-for-byte the display list it always did.
+   */
+  readonly followers?: FollowerLine;
   /**
    * Lines of a warning banner, drawn over everything else. Absent or empty
    * draws nothing.
@@ -1422,7 +1444,12 @@ function setpieceArt(
  * the player is looking at; the scenery says where he is and then stays out of
  * the way.
  */
-function pushScene(cmds: DrawCmd[], scene: SceneState, tuning: Tuning): void {
+function pushScene(
+  cmds: DrawCmd[],
+  scene: SceneState,
+  followers: FollowerLine,
+  tuning: Tuning,
+): void {
   const world = worldFor(scene.theme);
   // The tiles, the layer geometry and the ground line all come from the world
   // this scene *is*; only the colours move. That is the whole of "the palette
@@ -1506,6 +1533,11 @@ function pushScene(cmds: DrawCmd[], scene: SceneState, tuning: Tuning): void {
     }
   }
 
+  // The company, behind him and on the same ground line. Drawn before the
+  // scribe so that he is in front of them however tight the spacing is put, and
+  // drawn back to front among themselves for the same reason.
+  pushFollowers(cmds, followers, layout, scene, theme, tuning);
+
   // The strike outranks walking and idling: at the moment something is
   // destroyed the player should be looking at the blow. A stomp carries him
   // along an arc to the skull and back, which is why this is not simply a pose.
@@ -1545,6 +1577,73 @@ function pushScene(cmds: DrawCmd[], scene: SceneState, tuning: Tuning): void {
   // whole world -- the darkness at noon, the smoke on the mountain, the dark
   // closing over Jonah.
   if (piece !== null) cmds.push(...piece.front);
+}
+
+/**
+ * The line walking behind the scribe.
+ *
+ * docs/design/11-followers.md#they-must-not-compete-with-the-rail is a list of
+ * things this function must not do, and every one of them is arranged for rather
+ * than remembered:
+ *
+ *  - **Behind him, never ahead.** `core/followers.ts` places every figure at
+ *    `scribeX` minus a whole multiple of the spacing, so there is no arithmetic
+ *    here that could put one in front.
+ *  - **Never above the ground line.** Every pose stands on `groundY`, and the
+ *    settle is drawn inside the art rather than by moving the sprite, so a
+ *    follower's y is a constant.
+ *  - **Never in the reading band.** The figures are sixteen pixels tall with
+ *    their feet on the same line the scribe's are on, which is the line the
+ *    scenery band ends at.
+ *  - **No speech, no icons, no numbers over heads.** Two sprites per figure --
+ *    a body and the thing it carries -- and the one number on screen is the
+ *    count of the figures that are *not* here, standing where the next of them
+ *    would have been.
+ *
+ * The mark is a second command rather than a second sheet of bespoke sprites,
+ * which is what keeps nineteen figures down to three silhouettes and nineteen
+ * small pictures. See the follower section of `core/sprites.ts`.
+ */
+function pushFollowers(
+  cmds: DrawCmd[],
+  line: FollowerLine,
+  layout: SceneLayout,
+  scene: SceneState,
+  theme: string,
+  tuning: Tuning,
+): void {
+  if (line.walking.length === 0 && line.unseen === 0) return;
+  const geometry = {
+    scribeX: layout.scribeX,
+    groundY: layout.groundY,
+    walking: scene.walking,
+    animMs: scene.animMs,
+  };
+  const poses = followerPoses(line, geometry, tuning);
+  // Furthest first, so a nearer figure is painted over a further one and the
+  // line reads as depth rather than as a row of cut-outs.
+  for (let i = poses.length - 1; i >= 0; i -= 1) {
+    const pose = poses[i];
+    if (pose === undefined) continue;
+    const x = px(pose.x);
+    if (!onScreen(x)) continue;
+    const y = px(pose.y);
+    cmds.push({ op: 'sprite', id: pose.bodyId, x, y, frame: pose.frame, theme });
+    cmds.push({ op: 'sprite', id: pose.markId, x, y, theme });
+  }
+  if (line.unseen > 0) {
+    // Where the next figure would have stood, on the ground line, in the
+    // interface colour. Not over anybody, and nowhere near the rail.
+    cmds.push({
+      op: 'text',
+      value: `+${String(line.unseen)}`,
+      x: px(followerCountX(line, geometry, tuning)),
+      y: px(layout.groundY - SPRITE_SIZE / 2),
+      style: 'hud',
+      color: pal('hud'),
+      alpha: SCENE.partyCountAlpha,
+    });
+  }
 }
 
 /**
@@ -1637,7 +1736,9 @@ function pushNotice(cmds: DrawCmd[], lines: readonly string[]): void {
 export function drawFrame(state: FrameState, rail: RailState, tuning: Tuning): DrawCmd[] {
   const cmds: DrawCmd[] = [];
   cmds.push({ op: 'rect', x: 0, y: 0, w: M.vw, h: M.vh, color: pal('bg') });
-  if (state.scene !== undefined) pushScene(cmds, state.scene, tuning);
+  if (state.scene !== undefined) {
+    pushScene(cmds, state.scene, state.followers ?? EMPTY_LINE, tuning);
+  }
   const warp = state.warp;
   if (warp !== undefined) pushWarpWorld(cmds, warp);
   pushHud(cmds, state, tuning);

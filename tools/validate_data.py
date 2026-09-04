@@ -114,6 +114,36 @@ def main() -> int:
         if not any(ob == book and oa <= a <= obb for ob, oa, obb in ranges):
             errors.append(f"scenes: routed passage {ref} has no scene row (would fall back to abbey)")
 
+    # --- followers
+    #
+    # One figure per passage the route names, drawn from art that exists. A
+    # route edge added without a figure is a passage that finishes and leaves
+    # nothing behind, which is the hole docs/design/11-followers.md is about.
+    followers = load("followers.json")["followers"]
+    art = (ROOT / "core" / "sprites.ts").read_text(encoding="utf-8")
+
+    def art_keys(const: str) -> set[str]:
+        block = art.split(f"const {const}", 1)[-1].split("\n]);", 1)[0]
+        return set(re.findall(r"\['([A-Za-z_]+)',", block))
+
+    bodies, cloths, marks = art_keys("BODY_FRAMES"), art_keys("CLOTHS"), art_keys("MARK_ROWS")
+    seen_refs: set[str] = set()
+    for f in followers:
+        ref = f["passage"]
+        if ref in seen_refs:
+            errors.append(f"followers: two figures claim {ref}")
+        seen_refs.add(ref)
+        if ref not in routed:
+            errors.append(f"followers: {ref} is not a passage the route names")
+        for field, known in (("body", bodies), ("cloth", cloths), ("mark", marks)):
+            if f[field] not in known:
+                errors.append(
+                    f"followers: {ref} names {field} {f[field]!r}, "
+                    "which is not art in core/sprites.ts"
+                )
+    for ref in sorted(routed - seen_refs):
+        errors.append(f"followers: no figure joins after {ref}")
+
     # --- echo phrases, only if texts are present
     editions = [p.name for p in (DATA / "texts").glob("*")] if (DATA / "texts").exists() else []
     if not editions:

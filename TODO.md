@@ -39,7 +39,17 @@ alone.
    across a window one verse either side of the boundary. At 0 the world changes
    between one verse and the next; much above 3 and Genesis 1 is one long crossfade
    with no places in it. Two was chosen on the argument, not on the screen.
-9. **Genesis 1 keeps its chapter row.** `Genesis 1 | apocalypse | light_from_dark` still
+9. **Who joins after Genesis 1, and after John 8.** The followers table in
+   `docs/design/11-followers.md#who-joins-after-what` names one person per passage,
+   and two of the nineteen were judgement calls rather than readings. *Genesis 1* has
+   no named person in it, so it hands over **Eve** on Genesis 1:27 while Adam comes
+   from Genesis 3 as the design doc asks — she therefore joins before he does, which
+   is right by the text and slightly odd by the story. *John 8* hands over **the
+   woman he did not condemn**, carrying the stone that was put down; it is the
+   memorable image of the chapter and it is faithful, but it is also the only figure
+   in the line whose passage is about her rather than about what she carried. Both
+   are a row in a table and cost a line to change.
+10. **Genesis 1 keeps its chapter row.** `Genesis 1 | apocalypse | light_from_dark` still
    sits under the seven verse rows as the default, so a *warp* into Genesis 1 arrives on
    the apocalypse rather than on the void, and only the level itself resolves finely. It
    is the documented behaviour — a chapter citation is a question about the chapter —
@@ -75,6 +85,19 @@ place named, so none of this depends on remembering a conversation.
    promotion mark that already exists.
    → `docs/design/08-stats.md`
 
+## Built since the last pass
+
+- **Followers.** Finishing a passage the route names puts its figure in a line
+  walking behind the scribe, and finding a flashback room puts its figure there too
+  — which is the visible trace a secret room never used to leave. They walk when he
+  walks, idle when he idles, and do nothing else: no hearts, no smudge, no cloud, no
+  drops, no score, no gate. That is arranged rather than observed —
+  `core/followers.ts` has no way to name a mechanic, a pose has five fields, and a
+  test draws the frame twice and asserts the two display lists differ only by the
+  figures. The party is *derived* from `completed` and `discovered`, so there is no
+  new field on the progress record and nothing to migrate. The map names everyone.
+  → `docs/design/11-followers.md`
+
 ## Known problems
 
 - A hop caught mid-air freezes under the report card when a part ends.
@@ -103,6 +126,10 @@ place named, so none of this depends on remembering a conversation.
   share a tune with another (`void` with the abbey, `firmament` with the mountain);
   neither has one of its own.
 - More sprite art. Fifteen tiles cover twelve themes; monsters are still two kinds.
+  The nineteen followers are deliberately *not* nineteen sprites — three body
+  silhouettes, three cloths and one small mark apiece — and that is the shape any
+  further background art should take rather than an omission to fix.
+  → `docs/design/11-followers.md#art-without-ten-bespoke-sprites`
 - **Jerusalem still has no landmarks.** `docs/design/05-scenery-warps.md#a-chapter-is-not-one-place`
   names three faces of the same problem and two are now fixed: Genesis 1 moves, and every
   Gospel passage the route names has a set piece. The third is the city — "a place you
@@ -122,7 +149,7 @@ model. Nothing needed to continue this project lives in a conversation.
 |---|---|
 | The rules you must follow | `AGENTS.md` — read first, it is short and binding |
 | What is outstanding | this file |
-| What the game is and why | `docs/design/` — eleven documents, canonical |
+| What the game is and why | `docs/design/` — twelve documents, canonical |
 | Why a choice was made, and what was rejected | `docs/decisions/` — ten ADRs |
 | What the numbers are | `docs/design/07-tuning.md`, compiled to `data/tuning.json` |
 | Whether you have broken something | `./tools/check.sh` — every invariant, plus a smoke test that boots the actual built game |

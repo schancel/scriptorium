@@ -27,7 +27,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const calls = { fillText: [], lines: [], fills: [], fillRect: 0, stroke: 0, ready: null };
+const calls = { fillText: [], lines: [], fills: [], sprites: [], fillRect: 0, stroke: 0, ready: null };
 // Every (verse, sky colour) the game has drawn while standing in Genesis 1.
 // The scenery is the one thing in the game a unit test can only ever see as a
 // display list: `core/scenes.test.ts` proves the *resolver* returns seven
@@ -44,10 +44,16 @@ class Ctx2D {
     this.fillStyle = ''; this.strokeStyle = ''; this.lineWidth = 1; this.globalAlpha = 1;
     this.imageSmoothingEnabled = true;
   }
-  setTransform() {} translate() {} scale() {} save() {} restore() {}
+  setTransform() {} translate() {} scale() {}
+  // The clip stack, because it is the one thing that tells a *sprite* draw from
+  // a *tile* draw: `canvas_renderer.ts` fills a band by clipping to it and
+  // repeating one 16x16 image, and both end up in `drawImage`. Followers are
+  // sprites, and a band of grass is not one.
+  save() { this._clips = this._clips ?? []; this._clips.push(this._clipped === true); }
+  restore() { this._clipped = (this._clips ?? []).pop() === true; }
   clearRect() {}
   fillRect(x, y, w, h) { calls.fillRect += 1; calls.fills.push({ x, y, w, h, color: this.fillStyle }); }
-  beginPath() {} rect() {} clip() {}
+  beginPath() {} rect() {} clip() { this._clipped = true; }
   // The caret and the focal guide are lines, and "the eyes never move" is a
   // claim about exactly where they are drawn -- so they are recorded rather
   // than counted.
@@ -58,7 +64,11 @@ class Ctx2D {
   }
   stroke() { calls.stroke += 1; }
   createImageData(w, h) { return { width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }; }
-  putImageData() {} drawImage() {}
+  putImageData() {}
+  // Where every 16x16 sprite landed. Flipped sprites are drawn through a
+  // translated transform and arrive here at (0, 0); nothing the followers do is
+  // flipped, so they are filtered out by position rather than tracked.
+  drawImage(_img, x, y) { if (this._clipped !== true) calls.sprites.push({ x, y }); }
   fillText(v, x, y) {
     const text = String(v);
     calls.fillText.push({ v: text, x, y, style: this.font, color: this.fillStyle });
@@ -202,7 +212,7 @@ function sampleScene() {
 }
 
 const frameNow = () => {
-  calls.fillText = []; calls.lines = []; calls.fills = [];
+  calls.fillText = []; calls.lines = []; calls.fills = []; calls.sprites = [];
   step(1000 + frames * 16);
   sampleScene();
 };
@@ -268,6 +278,43 @@ ok(offsets.size === 1 && offsets.has(0), 'the reading column never drifts',
 
 ok(store.size > 0, 'progress is written to storage');
 
+// --- the company walking behind him ------------------------------------------
+//
+// docs/design/11-followers.md. `core/followers.test.ts` proves the derivation,
+// the cap and the geometry of the display list; none of that says a figure ever
+// reached the screen, because the party is assembled in the platform out of the
+// record and handed to the frame. So this reads the canvas: where a 16x16 sprite
+// was actually drawn, and whether one turned up when a passage was finished.
+//
+// A follower is the one thing in the game drawn as *two* sprites at exactly the
+// same place -- a body and the mark it carries -- at a whole multiple of
+// `follower_spacing_px` behind the scribe. That signature is what is counted.
+const TUNING_ROWS = JSON.parse(await readFile(resolve(ROOT, 'data/tuning.json'), 'utf8')).values;
+const SPACING = TUNING_ROWS.follower_spacing_px;
+const CAP = TUNING_ROWS.follower_line_max;
+// The scribe stands over the focal point, half a sprite to the left of it.
+const SCRIBE_X = FOCAL - 8;
+const RAIL_BAND_TOP = 114;
+
+/** Every follower drawn this frame: body and mark, at one of the line's places. */
+function figuresDrawn() {
+  const drawn = calls.sprites;
+  const found = [];
+  for (let i = 1; i < drawn.length; i++) {
+    const a = drawn[i - 1];
+    const b = drawn[i];
+    if (a.x !== b.x || a.y !== b.y) continue;
+    const back = (SCRIBE_X - a.x) / SPACING;
+    if (back >= 1 && Number.isInteger(back)) { found.push(a); i += 1; }
+  }
+  return found;
+}
+
+frameNow();
+const figuresAtStart = figuresDrawn().length;
+ok(figuresAtStart === 0, 'nobody walks behind a player who has finished nothing',
+   `${figuresAtStart} figures`);
+
 // --- the route, the crossing and the reading mode ----------------------------
 //
 // Everything above this line was true before the route was wired up. These are
@@ -318,7 +365,7 @@ function askedFor() {
 let clock = 5000;
 function tick(n = 1) {
   for (let i = 0; i < n; i++) {
-    calls.fillText = []; calls.lines = []; calls.fills = [];
+    calls.fillText = []; calls.lines = []; calls.fills = []; calls.sprites = [];
     step(clock += 16);
     sampleScene();
   }
@@ -384,6 +431,30 @@ for (; parts < 24; parts++) {
 const record = () => JSON.parse(store.get('scriptorium.progress') ?? '{}');
 ok((record().completed ?? []).includes('Genesis 1'),
    'a chapter typed to the end is recorded as completed', `after ${parts + 1} parts`);
+
+// One passage finished, one figure walking. Not "some": exactly one, because a
+// follower is a record of somewhere he has been and two of them would be the
+// screen saying he had been there twice.
+tick(4);
+const firstLine = figuresDrawn();
+ok(firstLine.length === 1, 'FINISHING A PASSAGE PUTS EXACTLY ONE FIGURE BEHIND HIM',
+   `${firstLine.length} figures after finishing Genesis 1`);
+ok(firstLine.every((f) => f.x < SCRIBE_X), 'AND HE WALKS BEHIND THE SCRIBE, NEVER AHEAD',
+   firstLine.map((f) => `x=${f.x}`).join(', '));
+ok(firstLine.every((f) => f.y + 16 <= RAIL_BAND_TOP),
+   'AND NEVER REACHES DOWN INTO THE READING BAND',
+   firstLine.map((f) => `y=${f.y}`).join(', '));
+// On the ground line, which is where the scribe is: no floating, no flying.
+const scribeFeet = calls.sprites.filter((c) => c.x === SCRIBE_X).map((c) => c.y);
+ok(scribeFeet.length > 0 && firstLine.every((f) => scribeFeet.includes(f.y)),
+   'and stands on the same ground the scribe stands on',
+   `scribe y=${scribeFeet.join('/')} follower y=${firstLine.map((f) => f.y).join('/')}`);
+// Nothing is written over him. The map names the company; the world does not.
+const overhead = calls.fillText.filter(
+  (c) => c.y > 22 && c.y + 4 < RAIL_BAND_TOP && firstLine.some((f) => Math.abs(c.x - f.x) < 16),
+);
+ok(overhead.length === 0, 'AND NOTHING IS WRITTEN OVER HIS HEAD',
+   overhead.map((c) => c.v).join(' / '));
 
 // --- the world changes under him while he types Genesis 1 --------------------
 //
@@ -923,6 +994,19 @@ if (doorway !== undefined) {
   ok(foundThreads.some((t) => t.includes('\u21a9') && t.includes('Genesis 22')),
      'and the doorway he used is drawn as a thread of its own',
      foundThreads.filter((t) => t.includes('\u21a9')).join(' / ') || '(no doorway threads)');
+
+  // The room left a figure behind as well, which is the other half of what a
+  // secret was missing: "a secret room leaves no visible trace once you have
+  // left it, and this is the natural one."
+  const partyRows = rowsOf('map-party').map(textOf);
+  ok(partyRows.some((t) => t.includes('Genesis 22') && t.includes('Abraham')),
+     'A ROOM FOUND PUTS ITS FIGURE IN THE COMPANY, AND THE MAP NAMES HIM',
+     partyRows.join(' / ') || '(nobody is with him)');
+  ok(partyRows.some((t) => t.includes('Genesis 1')),
+     'and the passages he finished are named there too', partyRows.join(' / '));
+  ok(String(stubEl('map-party-note').textContent).length > 0,
+     'and the map says what the company does, which is nothing',
+     String(stubEl('map-party-note').textContent));
   press('Escape');
   tick(4);
   ok(askedFor() !== null, 'and the rail comes back from the map mid-passage', refText());
@@ -975,6 +1059,59 @@ const ours = [/\bcandles?\b/i, /\blectio\b/i, /\bchunks?\b/i, /\bglyphs?\b/i,
               /\bgreyed\b/i, /\blive\b/i, /\bmastery gate\b/i, /\bkey ?set\b/i];
 const jargon = spoken.find((t) => ours.some((re) => re.test(t)));
 ok(jargon === undefined, 'AND NOTHING SAYS A WORD ONLY THE SOURCE TREE KNOWS', jargon ?? '');
+
+// --- the line caps ------------------------------------------------------------
+//
+// A player far enough along the route has more company than the screen can hold
+// without the scenery starting to compete with the text
+// (docs/design/11-followers.md#the-cap-and-what-is-shown-instead). Typing
+// nineteen chapters to reach that state is not something a smoke test can do, so
+// the game is booted a second time onto a record that already has them: the
+// party is *derived* from `completed` and `discovered`, so a record is the only
+// input, and this is exactly the reload the player would get.
+const FINISHED = JSON.parse(await readFile(resolve(ROOT, 'data/routes/pilgrimage.json'), 'utf8'))
+  .edges.flatMap((e) => [e.from, e.to]);
+store.set('scriptorium.progress', JSON.stringify({
+  version: 6, stage: 1, translation: 'WEB', route: 'pilgrimage',
+  position: { book: 'Genesis', chapter: 1, unit: 1 },
+  completed: FINISHED, discovered: FINISHED,
+  keyStats: {}, recent: {}, history: [],
+  gilding: false, gildOffered: true, firstRun: false, cloudEnabled: true,
+  notesSeen: ['space', 'error', 'dim'],
+}));
+await import(`${pathToFileURL(resolve(ROOT, 'build/platform/web/main.js')).href}?again`);
+await new Promise((r) => setTimeout(r, 400));
+await waitFor(() => askedFor() !== null);
+tick(8);
+
+const capped = figuresDrawn();
+ok(capped.length === CAP, 'THE LINE CAPS: A LONG PILGRIMAGE DOES NOT FILL THE SCREEN',
+   `${capped.length} figures drawn, cap is ${CAP}`);
+ok(capped.every((f) => f.x < SCRIBE_X && f.y + 16 <= RAIL_BAND_TOP),
+   'and every one of them is still behind him and still out of the reading band',
+   capped.map((f) => `${f.x},${f.y}`).join(' '));
+const overflow = calls.fillText.find((c) => /^\+\d+$/.test(c.v));
+ok(overflow !== undefined && Number(overflow.v.slice(1)) === new Set(FINISHED).size - CAP,
+   'AND THE ONES WHO WALKED ON AHEAD ARE COUNTED RATHER THAN FORGOTTEN',
+   overflow ? overflow.v : '(no count on screen)');
+ok(overflow !== undefined && overflow.y + 4 < RAIL_BAND_TOP && overflow.y > 22,
+   'with the count in the scenery band, never in the reading band',
+   overflow ? `y=${overflow.y}` : '');
+
+// And the map still names every one of them, because the cap is a limit on the
+// screen and not on the record.
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-map').click();
+tick(2);
+const wholeParty = rowsOf('map-party').map(textOf);
+ok(wholeParty.length === new Set(FINISHED).size,
+   'THE MAP NAMES EVERYONE, INCLUDING THE ONES THE SCREEN IS NOT SHOWING',
+   `${wholeParty.length} named, ${new Set(FINISHED).size} met`);
+ok(/walk on ahead/.test(String(stubEl('map-party-note').textContent)),
+   'and says why some of them are not on the screen',
+   String(stubEl('map-party-note').textContent));
+
 
 console.log('');
 if (fails.length > 0) {

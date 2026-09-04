@@ -1,0 +1,138 @@
+{
+  "followers": [
+    {
+      "passage": "Genesis 1",
+      "who": "Eve",
+      "body": "bare",
+      "cloth": "light",
+      "mark": "shoot"
+    },
+    {
+      "passage": "Genesis 3",
+      "who": "Adam",
+      "body": "bare",
+      "cloth": "robe",
+      "mark": "hoe"
+    },
+    {
+      "passage": "Genesis 22",
+      "who": "Abraham",
+      "body": "hooded",
+      "cloth": "mid",
+      "mark": "horn"
+    },
+    {
+      "passage": "Exodus 3",
+      "who": "Moses",
+      "body": "hooded",
+      "cloth": "robe",
+      "mark": "staff"
+    },
+    {
+      "passage": "Exodus 12",
+      "who": "the firstborn",
+      "body": "child",
+      "cloth": "light",
+      "mark": "lamb"
+    },
+    {
+      "passage": "Exodus 16",
+      "who": "the gatherer",
+      "body": "bare",
+      "cloth": "mid",
+      "mark": "pot"
+    },
+    {
+      "passage": "Numbers 21",
+      "who": "the one who looked",
+      "body": "hooded",
+      "cloth": "light",
+      "mark": "serpent"
+    },
+    {
+      "passage": "Psalm 22",
+      "who": "the psalmist",
+      "body": "hooded",
+      "cloth": "robe",
+      "mark": "harp"
+    },
+    {
+      "passage": "Psalm 23",
+      "who": "the shepherd",
+      "body": "bare",
+      "cloth": "mid",
+      "mark": "crook"
+    },
+    {
+      "passage": "Jonah 1",
+      "who": "Jonah",
+      "body": "hooded",
+      "cloth": "robe",
+      "mark": "fish"
+    },
+    {
+      "passage": "Matthew 12",
+      "who": "the man with the withered hand",
+      "body": "bare",
+      "cloth": "light",
+      "mark": "reed"
+    },
+    {
+      "passage": "Matthew 27",
+      "who": "Simon of Cyrene",
+      "body": "hooded",
+      "cloth": "mid",
+      "mark": "beam"
+    },
+    {
+      "passage": "John 1",
+      "who": "John the Baptist",
+      "body": "bare",
+      "cloth": "robe",
+      "mark": "scroll"
+    },
+    {
+      "passage": "John 3",
+      "who": "Nicodemus",
+      "body": "hooded",
+      "cloth": "light",
+      "mark": "lamp"
+    },
+    {
+      "passage": "John 6",
+      "who": "the boy with the loaves",
+      "body": "child",
+      "cloth": "mid",
+      "mark": "basket"
+    },
+    {
+      "passage": "John 8",
+      "who": "the woman he did not condemn",
+      "body": "bare",
+      "cloth": "light",
+      "mark": "stone"
+    },
+    {
+      "passage": "John 10",
+      "who": "the doorkeeper",
+      "body": "hooded",
+      "cloth": "mid",
+      "mark": "key"
+    },
+    {
+      "passage": "John 19",
+      "who": "Joseph of Arimathaea",
+      "body": "hooded",
+      "cloth": "robe",
+      "mark": "linen"
+    },
+    {
+      "passage": "Revelation 22",
+      "who": "the one who came to the water",
+      "body": "bare",
+      "cloth": "light",
+      "mark": "cup"
+    }
+  ],
+  "_generated_from": "docs/design/11-followers.md"
+}
