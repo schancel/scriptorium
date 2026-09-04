@@ -43,6 +43,8 @@ first evening a real beginner plays it and something feels wrong.
 | `lectio_ramp_wpm` | 20 | wpm/min | How fast Lectio accelerates while sustained. |
 | `lectio_max_wpm` | 700 | wpm | Ceiling. |
 | `candle_interval` | 3 | verses | Checkpoint spacing, so death costs a verse or two, never a chapter. |
+| `gild_score_per_char` | 2 | points | Awarded per greyed character typed correctly. |
+| `gild_page_bonus` | 50 | points | Awarded for a part in which every character was typed. |
 | `bonus_word_chance` | 0.15 | probability | Chance a verse offers a side-platform bonus word. |
 | `master_volume` | 0.35 | gain | Default output gain. |
 | `audio_default_on` | 0 | boolean | Audio starts muted. Browsers block autoplay and a beginner does not need a surprise. |

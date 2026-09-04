@@ -31,13 +31,24 @@ jobs:
         run: make build
       # Stage only what the site needs. Uploading '.' would ship node_modules
       # and the whole git-tracked repo, which is slow and hits artifact limits.
+      #
+      # Everything goes under v/<sha>/ and index.html is rewritten to point
+      # there. GitHub Pages serves max-age=600, so without this a visitor who
+      # loaded the site in the last ten minutes gets stale modules after a
+      # deploy -- and cannot tell a cached copy from a broken one. Versioning
+      # the directory changes every URL when the commit changes, so a deploy
+      # is never served half-old. main.js resolves data relative to its own
+      # URL, so data must live inside the versioned tree too.
       - name: Stage site
         run: |
-          mkdir -p _site
-          cp index.html _site/ 2>/dev/null || { echo "no index.html yet -- nothing to deploy"; exit 1; }
-          cp -r build _site/
-          cp -r data _site/
+          test -f index.html || { echo "no index.html yet -- nothing to deploy"; exit 1; }
+          SHA="${GITHUB_SHA:0:12}"
+          mkdir -p "_site/v/$SHA"
+          cp -r build/* "_site/v/$SHA/"
+          cp -r data "_site/v/$SHA/data"
+          sed "s|\./build/|./v/$SHA/|g" index.html > _site/index.html
           touch _site/.nojekyll
+          grep -o 'src="[^"]*"' _site/index.html
           du -sh _site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

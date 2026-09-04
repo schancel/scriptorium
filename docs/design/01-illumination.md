@@ -125,6 +125,31 @@ Two mechanisms keep density up where the text is unhelpful:
   chapter which are *fully* typable at the current stage. Keeps keystrokes-per-minute up
   without breaking the reading.
 
+## Gilding: a mode for people who already type
+
+Withholding letters helps a beginner and hinders a fluent typist. At speed you type
+words, not letters -- the motor program for a familiar word fires as a unit -- so omitting
+a letter mid-word means suppressing an automatic action. That is more work, not less.
+
+**Gilding** is an opt-in mode, off by default and remembered per player. With it on,
+every character in the passage is required: nothing auto-advances, and characters outside
+the current stage are *gilded* as they are typed. A part completed with every character
+is a fully illuminated page and earns gold leaf.
+
+The name is the theme's -- a scribe filling in the gold on a manuscript gilds it.
+
+It is a mode rather than a permissive free-for-all because intent cannot be read from a
+keystroke. With greyed characters merely *optional*, a wrong key before a greyed run is
+indistinguishable between a fumbled gild and a fumbled attempt at the live character, and
+every way of resolving that guess breaks something. See
+[ADR 0008](../decisions/0008-gilding-permissive-input.md).
+
+**The mastery gate counts only the current stage's keys, in both modes.** Gilded keys are
+by definition untaught, so they cannot open a gate -- otherwise a fluent typist would be
+promoted through a curriculum they never did, and the stage numbers would stop meaning
+anything for the beginner they exist to serve. Someone who wants to skip ahead sets their
+stage in the menu, which is one honest control rather than a hidden side effect.
+
 ## Feel
 
 Greyed runs auto-advance with **no animation delay** — the cursor snaps from one live

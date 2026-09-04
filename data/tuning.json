@@ -29,6 +29,8 @@
     "lectio_ramp_wpm": 20,
     "lectio_max_wpm": 700,
     "candle_interval": 3,
+    "gild_score_per_char": 2,
+    "gild_page_bonus": 50,
     "bonus_word_chance": 0.15,
     "master_volume": 0.35,
     "audio_default_on": 0,
@@ -151,6 +153,14 @@
     "candle_interval": {
       "unit": "verses",
       "description": "Checkpoint spacing, so death costs a verse or two, never a chapter."
+    },
+    "gild_score_per_char": {
+      "unit": "points",
+      "description": "Awarded per greyed character typed correctly."
+    },
+    "gild_page_bonus": {
+      "unit": "points",
+      "description": "Awarded for a part in which every character was typed."
     },
     "bonus_word_chance": {
       "unit": "probability",
