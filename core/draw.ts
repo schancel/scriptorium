@@ -45,6 +45,7 @@ import {
   type Strike,
   type StrikeVisual,
 } from './entities.js';
+import { setpieceParam, type SetpieceId, type SetpieceState } from './setpieces.js';
 import { CANDLE_UNLIT_FRAME, SPRITE_SIZE } from './sprites.js';
 import { roleIndex, worldFor, type ParallaxLayer, type World } from './worlds.js';
 import {
@@ -212,6 +213,37 @@ const NOTICE = {
   alpha: 0.92,      // tuning-exempt: art -- the level stays faintly visible behind it
 } as const;
 
+/**
+ * The scripted flourishes, as geometry.
+ *
+ * `core/setpieces.ts` returns named scalars in 0..1 and nothing else -- "so
+ * `rising_water` returns `water: 0.62` and the renderer decides what 0.62 of a
+ * flood looks like". This is that decision, and it is deliberately made in one
+ * place: ten little renderers, each with its own idea of the bands, is ten ways
+ * for the picture to disagree with itself.
+ *
+ * Every number here is `tuning-exempt` on the same grounds as `M` and `SCENE`:
+ * it composes a picture inside the scenery band. Nothing a player can win or
+ * lose by is decided here, and the flourishes cannot reach the rail -- every
+ * rect below is clamped into the band between the HUD and `M.bandTop`.
+ */
+const PIECE = {
+  veil: 0.72,        // tuning-exempt: art -- how opaque a full veil ever gets
+  wallW: 26,         // tuning-exempt: art -- a sea standing up, in virtual px
+  glowH: 20,         // tuning-exempt: art -- a band of light along the horizon
+  markW: 5,          // tuning-exempt: art -- a doorpost, in virtual px
+  markInset: 46,     // tuning-exempt: art -- how far in the doorposts stand
+  lintelH: 5,        // tuning-exempt: art -- the beam across the two posts
+  motes: 7,          // tuning-exempt: art -- specks of manna across the band
+  moteSize: 3,       // tuning-exempt: art -- and how big each speck is
+  moteDrift: 14,     // tuning-exempt: art -- how far a speck drifts down
+  fireW: 22,         // tuning-exempt: art -- the fire in the mountain
+  fireH: 14,         // tuning-exempt: art -- and how tall it stands
+  bushInset: 90,     // tuning-exempt: art -- how far right of centre the bush is
+  waterAlpha: 0.7,   // tuning-exempt: art -- water is deep, not opaque
+  swellLift: 4,      // tuning-exempt: art -- how far a swell moves the surface
+} as const;
+
 /** The art role the sky behind the parallax takes; every theme supplies one. */
 const SKY_ROLE = 'shade';
 
@@ -306,6 +338,55 @@ export interface FrameState {
    * with the wording it decides between. The frame only draws it.
    */
   readonly note?: string;
+  /**
+   * A doorway standing open in this passage, named in one sentence.
+   *
+   * It shares the coaching strip with `note` rather than taking a band of its
+   * own, because the strip's space is already reserved whether anything is in it
+   * or not -- and a second strip would move the picture the first time a doorway
+   * appeared, which is the one thing the layout under the rail may never do.
+   * A first-run note wins the strip outright: a note is spent three times in a
+   * player's life and a doorway stands open for a whole verse.
+   */
+  readonly doorway?: string;
+  /**
+   * A crossing between two passages that share a phrase, mid-flight.
+   *
+   * Absent on every frame but the ~1.4 seconds of a warp, and absent is what
+   * every frame in the game used to be. See `WarpView`.
+   */
+  readonly warp?: WarpView;
+}
+
+/**
+ * The crossing, as the frame draws it.
+ *
+ * "During the phase, the echoed words are the only thing on screen that does not
+ * change." -- docs/design/05-scenery-warps.md#warps. That sentence is one field:
+ * `echoX`, which `core/warp.ts` computes **once**, at the doorway, precisely so
+ * that nothing running during the phase can move it. It is carried here and used
+ * verbatim; this file never derives it from the rail, the cursor or the viewport,
+ * because a column derived twice is a column that eventually differs, and drift
+ * in this one is the difference between a phrase that stays lit and a phrase
+ * that slides.
+ *
+ * Everything else here is the part that *is* allowed to change: the destination
+ * world washing in over the origin's, and the phrase's own alpha once the hold
+ * is over.
+ */
+export interface WarpView {
+  /** The authored phrase, held lit. Never string-matched; see `core/warp.ts`. */
+  readonly phrase: string;
+  /** The screen column the phrase's first glyph sits on. Computed once, upstream. */
+  readonly echoX: number;
+  /** 1 while the phrase is held, then down to 0 by arrival. */
+  readonly echoAlpha: number;
+  /** 0 is the origin's scenery, 1 the destination's. */
+  readonly worldMix: number;
+  /** The theme arriving. Its sky and parallax wash in over the origin's. */
+  readonly toTheme: string;
+  /** Where the destination's parallax stands, in the same space as `cameraX`. */
+  readonly cameraX: number;
 }
 
 /**
@@ -370,6 +451,15 @@ export interface SceneState {
    * scribe takes the most recent; everything in flight is drawn.
    */
   readonly strikes: readonly Strike[];
+  /**
+   * The passage's scripted flourish, if it has one. Most do not.
+   *
+   * A `SetpieceState` from `core/setpieces.ts`: named scalars in 0..1 and no
+   * draw commands, because "a set piece that emitted draw commands would be a
+   * second renderer with its own idea of the palette and the bands". This file
+   * turns those scalars into rects inside the scenery band, and nowhere else.
+   */
+  readonly setpiece?: SetpieceState;
 }
 
 // --- the report card --------------------------------------------------------
@@ -615,6 +705,147 @@ function pushStrikeVisual(
   });
 }
 
+// --- set pieces -------------------------------------------------------------
+
+/** The bottom of the scenery band. Nothing a flourish draws may pass it. */
+const BAND_BOTTOM = SCENE.top + SCENE.height;
+
+/** A themed rect clamped into the scenery band, so no flourish can reach the rail. */
+function bandRect(
+  cmds: DrawCmd[],
+  theme: string,
+  role: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  alpha: number,
+): void {
+  const top = Math.max(SCENE.top, y);
+  const bottom = Math.min(BAND_BOTTOM, y + h);
+  if (bottom <= top || w <= 0 || alpha <= 0) return;
+  cmds.push({
+    op: 'rect', x: px(x), y: px(top), w: Math.round(w), h: Math.max(1, Math.round(bottom - top)),
+    color: roleIndex(role), alpha, theme,
+  });
+}
+
+/** A full-band veil: the one shape four of the ten flourishes are made of. */
+function veil(cmds: DrawCmd[], theme: string, role: string, amount: number): void {
+  bandRect(cmds, theme, role, 0, SCENE.top, M.vw, SCENE.height, amount * PIECE.veil);
+}
+
+/**
+ * One flourish, split into what is drawn behind the scribe and what is drawn
+ * over him.
+ *
+ * The switch is exhaustive by construction -- the `never` in the default is what
+ * makes a scene table that grew an eleventh set piece a compile error here as
+ * well as a test failure in `core/setpieces.test.ts`. A documented flourish that
+ * computed parameters nobody drew would be the same class of bug as one nobody
+ * implemented: it would look exactly like working software.
+ *
+ * Each case is the sentence the design doc uses, in rects. `rising_water`
+ * "physically raises the level as the flood does"; `parted_walls` "stands the
+ * sea up on either side of the rail"; `darkness_at_noon` "drains the palette
+ * over the passage", which here is the world sinking toward its own outline.
+ */
+function setpieceArt(
+  state: SetpieceState,
+  theme: string,
+  layout: SceneLayout,
+): { back: DrawCmd[]; front: DrawCmd[] } {
+  const back: DrawCmd[] = [];
+  const front: DrawCmd[] = [];
+  const p = (name: string): number => setpieceParam(state, name);
+  const ground = layout.groundY;
+  const rise = ground - SCENE.top;
+  const id: SetpieceId = state.id;
+
+  switch (id) {
+    case 'light_from_dark': {
+      // The void takes light as the verses are written: dark drains off the
+      // whole band, and a band of light gathers along the horizon.
+      veil(front, theme, 'outline', p('dark'));
+      const h = PIECE.glowH * p('light');
+      bandRect(back, theme, 'highlight', 0, ground - h, M.vw, h, p('light'));
+      break;
+    }
+    case 'rising_water': {
+      // The level itself rises. Driven by progress, never by a clock: the flood
+      // rises because verses are being written.
+      const lift = rise * p('water') + PIECE.swellLift * p('swell');
+      bandRect(back, theme, 'mid', 0, ground - lift, M.vw, lift, PIECE.waterAlpha);
+      break;
+    }
+    case 'burning_bush': {
+      // It burns and is not consumed, so nothing here chars: `consumed` is zero
+      // at every input and there is deliberately nothing that reads it.
+      const x = layout.scribeX + PIECE.bushInset;
+      bandRect(back, theme, 'flame', x, ground - SPRITE_SIZE, SPRITE_SIZE, SPRITE_SIZE, p('flame'));
+      bandRect(back, theme, 'accent', x - PIECE.markW, ground - SPRITE_SIZE - PIECE.markW,
+        SPRITE_SIZE + PIECE.markW + PIECE.markW, SPRITE_SIZE + PIECE.markW, p('glow') * PIECE.veil);
+      break;
+    }
+    case 'blood_on_doorposts': {
+      const h = rise * p('marked');
+      for (const x of [PIECE.markInset, M.vw - PIECE.markInset - PIECE.markW]) {
+        bandRect(back, theme, 'blood', x, ground - h, PIECE.markW, h, p('marked'));
+      }
+      bandRect(back, theme, 'blood', PIECE.markInset, ground - h,
+        M.vw - PIECE.markInset - PIECE.markInset, PIECE.lintelH, p('lintel'));
+      break;
+    }
+    case 'parted_walls': {
+      // The sea stands up on either side, and the scribe walks between them.
+      const h = rise * p('wall') + PIECE.swellLift * p('sway');
+      bandRect(back, theme, 'mid', 0, ground - h, PIECE.wallW, h, PIECE.waterAlpha);
+      bandRect(back, theme, 'mid', M.vw - PIECE.wallW, ground - h, PIECE.wallW, h, PIECE.waterAlpha);
+      break;
+    }
+    case 'manna': {
+      const step = M.vw / PIECE.motes;
+      for (let i = 0; i < PIECE.motes; i += 1) {
+        const y = SCENE.top + (rise - PIECE.moteDrift) * p('fall')
+          + PIECE.moteDrift * p('drift');
+        bandRect(back, theme, 'highlight', i * step + step / 2, y,
+          PIECE.moteSize, PIECE.moteSize, p('density'));
+      }
+      break;
+    }
+    case 'smoke_and_fire': {
+      veil(front, theme, 'shade', p('smoke'));
+      bandRect(back, theme, 'flame', (M.vw - PIECE.fireW) / 2, ground - PIECE.fireH,
+        PIECE.fireW, PIECE.fireH, p('fire'));
+      break;
+    }
+    case 'swallowed': {
+      // The dark closes over the player from both sides, and then over all of it.
+      const w = (M.vw / 2) * p('closure');
+      bandRect(front, theme, 'outline', 0, SCENE.top, w, SCENE.height, PIECE.veil);
+      bandRect(front, theme, 'outline', M.vw - w, SCENE.top, w, SCENE.height, PIECE.veil);
+      veil(front, theme, 'outline', p('dark'));
+      break;
+    }
+    case 'darkness_at_noon': {
+      veil(front, theme, 'outline', p('grey'));
+      break;
+    }
+    case 'tree_of_life': {
+      const h = PIECE.glowH * p('leaves');
+      bandRect(back, theme, 'light', 0, SCENE.top, M.vw, h, p('leaves'));
+      bandRect(back, theme, 'accent', (M.vw - PIECE.fireW) / 2 + PIECE.swellLift * p('sway'),
+        ground - PIECE.fireH, PIECE.fireW, PIECE.fireH, p('bloom'));
+      break;
+    }
+    default: {
+      const unhandled: never = id;
+      return unhandled;
+    }
+  }
+  return { back, front };
+}
+
 /**
  * The band between the HUD and the rail: sky, parallax, candles, monsters, the
  * scribe, and the cloud over the top of him.
@@ -647,6 +878,13 @@ function pushScene(cmds: DrawCmd[], scene: SceneState, tuning: Tuning): void {
       theme,
     });
   }
+
+  // The passage's own flourish, if it has one. Split in two: the sea standing up
+  // goes behind the scribe, the darkness at noon goes over him.
+  const piece = scene.setpiece === undefined
+    ? null
+    : setpieceArt(scene.setpiece, theme, layout);
+  if (piece !== null) cmds.push(...piece.back);
 
   const standY = layout.groundY - SPRITE_SIZE;
 
@@ -727,6 +965,68 @@ function pushScene(cmds: DrawCmd[], scene: SceneState, tuning: Tuning): void {
       theme,
     });
   }
+
+  // Last in the band, and still inside it: the veils a flourish draws over the
+  // whole world -- the darkness at noon, the smoke on the mountain, the dark
+  // closing over Jonah.
+  if (piece !== null) cmds.push(...piece.front);
+}
+
+/**
+ * The destination's world, washing in over the origin's.
+ *
+ * A crossfade with only one side drawn: the arriving sky and parallax are pushed
+ * over the departing ones at `worldMix`, which reads as the dissolve the design
+ * doc asks for and needs no second opinion about how to fade a band that is
+ * already composed. It stays entirely inside the scenery band, so the rail and
+ * the strip reserved under it for a first-run note are untouched -- the phrase
+ * on the rail is the thing that must not move, and the way to guarantee that is
+ * to draw nothing near it.
+ */
+function pushWarpWorld(cmds: DrawCmd[], warp: WarpView): void {
+  if (warp.worldMix <= 0) return;
+  const world = worldFor(warp.toTheme);
+  const theme = world.id;
+  const projection = projectionOf(world.parallax);
+  cmds.push({
+    op: 'rect', x: 0, y: SCENE.top, w: M.vw, h: SCENE.height,
+    color: roleIndex(SKY_ROLE), alpha: warp.worldMix, theme,
+  });
+  for (const layer of world.parallax) {
+    const y = px(projY(projection, layer.y));
+    const h = Math.max(1, Math.round(projH(projection, layer.h)));
+    const shift = wrapToTile(warp.cameraX * layer.factor);
+    cmds.push({
+      op: 'tile', id: layer.tileId, x: px(-shift), y, w: M.vw + SPRITE_SIZE, h,
+      alpha: (SCENE.layerAlphaBase + SCENE.layerAlphaSpan * layer.factor) * warp.worldMix,
+      theme,
+    });
+  }
+}
+
+/**
+ * The echoed phrase, pinned.
+ *
+ * The one thing in the whole program that is drawn from a column somebody else
+ * computed. `warp.echoX` came from `planWarp`, once, at the doorway; every glyph
+ * of the phrase is placed at `echoX + i * CELL_W`, so the first glyph's x is
+ * *exactly* the planned number on every frame of the crossing and the rest step
+ * off it by whole cells. There is no rail offset in this arithmetic, no cursor
+ * and no viewport, which is what makes "it does not move" a property of the code
+ * rather than a hope about it.
+ *
+ * Drawn after the rail so that neither ribbon -- the one leaving or the one
+ * arriving -- can be painted over the top of it.
+ */
+function pushHeldEcho(cmds: DrawCmd[], warp: WarpView): void {
+  if (warp.echoAlpha <= 0) return;
+  [...warp.phrase].forEach((ch, i) => {
+    if (ch === ' ') return;
+    cmds.push({
+      op: 'text', value: ch, x: warp.echoX + i * CELL_W, y: M.railBaseY,
+      style: 'rail-cursor', color: pal('gold'), alpha: warp.echoAlpha,
+    });
+  });
 }
 
 /**
@@ -763,11 +1063,24 @@ export function drawFrame(state: FrameState, rail: RailState, tuning: Tuning): D
   const cmds: DrawCmd[] = [];
   cmds.push({ op: 'rect', x: 0, y: 0, w: M.vw, h: M.vh, color: pal('bg') });
   if (state.scene !== undefined) pushScene(cmds, state.scene, tuning);
+  const warp = state.warp;
+  if (warp !== undefined) pushWarpWorld(cmds, warp);
   pushHud(cmds, state, tuning);
   pushRail(cmds, state, rail, tuning);
+  // After the rail, so nothing of either ribbon can be drawn over the phrase
+  // the crossing exists to hold still.
+  if (warp !== undefined) pushHeldEcho(cmds, warp);
+  // One sentence, in the one strip reserved for one. A first-run note outranks a
+  // doorway: the note is spent three times in a player's life and never comes
+  // back, while the doorway stands open for the rest of its verse.
   const note = state.note;
-  if (note !== undefined && note.length > 0) pushNote(cmds, note);
-  pushKeyboard(cmds, state, tuning);
+  const doorway = state.doorway;
+  if (note !== undefined && note.length > 0) pushNote(cmds, note, pal('hud'));
+  else if (doorway !== undefined && doorway.length > 0) pushNote(cmds, doorway, pal('live'));
+  // Reading mode asks for nothing, so it points at nothing. A board lit for a
+  // key the player is not being asked for would be the overlay lying.
+  if (state.mode === 'lectio') pushReadingHint(cmds);
+  else pushKeyboard(cmds, state, tuning);
   if (state.mode === 'report') pushReport(cmds, state);
   // Last, so the report card cannot bury it. Running on fallback data must be
   // impossible to miss from any screen in the game.
@@ -840,9 +1153,14 @@ function pushHud(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
   const gild = state.gilding === true
     ? `    GILD ${Math.round(state.gildPoints ?? 0)}`
     : '';
+  // Reading mode reports the pace it is flowing at and nothing else. An accuracy
+  // in a mode with no keystrokes in it would be a number the player cannot move,
+  // and a WPM would read as a score for something he is not doing.
   cmds.push({
     op: 'text',
-    value: `WPM ${Math.round(state.score.wpm)}    ACC ${pct(state.score.accuracy)}%${gild}`,
+    value: state.mode === 'lectio'
+      ? `READING    ${Math.round(state.score.wpm)} wpm`
+      : `WPM ${Math.round(state.score.wpm)}    ACC ${pct(state.score.accuracy)}%${gild}`,
     x: M.vw / 2, y: M.hudTextY, style: 'hud-center', color: pal('gold'),
   });
   if (scene !== undefined) pushSmudgeMeter(cmds, scene, tuning);
@@ -947,9 +1265,29 @@ function pushRail(cmds: DrawCmd[], state: FrameState, rail: RailState, tuning: T
     op: 'line', x1: centre - half, y1: M.guideBotY, x2: centre + half, y2: M.guideBotY,
     color: pal('rule'), width: 1,
   });
+  // No caret during a crossing: nothing is being asked for, and gold is how the
+  // game says *this one*. While the phrase is held it is the only gold on
+  // screen, which is the whole of what the transition has to say.
+  if (state.warp === undefined) {
+    cmds.push({
+      op: 'line', x1: x0, y1: M.caretTop, x2: x0, y2: M.caretBot,
+      color: pal(state.blocked ? 'error' : 'gold'), width: CARET_W,
+    });
+  }
+}
+
+/**
+ * The way out of reading mode, where the keyboard overlay would otherwise be.
+ *
+ * Lectio "is the mode available on a day he does not want to drill", so it has
+ * to be as easy to leave as it was to enter -- and the one place a player is
+ * already looking for instructions is the line under the rail that normally
+ * names the next key.
+ */
+function pushReadingHint(cmds: DrawCmd[]): void {
   cmds.push({
-    op: 'line', x1: x0, y1: M.caretTop, x2: x0, y2: M.caretBot,
-    color: pal(state.blocked ? 'error' : 'gold'), width: CARET_W,
+    op: 'text', value: 'reading \u2014 esc: back to typing',
+    x: M.vw / 2, y: M.hintY, style: 'hint-center', color: pal('hud'),
   });
 }
 
@@ -1038,7 +1376,7 @@ function highlightedKeys(
  * borrowed it would compete with the one thing on screen the player has to act
  * on. Nothing here blinks, either. It is a remark, not an alarm.
  */
-function pushNote(cmds: DrawCmd[], note: string): void {
+function pushNote(cmds: DrawCmd[], note: string, colour: number): void {
   cmds.push({
     op: 'rect', x: 0, y: COACH.top, w: M.vw, h: COACH.height, color: pal('band'),
   });
@@ -1048,7 +1386,7 @@ function pushNote(cmds: DrawCmd[], note: string): void {
   });
   cmds.push({
     op: 'text', value: note, x: M.vw / 2, y: COACH.top + COACH.height / 2,
-    style: 'note-center', color: pal('hud'),
+    style: 'note-center', color: colour,
   });
 }
 
@@ -1089,7 +1427,9 @@ function pushKeyboard(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void 
     });
   }
 
-  if (next !== null) {
+  // Nothing is owed mid-crossing, so nothing is named. A `next:` line during a
+  // warp would point at a key on a ribbon that is already leaving.
+  if (next !== null && state.warp === undefined) {
     cmds.push({
       op: 'text', value: `next: ${describeStrokes(next)}`,
       x: M.vw / 2, y: M.hintY, style: 'hint-center', color: pal('gold'),

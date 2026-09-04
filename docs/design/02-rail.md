@@ -89,3 +89,12 @@ This is worth shipping rather than treating as a bonus. It is the mode available
 he does not want to drill, it exercises the same corpus, and it converts the fixed-gaze
 habit from a side effect into something practised deliberately. Pace ramp parameters live
 in [tuning](07-tuning.md).
+
+It is entered from the menu — *Read without typing* — and left with **Escape**, which is
+named on screen where the next-key hint would otherwise be. Both halves matter: a mode for
+the day he does not want to drill has to be easy to find and easier to leave. The board is
+not drawn while it is up, because reading asks for no keys and an overlay lit for a key
+nobody is being asked for is the overlay lying; the HUD reports the pace rather than a WPM
+and an accuracy, which would be scores for something he is not doing. The ribbon is
+classified against the whole keyboard rather than the current stage, so he is reading the
+page rather than the curriculum's view of it. Nothing in the mode can be failed.

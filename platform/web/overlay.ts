@@ -63,6 +63,25 @@ export interface OverlayHandlers {
   exportFile(): void;
   importFile(file: File): void;
   /**
+   * The player asked to see the route.
+   *
+   * The map is the only place the graph in `core/route.ts` is visible: which
+   * passages are joined to which, and by what echo. It is a panel and not a
+   * canvas screen for the same reason the menu is -- it is a list of passages
+   * with a sentence beside each thread, and the canvas is for the rail.
+   */
+  requestMap(): void;
+  /** The player chose a passage on the map. */
+  travel(ref: string): void;
+  /**
+   * The player asked to read rather than type.
+   *
+   * Lectio: the same ribbon on the same rail with the pace ramping and nothing
+   * asked of him. It is "the mode available on a day he does not want to drill",
+   * so it is in the menu rather than behind anything.
+   */
+  startReading(): void;
+  /**
    * The player asked for sound on or off.
    *
    * Called from inside the click, and it must stay that way: a browser will not
@@ -92,6 +111,39 @@ export interface MenuView {
   readonly history: readonly HistoryEntry[];
 }
 
+/** One passage on the map. Every judgement in it is made by `core/route.ts`. */
+export interface RouteNodeView {
+  readonly ref: string;
+  readonly kind: 'stop' | 'secret';
+  readonly unlocked: boolean;
+  readonly completed: boolean;
+  readonly current: boolean;
+}
+
+/** One thread on the map: two passages, and the echo that joins them. */
+export interface RouteThreadView {
+  readonly from: string;
+  readonly to: string;
+  readonly kind: 'progression' | 'flashback';
+  /** The phrase held lit across the crossing, in the translation in use. */
+  readonly echo: string;
+  /** One line about what the later passage does with the earlier one. */
+  readonly note: string;
+  readonly travelled: boolean;
+}
+
+export interface RouteView {
+  readonly routeId: string;
+  readonly complete: boolean;
+  /** Stops finished, out of the stops the route requires. Secrets are not counted. */
+  readonly finished: number;
+  readonly stops: number;
+  readonly nodes: readonly RouteNodeView[];
+  readonly threads: readonly RouteThreadView[];
+  /** Non-null when the route file itself could not be read. */
+  readonly error: string | null;
+}
+
 export interface Overlay {
   isOpen(): boolean;
   /**
@@ -103,6 +155,8 @@ export interface Overlay {
    */
   showOpening(onDone: () => void): void;
   openMenu(view: MenuView): void;
+  /** The map: the passage graph, and the way back out of it. */
+  showMap(view: RouteView): void;
   showPromotion(promotion: Promotion, onDismiss: () => void): void;
   /**
    * Ask whether the player wants gilding. `onAnswer` is called with their
@@ -168,6 +222,8 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const importInput = need('menu-import', HTMLInputElement);
   const resetButton = need('menu-reset', HTMLButtonElement);
   const firstRunButton = need('menu-first-run', HTMLButtonElement);
+  const mapButton = need('menu-map', HTMLButtonElement);
+  const readButton = need('menu-read', HTMLButtonElement);
   const historyList = need('menu-history', HTMLOListElement);
   const historyNote = need('history-note', HTMLParagraphElement);
 
@@ -177,6 +233,14 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const promotionDip = need('promotion-dip', HTMLParagraphElement);
   const promotionCoverage = need('promotion-coverage', HTMLParagraphElement);
   const promotionOk = need('promotion-ok', HTMLButtonElement);
+
+  const mapPanel = need('panel-map', HTMLDivElement);
+  const mapNodes = need('map-nodes', HTMLUListElement);
+  const mapThreadList = need('map-threads', HTMLUListElement);
+  const mapError = need('map-error', HTMLParagraphElement);
+  const mapProgress = need('map-progress', HTMLParagraphElement);
+  const mapMenu = need('map-menu', HTMLButtonElement);
+  const mapResume = need('map-resume', HTMLButtonElement);
 
   const gildPanel = need('panel-gild', HTMLDivElement);
   const gildYes = need('gild-yes', HTMLButtonElement);
@@ -217,6 +281,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     promotionPanel.hidden = true;
     gildPanel.hidden = true;
     openingPanel.hidden = true;
+    mapPanel.hidden = true;
     dismissPromotion = null;
     answerGild = null;
     finishOpening = null;
@@ -311,9 +376,99 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     promotionPanel.hidden = true;
     gildPanel.hidden = true;
     openingPanel.hidden = true;
+    mapPanel.hidden = true;
     menuPanel.hidden = false;
     overlay.hidden = false;
     resumeButton.focus();
+  }
+
+  /**
+   * The map.
+   *
+   * Every judgement on it is `core/route.ts`'s: which passages exist, which are
+   * unlocked, which are finished, and which secret rooms have been found. This
+   * only says it out loud -- and the thing it exists to say is the *thread*: not
+   * that Genesis 1 comes before John 1, but that John 1 opens by quoting it.
+   * Without the notes the map is a reading order; with them it is a route.
+   */
+  function renderMap(view: RouteView): void {
+    mapError.textContent = view.error ?? '';
+    // Secrets are not counted, and that is the point: a player who never finds
+    // a single doorway still finishes the pilgrimage.
+    mapProgress.textContent = view.error !== null
+      ? ''
+      : view.complete
+        ? `Every passage on the ${view.routeId} route is finished.`
+        : `${String(view.finished)} of ${String(view.stops)} passages finished. ` +
+          'Secret rooms are not counted \u2014 you can finish without ever finding one.';
+    mapNodes.replaceChildren();
+    mapThreadList.replaceChildren();
+
+    for (const node of view.nodes) {
+      const row = document.createElement('li');
+      if (node.current) row.classList.add('here');
+      if (node.completed) row.classList.add('done');
+      if (!node.unlocked) row.classList.add('locked');
+
+      const name = document.createElement('span');
+      name.className = 'what';
+      name.textContent = node.ref;
+
+      const state = document.createElement('span');
+      state.className = 'how';
+      // A locked passage says what unlocks it rather than only that it is shut:
+      // "not yet" with no reason reads as a bug in a graph the player can see.
+      state.textContent = node.current
+        ? 'you are here'
+        : node.completed
+          ? 'finished'
+          : node.kind === 'secret'
+            ? 'a room you found'
+            : node.unlocked
+              ? 'open'
+              : 'finish a passage that leads here';
+
+      row.append(name, state);
+      if (node.unlocked && !node.current) {
+        const go = document.createElement('button');
+        go.type = 'button';
+        go.textContent = 'Go';
+        go.addEventListener('click', () => {
+          handlers.travel(node.ref);
+        });
+        row.append(go);
+      }
+      mapNodes.append(row);
+    }
+
+    for (const thread of view.threads) {
+      const row = document.createElement('li');
+      if (thread.travelled) row.classList.add('done');
+      const ends = document.createElement('span');
+      ends.className = 'ends';
+      ends.textContent = thread.kind === 'flashback'
+        ? `${thread.from} \u21a9 ${thread.to}`
+        : `${thread.from} \u2192 ${thread.to}`;
+      const note = document.createElement('span');
+      note.className = 'what';
+      note.textContent = thread.note;
+      const echo = document.createElement('span');
+      echo.className = 'echo';
+      echo.textContent = `\u201c${thread.echo}\u201d`;
+      row.append(ends, note, echo);
+      mapThreadList.append(row);
+    }
+  }
+
+  function showMap(view: RouteView): void {
+    renderMap(view);
+    menuPanel.hidden = true;
+    promotionPanel.hidden = true;
+    gildPanel.hidden = true;
+    openingPanel.hidden = true;
+    mapPanel.hidden = false;
+    overlay.hidden = false;
+    mapResume.focus();
   }
 
   /**
@@ -340,6 +495,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     menuPanel.hidden = true;
     gildPanel.hidden = true;
     openingPanel.hidden = true;
+    mapPanel.hidden = true;
     promotionPanel.hidden = false;
     overlay.hidden = false;
     promotionOk.focus();
@@ -365,6 +521,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     menuPanel.hidden = true;
     promotionPanel.hidden = true;
     openingPanel.hidden = true;
+    mapPanel.hidden = true;
     gildPanel.hidden = false;
     overlay.hidden = false;
     gildNo.focus();
@@ -389,6 +546,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     menuPanel.hidden = true;
     promotionPanel.hidden = true;
     gildPanel.hidden = true;
+    mapPanel.hidden = true;
     openingPanel.hidden = false;
     overlay.hidden = false;
     openingOk.focus();
@@ -412,6 +570,13 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   openButton.addEventListener('click', () => {
     handlers.requestMenu();
   });
+  mapMenu.addEventListener('click', () => {
+    handlers.requestMenu();
+  });
+  mapResume.addEventListener('click', () => {
+    close();
+    handlers.resume();
+  });
   audioButton.addEventListener('click', () => {
     handlers.toggleAudio();
   });
@@ -419,6 +584,12 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   openingOk.addEventListener('click', opened);
   firstRunButton.addEventListener('click', () => {
     handlers.replayFirstRun();
+  });
+  mapButton.addEventListener('click', () => {
+    handlers.requestMap();
+  });
+  readButton.addEventListener('click', () => {
+    handlers.startReading();
   });
   resumeButton.addEventListener('click', () => {
     close();
@@ -517,6 +688,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   });
 
   return {
-    isOpen, showOpening, openMenu, showPromotion, showGildOffer, showError, showAudio, close,
+    isOpen, showOpening, openMenu, showMap, showPromotion, showGildOffer, showError,
+    showAudio, close,
   };
 }

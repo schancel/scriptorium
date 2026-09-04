@@ -24,6 +24,7 @@ import {
   setStage,
   shouldOfferGilding,
   withGildOffered,
+  withDiscovered,
   withNotesSeen,
   withOpeningSeen,
   withPosition,
@@ -521,4 +522,47 @@ test('replaying from the menu re-arms it, and then it stays dismissed again', ()
   const done = withNotesSeen(withOpeningSeen(again), NOTE_ORDER);
   assert.equal(migrate(JSON.parse(JSON.stringify(done)) as unknown).firstRun, false);
   assert.deepEqual([...migrate(JSON.parse(JSON.stringify(done)) as unknown).notesSeen], [...NOTE_ORDER]);
+});
+
+// --- the secret rooms -------------------------------------------------------
+
+test('A VERSION 4 RECORD MIGRATES WITH EVERYTHING IT EARNED, AND HAS FOUND NO ROOMS', () => {
+  // A whole player one schema behind, now including the first run they have
+  // already seen. Nothing they earned may move, and the one new field is empty
+  // rather than guessed: nothing recorded a found room before it existed.
+  const v4 = {
+    ...V2_RECORD,
+    version: SCHEMA_VERSION - 1,
+    gilding: true,
+    gildOffered: true,
+    firstRun: false,
+    notesSeen: [...NOTE_ORDER],
+  };
+  const migrated = migrate(v4);
+
+  assert.equal(migrated.version, SCHEMA_VERSION);
+  assert.equal(migrated.stage, V1_STAGE);
+  assert.deepEqual(migrated.completed, ['Genesis 1']);
+  assert.equal(migrated.keyStats['a']?.hits, V1_HITS);
+  assert.equal(migrated.history.length, 1);
+  assert.equal(migrated.gilding, true);
+  assert.equal(migrated.firstRun, false);
+  assert.deepEqual([...migrated.notesSeen], [...NOTE_ORDER]);
+  assert.deepEqual([...migrated.discovered], [], 'a room was invented from nothing');
+});
+
+test('a found room stays found, across a reload and across walking back out of it', () => {
+  assert.deepEqual([...DEFAULT_PROGRESS.discovered], []);
+  const found = withDiscovered(DEFAULT_PROGRESS, 'Genesis 22');
+  assert.deepEqual([...found.discovered], ['Genesis 22']);
+
+  // Idempotent: finding it twice is finding it once.
+  assert.equal(withDiscovered(found, 'Genesis 22'), found, 'a second visit made a new record');
+
+  // And it survives the cheapest way there is to lose a room.
+  const reloaded = migrate(JSON.parse(JSON.stringify(found)) as unknown);
+  assert.deepEqual(reloaded, found, 'the record did not round-trip');
+
+  // It moves nothing else at all.
+  assert.deepEqual({ ...found, discovered: DEFAULT_PROGRESS.discovered }, DEFAULT_PROGRESS);
 });

@@ -243,10 +243,29 @@ export interface RailState {
   readonly targetOffset: number;
 }
 
-/** A saved position to return to when a flashback ends. */
+/**
+ * A saved position to return to when a flashback ends.
+ *
+ * `unit` is the field this interface spent a while without, and its absence was
+ * not cosmetic: a chapter reference plus a glyph cursor cannot say which verse
+ * the player was on, because the cursor indexes the *ribbon of one chunk* and a
+ * chunk is only a few verses of the chapter. A round trip restored from `ref`
+ * and `cursor` alone therefore put the scribe back in the right chapter at the
+ * wrong place, which is precisely what
+ * docs/design/05-scenery-warps.md#warps forbids: "entering and leaving one must
+ * restore the exact verse, cursor position, hearts, smudge level and combo".
+ *
+ * `core/warp.ts` had to define the shape locally to say so. It no longer does;
+ * `FlashbackFrame` is this type.
+ */
 export interface ReturnFrame {
+  /** The chapter left behind, e.g. `John 19`. */
   readonly ref: string;
+  /** 1-based verse. Without it the return lands in the right chapter only. */
+  readonly unit: number;
+  /** Glyph index within the ribbon. */
   readonly cursor: number;
+  /** Hearts, smudge and combo, exactly as they stood. */
   readonly damage: DamageState;
 }
 

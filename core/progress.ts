@@ -31,13 +31,14 @@ import { tuningValue } from './tuning.js';
 
 /**
  * Bumped to 2 when `position` and `recent` were added, to 3 for the gilding
- * mode and whether its offer has been made, and to 4 for the first run. A
- * record at any older version is *migrated*, never discarded: months of a
- * beginner's curve is the one thing in this program that cannot be regenerated.
+ * mode and whether its offer has been made, to 4 for the first run, and to 5
+ * for the secret rooms the player has found. A record at any older version is
+ * *migrated*, never discarded: months of a beginner's curve is the one thing in
+ * this program that cannot be regenerated.
  *
  * See the version table in docs/architecture/data-schemas.md#progress.
  */
-export const SCHEMA_VERSION = 4;   // tuning-exempt: a schema version, not a tunable
+export const SCHEMA_VERSION = 5;   // tuning-exempt: a schema version, not a tunable
 
 // --- the record -------------------------------------------------------------
 
@@ -91,6 +92,20 @@ export interface Progress {
   readonly spaceThumb: Thumb;
   readonly position: Position;
   readonly completed: readonly string[];
+  /**
+   * Flashback rooms the player has stepped into, by citation.
+   *
+   * Separate from `completed`, and `core/route.ts` says why: "a secret is
+   * revealed by being *found* -- stepping through the doorway -- and a player
+   * who steps in, turns round and walks out has still found it. Losing the room
+   * off the map again would be the same as never having found it." Held in the
+   * record rather than for the session for exactly that reason: a reload is a
+   * cheaper way to lose a room than walking out of one.
+   *
+   * It gates nothing. `requiredRefs` excludes every flashback destination by
+   * construction, so this list can only ever *add* to what the map shows.
+   */
+  readonly discovered: readonly string[];
   /** Lifetime totals, behind the report card. */
   readonly keyStats: Readonly<Record<Key, KeyStat>>;
   /** The trailing window the mastery gate is measured over. */
@@ -147,6 +162,7 @@ export const DEFAULT_PROGRESS: Progress = {
   spaceThumb: 'rt',
   position: DEFAULT_POSITION,
   completed: [],
+  discovered: [],
   keyStats: {},
   recent: {},
   history: [],
@@ -256,6 +272,13 @@ export function migrate(parsed: unknown): Progress {
     position: migratePosition(parsed['position']),
     completed: Array.isArray(parsed['completed'])
       ? parsed['completed'].filter((r): r is string => typeof r === 'string')
+      : [],
+    // Empty for a version 4 record, which is the only honest default: nothing
+    // recorded a found room before this version existed, so the game does not
+    // know of any. It costs the player nothing -- a secret is optional by
+    // construction and re-finding one is the same walk it was the first time.
+    discovered: Array.isArray(parsed['discovered'])
+      ? parsed['discovered'].filter((r): r is string => typeof r === 'string')
       : [],
     keyStats: isRecord(parsed['keyStats'])
       ? (parsed['keyStats'] as Record<Key, KeyStat>)
@@ -467,6 +490,18 @@ export function recordSession(
 /** Move the bookmark without recording a session. */
 export function withPosition(progress: Progress, position: Position): Progress {
   return { ...progress, position };
+}
+
+/**
+ * Remember a flashback room the player stepped into.
+ *
+ * Idempotent, and it only ever grows: a room found is found. Nothing here can
+ * remove one, because the only thing that could -- walking back out of it --
+ * is exactly the case `core/route.ts` says must still count as having found it.
+ */
+export function withDiscovered(progress: Progress, ref: string): Progress {
+  if (progress.discovered.includes(ref)) return progress;
+  return { ...progress, discovered: [...progress.discovered, ref] };
 }
 
 // --- the two switches the player owns ---------------------------------------

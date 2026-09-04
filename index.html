@@ -153,6 +153,27 @@
   #menu-history .when { color: var(--dim); min-width: 6.5rem; }
   #menu-history .what { flex: 1; }
   #menu-history .how { font-variant-numeric: tabular-nums; }
+  /* The map: a list of passages, and a list of the threads between them. The
+     thread's note is the point of the whole screen -- without it the map is a
+     reading order rather than a route. */
+  #map-nodes, #map-threads { margin: 0; padding: 0; list-style: none; font-size: .9rem; }
+  #map-nodes li, #map-threads li {
+    display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap;
+    padding: .25rem 0; border-bottom: 1px solid rgba(122, 107, 80, .18);
+  }
+  #map-nodes .what, #map-threads .what { flex: 1; min-width: 10rem; }
+  #map-nodes .how { color: var(--dim); font-size: .85rem; }
+  #map-nodes li.here { color: var(--gold); }
+  #map-nodes li.here .how { color: var(--gold); }
+  #map-nodes li.done .what { color: var(--bright); }
+  #map-nodes li.locked .what { color: var(--dim); }
+  #map-nodes button { font-size: .8rem; padding: .1em .6em; }
+  #map-threads .ends { min-width: 14rem; color: var(--bright); }
+  #map-threads .echo {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--gold); font-size: .85rem;
+  }
+  #map-threads li.done .ends { color: var(--gold); }
   .file input { display: none; }
   .file { cursor: pointer; border: 1px solid var(--dim); border-radius: .3em; padding: .3em .7em; color: var(--bright); }
   .file:hover { border-color: var(--gold); color: var(--gold); }
@@ -224,6 +245,40 @@
     <div class="row">
       <button id="gild-yes" class="primary" type="button">Turn gilding on</button>
       <button id="gild-no" type="button">No, leave it as it is</button>
+    </div>
+  </div>
+
+  <!-- The map. The graph in core/route.ts, said out loud: which passages are
+       joined to which, and by what echo. The thread notes are the reason it
+       exists -- a list of passages in order is a reading plan, and the note is
+       what makes it a route. docs/design/04-route.md. -->
+  <div class="panel" id="panel-map" hidden>
+    <p class="panel-hint"><b>Esc</b> closes this and picks up where you left off &middot; a thread is a phrase two passages share</p>
+    <h2>The route</h2>
+    <p class="lead">
+      Not a reading order. Every thread below is a real link between what one
+      passage says and what a later one does with it &mdash; and when you travel
+      one, the shared phrase stays lit on the rail while the world changes
+      around it.
+    </p>
+    <p class="err" id="map-error"></p>
+    <p class="dim" id="map-progress"></p>
+
+    <h3>Passages</h3>
+    <ul id="map-nodes"></ul>
+
+    <h3>Threads</h3>
+    <ul id="map-threads"></ul>
+    <p class="dim">
+      A thread marked with &#8617; is a doorway: an optional room part-way
+      through a passage that phases back into an older one for a few verses and
+      returns you to the exact verse you left. Walking straight past one costs
+      nothing and never closes anything off.
+    </p>
+
+    <div class="panel-actions">
+      <button id="map-menu" type="button">Menu</button>
+      <button id="map-resume" class="primary" type="button">Resume</button>
     </div>
   </div>
 
@@ -309,6 +364,18 @@
       work. Taking a long time over a single key never brings it — only stopping
       does. Turn it off if it nags rather than nudges; nothing else changes, and
       the game is fully playable without it.
+    </p>
+
+    <h3>The route</h3>
+    <div class="row">
+      <button id="menu-map" type="button">Show the route</button>
+      <button id="menu-read" type="button">Read without typing</button>
+    </div>
+    <p class="dim">
+      The route is a small graph of passages joined by phrases they share, not a
+      run through the Bible front to back. <b>Read without typing</b> is the same
+      page on the same rail with nothing asked of you &mdash; it speeds up
+      gently the longer you stay with it, and <b>Esc</b> brings you back.
     </p>
 
     <h3>The opening</h3>

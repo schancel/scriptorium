@@ -70,6 +70,28 @@ one occurs literally in *both* connected passages, under WEB and KJV both, becau
 translation switch can silently break an echo. If a check fails, fix the phrase in this
 table — never the check.
 
+## How it is played
+
+The graph is a screen. **The map** — from the menu — lists every passage the route
+names, says which are open, which are finished and which secret rooms have been found,
+and lists every thread with its note. The note is the point of the screen: a list of
+passages in canonical order is a reading plan, and *"John opens by quoting Genesis word
+for word"* is what makes it a route. Choosing a passage the player has earned travels the
+thread that unlocks it, which runs the [warp](05-scenery-warps.md#warps).
+
+A **doorway** stands open on the echoed phrase itself and stays open to the end of that
+verse — the only place in the passage where stepping backwards means anything, and long
+enough to be noticed in. It is named in one sentence in the strip under the rail, and
+**Tab** steps through it. Tab again, or finishing the short stretch inside, phases forward
+to the exact verse left. Typing on is how you decline one, and declining costs nothing:
+`requiredRefs` is built from the stops, a flashback destination is a secret by
+construction, and the platform filters its doorways through that guarantee rather than
+restating it.
+
+A room the player has entered is recorded in the progress record as `discovered`, because
+a player who steps in, turns round and walks straight back out has still found it, and a
+reload must not be a cheaper way to lose a room than walking out of one.
+
 ## Alternate routes
 
 Routes are data, so alternates are cheap:

@@ -1,6 +1,6 @@
 # Scenery, set pieces and warps
 
-**Implemented by:** `core/scenes.ts`, `core/setpieces.ts`, `core/worlds.ts`, `core/sprites.ts`
+**Implemented by:** `core/scenes.ts`, `core/setpieces.ts`, `core/worlds.ts`, `core/sprites.ts`, `core/warp.ts`, `core/draw.ts`
 
 ## Scenery is authored, not inferred
 
@@ -63,6 +63,12 @@ scene, so most passages need only a theme and the memorable ones can be special.
 | John 10 | `garden` | — |
 | John 19 | `mountain` | `darkness_at_noon` |
 | Revelation 22 | `garden` | `tree_of_life` |
+
+A set piece produces **named scalars in 0..1 and no draw commands**; `core/draw.ts` turns
+those into rects inside the scenery band, and nowhere else. Ten little renderers, each
+with its own idea of the palette and the bands, is ten ways for the picture to disagree
+with itself — and a flourish that could reach below the band would be scenery competing
+with the rail it exists to serve.
 
 `rising_water` physically raises the level as the flood does. `parted_walls` stands the
 sea up on either side of the rail. `darkness_at_noon` drains the palette to greyscale

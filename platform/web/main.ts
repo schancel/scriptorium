@@ -31,15 +31,32 @@
 
 import { createRenderer, type Renderer } from './canvas_renderer.js';
 import { attachKeyboard } from './keyboard_input.js';
-import { createOverlay, type MenuView, type Overlay } from './overlay.js';
+import { createOverlay, type MenuView, type Overlay, type RouteView } from './overlay.js';
 import { loadTuning } from '../../core/tuning.js';
 import { keySetFor, loadStages, stageAt } from '../../core/curriculum.js';
 import { classify } from '../../core/illumination.js';
 import { applyKey, atEnd, createTypingState, gildScore, score, tick } from '../../core/typing.js';
-import { createRail, layoutRail, stepRail } from '../../core/rail.js';
+import { CELL_W, createRail, layoutRail, stepRail } from '../../core/rail.js';
 import {
-  VIRTUAL_W, drawFrame, sceneLayout, type FrameState, type SceneCandle, type SceneState,
+  VIRTUAL_W, drawFrame, sceneLayout,
+  type FrameState, type SceneCandle, type SceneState, type WarpView,
 } from '../../core/draw.js';
+import { loadScenes, sceneFor as sceneAt, type Scene, type SceneMap } from '../../core/scenes.js';
+import { setpieceState, type SetpieceState } from '../../core/setpieces.js';
+import {
+  arriveAt, completePassage, createMap, discoverSecret, flashbacksFrom,
+  loadRoute, mapThreads, mapView, nodeRefs, requiredRefs, routeComplete,
+  type MapState, type Route, type RouteEdge,
+} from '../../core/route.js';
+import {
+  beginWarp, echoFor, enterFlashback, heldSpan, insideFlashback, leaveFlashback, locateEcho,
+  planWarp, skipFlashback, stepWarp, warpComplete,
+  type FlashbackFrame, type WarpPlan, type WarpState,
+} from '../../core/warp.js';
+import {
+  createLectio, lectioCursor, lectioFinished, lectioOffset, pauseLectio, stepLectio,
+  type LectioState,
+} from '../../core/lectio.js';
 import { SPRITE_SIZE } from '../../core/sprites.js';
 import {
   beginStrike, createCloud, createEntity, monstersAt, stepCloud, stepEntities, stepMonsters,
@@ -54,7 +71,6 @@ import {
   restoreHeart,
 } from '../../core/damage.js';
 import { draws, seedFrom } from '../../core/rng.js';
-import { DEFAULT_THEME } from '../../core/worlds.js';
 import {
   createAudio, setAudioOn, stepSound, type AudioState, type Cue, type Songbook,
 } from '../../core/sound.js';
@@ -68,7 +84,9 @@ import {
   chunkIndexFor,
   chunkRef,
   chunksFor,
+  formatReference,
   loadBook,
+  parseReference,
   sectionFor,
 } from '../../core/corpus.js';
 import {
@@ -83,6 +101,7 @@ import {
   setStage,
   shouldOfferGilding,
   withGildOffered,
+  withDiscovered,
   withNotesSeen,
   withOpeningSeen,
   withPosition,
@@ -96,7 +115,7 @@ import {
   today,
 } from './local_storage.js';
 import type {
-  BlotCloud, DamageState, Glyph, Key, KeyboardLayout, RailState, Stage, Thumb,
+  BlotCloud, DamageState, Glyph, Key, KeyboardLayout, Mode, RailState, Score, Stage, Thumb,
   Tuning, TypingState,
 } from '../../core/types.js';
 
@@ -201,10 +220,21 @@ const DATA_NAMES = {
   tuning: 'tuning',
   curriculum: 'curriculum',
   scenery: 'scenery',
+  route: 'the route',
   themes: 'themes',
   tunes: 'tunes',
   text: 'the text',
 } as const;
+
+/**
+ * What the map says when the route file is unreachable.
+ *
+ * A blank graph and a broken one look identical, and only one of them is the
+ * player's own progress -- so the panel says which, in the same spirit as
+ * docs/decisions/0009-fallbacks-must-announce-themselves.md.
+ */
+const ROUTE_MISSING =
+  'The route did not load. Run `make build` and serve over http (`make serve`).';
 
 // --- loading ----------------------------------------------------------------
 
@@ -411,54 +441,14 @@ function placeMonsters(
 }
 
 // --- which world a passage is set in ----------------------------------------
-
-/**
- * One row of `data/scenes/bible.json`: a chapter range and the theme it wears.
- *
- * `core/scenes.ts` is specced in docs/design/05-scenery-warps.md and not yet
- * written; when it lands, this reader and `themeFor` move into it wholesale and
- * this file goes back to asking one question. Until then the scenery is still
- * *authored* rather than inferred, which is the part of that doc that matters:
- * a passage with no row gets the abbey, and nothing here guesses a theme from
- * the text.
- */
-interface SceneRow {
-  readonly book: string;
-  readonly first: number;
-  readonly last: number;
-  readonly theme: string;
-}
-
-const RANGE = /^(.+?)\s+(\d+)(?:-(\d+))?$/;
-
-function loadScenes(parsed: unknown): SceneRow[] {
-  if (typeof parsed !== 'object' || parsed === null) return [];
-  const rows: unknown = (parsed as { scenes?: unknown }).scenes;
-  if (!Array.isArray(rows)) return [];
-  const out: SceneRow[] = [];
-  for (const raw of rows as readonly unknown[]) {
-    if (typeof raw !== 'object' || raw === null) continue;
-    const row = raw as { range?: unknown; theme?: unknown };
-    if (typeof row.range !== 'string' || typeof row.theme !== 'string') continue;
-    const match = RANGE.exec(row.range.trim());
-    if (match === null) continue;
-    const book = canonicalBook(match[1] ?? '');
-    const first = Number(match[2]);
-    const last = Number(match[3] ?? match[2]);
-    if (book === null || !Number.isFinite(first) || !Number.isFinite(last)) continue;
-    out.push({ book, first, last, theme: row.theme });
-  }
-  return out;
-}
-
-/** The documented fallback: any passage with no row is the abbey. */
-function themeFor(scenes: readonly SceneRow[], book: string, chapter: number): string {
-  const canonical = canonicalBook(book) ?? book;
-  for (const row of scenes) {
-    if (row.book === canonical && chapter >= row.first && chapter <= row.last) return row.theme;
-  }
-  return DEFAULT_THEME;
-}
+//
+// There used to be a thirty-line scene reader here: a range regex, a row type
+// and a `themeFor` lookup, written before `core/scenes.ts` existed. It has gone
+// where it belonged. The rule -- a hand-authored range table, an abbey for any
+// passage with no row, and nothing inferred from a single character of the
+// prose -- is docs/design/05-scenery-warps.md, and a rule in the platform is a
+// rule no test in `core/` can reach. This file now asks one question and draws
+// the answer.
 
 // --- the ribbon -------------------------------------------------------------
 
@@ -512,6 +502,44 @@ function offsetOfUnit(verseAt: readonly number[], unit: number): number {
 
 // --- the level --------------------------------------------------------------
 
+/**
+ * An optional doorway standing in a part: a flashback edge, and the stretch of
+ * ribbon it is open across.
+ *
+ * It opens on the echoed phrase, because that is the only place in the passage
+ * where stepping backwards means anything, and it stays open to the end of that
+ * verse so the player has a sentence rather than a keystroke to notice it in.
+ * Walking past it is typing on, and costs nothing at all.
+ */
+interface Doorway {
+  readonly edge: RouteEdge;
+  /** Glyph index in this part's ribbon where the doorway opens. */
+  readonly at: number;
+  /** The last glyph it is still open at: the end of the verse holding the echo. */
+  readonly until: number;
+}
+
+/** How a part may be opened differently from the way the bookmark would open it. */
+interface LevelOptions {
+  /**
+   * The exact glyph to resume on, rather than the first one owed. Used by the
+   * return from a flashback, which must land on the cursor the player left and
+   * not merely in the right verse.
+   */
+  readonly cursor?: number;
+  /**
+   * The ribbon offset the part opens at. A warp arrives with the destination's
+   * copy of the held phrase already on `echoX`, and "the rail eases away from it
+   * once the crossing is over" -- so the part opens on the crossing's offset and
+   * glides to its own, rather than cutting.
+   */
+  readonly railOffset?: number;
+  /** The frame to come back to, when this part is a secret room. */
+  readonly flashback?: FlashbackFrame;
+  /** The doorway it was entered by, so the return can retrace the same thread. */
+  readonly doorway?: RouteEdge;
+}
+
 interface Level {
   readonly book: Book;
   readonly bookTitle: string;
@@ -536,8 +564,41 @@ interface Level {
   bookmark: number;
 
   // --- the world this part is set in ---------------------------------------
-  /** A theme id in `core/worlds.ts`, from the authored scene map. */
-  readonly theme: string;
+  /**
+   * The authored scene: a theme, and a set piece for the handful of passages
+   * that have one. Resolved by `core/scenes.ts` from the range table, never
+   * inferred from a character of the prose.
+   */
+  readonly scene: Scene;
+  /** The chapter, canonically cited: `Psalms 23`. What the route graph is keyed on. */
+  readonly ref: string;
+  /**
+   * The optional doorways standing in this part, and the glyph each opens at.
+   *
+   * Every one of them may be walked straight past. That is not a promise made
+   * here: `core/route.ts` guarantees it, because `requiredRefs` is built from
+   * the *stops* and a flashback destination is by construction a secret. This
+   * list is filtered through that guarantee rather than through a rule restated
+   * in the platform -- see `doorwaysIn`.
+   */
+  readonly doorways: readonly Doorway[];
+  /**
+   * The frame to come back to, when this level *is* a secret room.
+   *
+   * Null in every ordinary part. Non-null, it is the verse, cursor, hearts,
+   * smudge and combo the player left behind, held for the return trip and
+   * handed back untouched -- damage taken inside a secret room is forgiven, by
+   * design. See docs/design/05-scenery-warps.md#warps.
+   */
+  readonly flashback: FlashbackFrame | null;
+  /**
+   * The doorway this room was entered by, for the trip back out.
+   *
+   * Held on the level rather than in a second stack beside the return frames,
+   * because nesting one room inside another would then be two stacks that have
+   * to agree -- and `core/warp.ts` already owns the one that matters.
+   */
+  readonly doorwayHome: RouteEdge | null;
   /** Word-boundary indices into `glyphs`, so progress can be counted in strides. */
   readonly breaks: readonly number[];
   /** Virtual px from the candle at the start of this part to the one at its end. */
@@ -590,14 +651,48 @@ function candlesOf(level: Level): SceneCandle[] {
   return level.candleXs.map((x) => ({ x, lit: level.cameraX >= x - CANDLE_REACH }));
 }
 
-function sceneFor(
+/**
+ * How far through the *chapter* the player has typed, 0..1.
+ *
+ * A set piece is a function of this and never of a clock: "the flood rises
+ * because verses are being written", which is
+ * docs/decisions/0004-idle-threat-not-speed-timer.md applied to the scenery. It
+ * is measured over the chapter rather than the part, or the flood would drain
+ * and rise again at every candle.
+ */
+function passageProgress(level: Level): number {
+  const total = level.chunks[level.chunks.length - 1]?.last ?? 0;
+  if (total <= 0) return 0;
+  const span = level.chunk.last - level.chunk.first + 1;
+  const within = level.glyphs.length === 0 ? 0 : level.typing.cursor / level.glyphs.length;
+  return Math.min(1, Math.max(0, (level.chunk.first - 1 + within * span) / total));
+}
+
+/**
+ * The passage's scripted flourish for this frame, or nothing.
+ *
+ * Most passages have none, which is the point of the mechanism: `sceneFor`
+ * returns a null set piece for every row of the table that does not name one,
+ * and for every passage with no row at all. `setpieceState` throws on an id it
+ * does not implement, and that is left to throw -- a scene table that had run
+ * ahead of the code would otherwise stay documented and imaginary for as long
+ * as nobody happened to play that passage.
+ */
+function setpieceFor(level: Level): SetpieceState | null {
+  const id = level.scene.setpiece;
+  if (id === null) return null;
+  return setpieceState(id, { elapsedMs: level.animMs, progress: passageProgress(level) });
+}
+
+function sceneStateFor(
   level: Level,
   damage: DamageState,
   cloud: BlotCloud,
   tuning: Tuning,
 ): SceneState {
+  const piece = setpieceFor(level);
   return {
-    theme: level.theme,
+    theme: level.scene.theme,
     cameraX: level.cameraX,
     // The scribe walks exactly while the world is still moving under him, which
     // is exactly while there are words behind the cursor he has not been carried
@@ -611,6 +706,9 @@ function sceneFor(
     heartsMax: maxHearts(tuning),
     candles: candlesOf(level),
     strikes: level.strikes,
+    // Spread rather than set to null: absent is not the same as empty, and
+    // `exactOptionalPropertyTypes` is what keeps the two apart.
+    ...(piece === null ? {} : { setpiece: piece }),
   };
 }
 
@@ -621,6 +719,7 @@ function frameFor(
   tuning: Tuning,
   gildPoints: number,
   note: string | null,
+  doorway: string | null,
 ): FrameState {
   const candle = `${String(level.chunkIndex + 1)}/${String(level.chunks.length)}`;
   return {
@@ -637,12 +736,13 @@ function frameFor(
     keySet: level.keySet,
     gilding: level.gilding,
     gildPoints,
-    scene: sceneFor(level, damage, cloud, tuning),
+    scene: sceneStateFor(level, damage, cloud, tuning),
     // Drawn over everything, every frame, for as long as a fallback is in use.
     notice: noticeLines(),
     // Absent on all but a handful of frames in a player's life -- and absent is
     // not the same as empty here, so it is spread in rather than set to null.
     ...(note === null ? {} : { note }),
+    ...(doorway === null ? {} : { doorway }),
   };
 }
 
@@ -700,9 +800,36 @@ async function boot(): Promise<void> {
     usingFallback(DATA_NAMES.curriculum);
   }
 
-  // The authored scene map. Unreachable, it is an empty list and every passage
-  // wears the abbey -- which is the documented fallback, not a degraded mode.
-  const scenes: SceneRow[] = loadScenes(await fetchJsonOr('data/scenes/bible.json', null, DATA_NAMES.scenery));
+  /**
+   * The authored scene map, parsed by `core/scenes.ts`.
+   *
+   * Unreachable or malformed, it is `null` and every passage wears the abbey --
+   * which is the documented fallback and not a degraded mode, since that is
+   * exactly what an imported Gutenberg book gets. It still announces itself:
+   * a silent fallback is indistinguishable from working software, and this one
+   * would cost the game every theme and therefore every tune.
+   */
+  let scenes: SceneMap | null = null;
+  try {
+    scenes = loadScenes(await fetchJson('data/scenes/bible.json'));
+  } catch {
+    usingFallback(DATA_NAMES.scenery);
+  }
+
+  /**
+   * The route graph: which passages are joined to which, and by what echo.
+   *
+   * Null when the file cannot be read, in which case the map screen says so
+   * rather than drawing an empty graph -- there is a real difference between
+   * "you have not reached anything yet" and "the route did not load", and only
+   * one of them is the player's fault.
+   */
+  let route: Route | null = null;
+  try {
+    route = loadRoute(await fetchJson('data/routes/pilgrimage.json'));
+  } catch {
+    usingFallback(DATA_NAMES.route);
+  }
 
   const songbook = await loadSongbook();
   const webAudio: WebAudio = createWebAudio(tuning);
@@ -782,7 +909,7 @@ async function boot(): Promise<void> {
    * @throws if the book cannot be loaded, so the menu can say so rather than
    *         silently landing the player somewhere they did not ask for
    */
-  async function buildLevel(at: Position): Promise<Level> {
+  async function buildLevel(at: Position, options: LevelOptions = {}): Promise<Level> {
     const book = await fetchBook(progress.translation, at.book);
     // A chapter the book does not have -- a bookmark carried across a jump, or
     // a hand-typed number -- lands on the first chapter rather than on nothing.
@@ -808,10 +935,19 @@ async function boot(): Promise<void> {
       glyphs, offsetOfUnit(verseAt, Math.max(chunk.first, at.unit)), progress.gilding,
     );
     const base = createTypingState(glyphs, progress.gilding);
-    const typing = resumeAt <= base.cursor ? base : { ...base, cursor: resumeAt };
+    const opened = resumeAt <= base.cursor ? base : { ...base, cursor: resumeAt };
+    // A flashback return names the cursor outright. It is clamped rather than
+    // trusted: the frame is the player's, but the ribbon is rebuilt, and a
+    // stage change while they were inside the room would shorten it.
+    const exact = options.cursor;
+    const typing = exact === undefined
+      ? opened
+      : { ...base, cursor: Math.min(Math.max(0, exact), glyphs.length) };
 
-    const theme = themeFor(scenes, book.title, chapter);
-    const layout = sceneLayout(theme, tuning);
+    const railTarget = layoutRail(glyphs, typing.cursor, VIRTUAL_W, tuning).offset;
+    const ref = formatReference(book.title, chapter);
+    const scene = sceneAt(scenes, ref);
+    const layout = sceneLayout(scene.theme, tuning);
     const breaks = wordBreaks(glyphs);
     // One stride per word, and the part's far candle stands at the end of them.
     const span = (breaks.length + 1) * WORLD_STRIDE;
@@ -833,11 +969,20 @@ async function boot(): Promise<void> {
       layout: progress.layout,
       spaceThumb: progress.spaceThumb,
       typing,
-      rail: createRail(layoutRail(glyphs, typing.cursor, VIRTUAL_W, tuning).offset),
+      // Settled on its target, unless a crossing has just handed the ribbon over
+      // at the offset that held the phrase -- in which case the rail opens there
+      // and eases away from it, which is what `arrivalOffset` is for.
+      rail: options.railOffset === undefined
+        ? createRail(railTarget)
+        : { offset: options.railOffset, targetOffset: railTarget },
       reporting: false,
       started: false,
       bookmark: verseAt[typing.cursor] ?? chunk.first,
-      theme,
+      scene,
+      ref,
+      doorways: doorwaysIn(ref, glyphs, verseAt),
+      flashback: options.flashback ?? null,
+      doorwayHome: options.doorway ?? null,
       breaks,
       span,
       // The candle behind him is the checkpoint he is standing on; the one ahead
@@ -890,6 +1035,10 @@ async function boot(): Promise<void> {
   // --- the bookmark ---------------------------------------------------------
 
   function bookmark(): void {
+    // A secret room is not a place to come back to. Writing the bookmark inside
+    // one would make closing the tab mid-flashback reopen the game in a room
+    // with nothing on the stack to leave it by.
+    if (level.flashback !== null) return;
     const unit = verseUnder(level);
     if (unit === level.bookmark && progress.position.chapter === level.chapter) return;
     level.bookmark = unit;
@@ -1014,10 +1163,15 @@ async function boot(): Promise<void> {
    * menu up -- handing the keyboard back while a panel is open would send the
    * player's next keystroke into the rail behind it.
    */
-  function goTo(at: Position, onError: (message: string) => void, resume = true): void {
+  function goTo(
+    at: Position,
+    onError: (message: string) => void,
+    resume = true,
+    options: LevelOptions = {},
+  ): void {
     if (loading) return;
     loading = true;
-    void buildLevel(at)
+    void buildLevel(at, options)
       .then((next) => {
         // Gold leaf lasts "for the rest of the level", and a level is a chapter.
         // Crossing into another one resets both the multiplier and the running
@@ -1044,6 +1198,552 @@ async function boot(): Promise<void> {
       .finally(() => {
         loading = false;
       });
+  }
+
+  // --- the route --------------------------------------------------------------
+  //
+  // The graph in `core/route.ts`, joined to the record. Everything the map shows
+  // is derived here and decided there: which nodes exist, which are unlocked,
+  // which are secret, and the note on every thread.
+
+  /**
+   * A citation in the one spelling everything else can be compared against.
+   *
+   * The route table says `Psalm 23` and a fetched book is titled `Psalms`, which
+   * is the whole reason `core/corpus.ts` has a canon table. Comparing the record
+   * against the graph without going through it would leave a completed psalm
+   * failing to unlock the passage it leads to, silently.
+   */
+  function canonRef(citation: string): string {
+    try {
+      const parsed = parseReference(citation);
+      return formatReference(parsed.book, parsed.chapter);
+    } catch {
+      return citation;
+    }
+  }
+
+  /** The route's own spelling of a citation, or null when it names no node. */
+  function routeRefFor(citation: string): string | null {
+    if (route === null) return null;
+    const want = canonRef(citation);
+    return nodeRefs(route).find((ref) => canonRef(ref) === want) ?? null;
+  }
+
+  /**
+   * Where the player stands on the graph, built from the record.
+   *
+   * Assembled with the module's own reducers rather than by writing the record
+   * out by hand, so the rules about what completing and discovering *mean* stay
+   * in one place. `completed` comes from `progress.completed`, which the candle
+   * has always written; `discovered` comes from the field added for it, because
+   * a secret is revealed by being found and a reload must not lose that.
+   */
+  function mapState(): MapState {
+    if (route === null) return { routeId: '', current: '', completed: [], discovered: [] };
+    const done = new Set(progress.completed.map(canonRef));
+    const found = new Set(progress.discovered.map(canonRef));
+    let state = createMap(route);
+    for (const ref of nodeRefs(route)) {
+      if (done.has(canonRef(ref))) state = completePassage(state, ref);
+      if (found.has(canonRef(ref))) state = discoverSecret(state, ref);
+    }
+    const here = routeRefFor(level.ref);
+    return here === null ? state : arriveAt(state, here);
+  }
+
+  function routeView(): RouteView {
+    if (route === null) {
+      return {
+        routeId: '', complete: false, finished: 0, stops: 0,
+        nodes: [], threads: [], error: ROUTE_MISSING,
+      };
+    }
+    const state = mapState();
+    return {
+      routeId: route.id,
+      complete: routeComplete(route, state),
+      finished: mapView(route, state).filter((n) => n.kind === 'stop' && n.completed).length,
+      stops: requiredRefs(route).length,
+      nodes: mapView(route, state)
+        .filter((node) => node.visible)
+        .map((node) => ({
+          ref: node.ref,
+          kind: node.kind,
+          unlocked: node.unlocked,
+          completed: node.completed,
+          current: node.current,
+        })),
+      threads: mapThreads(route, state)
+        .filter((thread) => thread.visible)
+        .map((thread) => ({
+          from: thread.edge.from,
+          to: thread.edge.to,
+          kind: thread.edge.kind,
+          echo: echoFor(thread.edge, progress.translation),
+          note: thread.edge.note,
+          travelled: thread.travelled,
+        })),
+      error: null,
+    };
+  }
+
+  /** The position a citation names: the top of that chapter. */
+  function positionOf(citation: string): Position {
+    const parsed = parseReference(citation);
+    return { book: parsed.book, chapter: parsed.chapter, unit: 1 };
+  }
+
+  // --- crossings --------------------------------------------------------------
+
+  /** A chapter, as both the text a warp is planned against and the ribbon drawn. */
+  interface ChapterText {
+    readonly units: readonly string[];
+    /** The whole chapter as one ribbon, joined exactly as `buildRibbon` joins it. */
+    readonly text: string;
+  }
+
+  async function chapterText(citation: string): Promise<ChapterText> {
+    const parsed = parseReference(citation);
+    const book = await fetchBook(progress.translation, parsed.book);
+    const section = sectionFor(book, parsed.chapter) ?? book.sections[0];
+    if (section === undefined) throw new Error(`main: no chapter for ${citation}`);
+    return { units: section.units, text: section.units.join(' ') };
+  }
+
+  /** The whole chapter, classified for the stage the player is on. */
+  function chapterRibbon(units: readonly string[]): readonly Glyph[] {
+    return buildRibbon(
+      units, 1, keySetAt(progress.stage), progress.layout, progress.spaceThumb,
+    ).glyphs;
+  }
+
+  /** Where a chunk starts in its chapter's ribbon. Verses are joined by one space. */
+  function chapterOffsetOfUnit(units: readonly string[], firstUnit: number): number {
+    if (firstUnit <= 1) return 0;
+    return units.slice(0, firstUnit - 1).join(' ').length + 1;
+  }
+
+  /**
+   * A crossing in flight.
+   *
+   * `plan` is computed once, at the doorway, and nothing here recomputes any of
+   * it -- `echoX` least of all. The two ribbons are the chapter being left and
+   * the chapter arriving, each at the offset that puts *its* copy of the phrase
+   * on that same column, which is why the swap between them at the hold boundary
+   * is invisible.
+   */
+  interface ActiveWarp {
+    readonly plan: WarpPlan;
+    state: WarpState;
+    readonly originGlyphs: readonly Glyph[];
+    /** The offset that lands the origin's copy of the phrase on `plan.echoX`. */
+    readonly originOffset: number;
+    readonly destGlyphs: readonly Glyph[];
+    /** The scenery being left, frozen: it is the thing the destination dissolves over. */
+    readonly fromScene: SceneState;
+    readonly toTheme: string;
+    readonly cameraX: number;
+    /** Run once, on the frame the crossing ends. Synchronous by construction. */
+    readonly arrive: () => void;
+  }
+
+  let warp: ActiveWarp | null = null;
+
+  /**
+   * Travel an echo edge.
+   *
+   * The destination level is built *before* the crossing starts, so nothing in
+   * the 1.4 seconds of the phase is waiting on a fetch: a crossing that stalled
+   * mid-dissolve would move the one thing on screen that must not move, by
+   * dropping frames around it.
+   *
+   * `reverse` is the way back out of a secret room. The edge is mirrored rather
+   * than the arithmetic, so `planWarp` still names the right side of it when a
+   * phrase is missing.
+   */
+  async function crossEdge(
+    edge: RouteEdge,
+    reverse: boolean,
+    destination: Position,
+    options: LevelOptions,
+  ): Promise<void> {
+    const crossing: RouteEdge = reverse ? { ...edge, from: edge.to, to: edge.from } : edge;
+    const origin = await chapterText(crossing.from);
+    const dest = await chapterText(crossing.to);
+
+    // Entered from where the player is standing when the passage is the origin,
+    // and from the phrase itself otherwise -- which is where the map travels
+    // from, and puts the echo on the focal guide for the whole crossing.
+    const standingHere = canonRef(level.ref) === canonRef(crossing.from);
+    const originCursor = standingHere
+      ? chapterOffsetOfUnit(origin.units, level.chunk.first) + level.typing.cursor
+      : locateEcho(origin.text, echoFor(crossing, progress.translation));
+
+    const plan = planWarp({
+      edge: crossing,
+      translation: progress.translation,
+      originText: origin.text,
+      originCursor: Math.max(0, originCursor),
+      destText: dest.text,
+      viewportW: VIRTUAL_W,
+      tuning,
+    });
+
+    // The destination opens on the crossing's own offset and eases away from it,
+    // which is what the plan's `arrivalOffset` is for -- unless it is opening on
+    // an exact cursor, where the ribbon is a chunk from the middle of the
+    // chapter and shares no indices with the one the crossing drew.
+    const next = await buildLevel(
+      destination,
+      options.cursor === undefined
+        ? { ...options, railOffset: plan.arrivalOffset }
+        : options,
+    );
+
+    detachTyping();
+    warp = {
+      plan,
+      state: beginWarp(plan, tuning),
+      originGlyphs: chapterRibbon(origin.units),
+      // Carried through from the plan, never recomputed: the origin's phrase
+      // sits on `echoX`, so the ribbon holding it starts exactly this far left.
+      originOffset: plan.echoX - plan.originSpan.first * CELL_W,
+      destGlyphs: chapterRibbon(dest.units),
+      fromScene: sceneStateFor(level, damage, cloud, tuning),
+      toTheme: sceneAt(scenes, canonRef(crossing.to)).theme,
+      cameraX: level.cameraX,
+      arrive: () => {
+        if (next.bookTitle !== level.bookTitle || next.chapter !== level.chapter) {
+          gildBanked = 0;
+          leaf = createPlayer(damage);
+        }
+        level = next;
+        // A secret room is not a place to come back to. Writing the bookmark on
+        // the way in would make closing the tab mid-flashback reopen the game
+        // inside the room, with nothing on the stack to leave it by -- which is
+        // exactly the trap docs/design/04-route.md says a flashback must not be.
+        if (next.flashback === null) {
+          progress = withPosition(progress, {
+            book: next.bookTitle,
+            chapter: next.chapter,
+            unit: next.bookmark,
+          });
+          saveProgress(progress);
+        }
+        attachTyping();
+      },
+    };
+  }
+
+  /** The frame a crossing draws. Nothing else in the program draws one. */
+  function warpFrame(w: ActiveWarp): { frame: FrameState; rail: RailState } {
+    const holding = w.state.phase === 'holding';
+    const glyphs = holding ? w.originGlyphs : w.destGlyphs;
+    const offset = holding ? w.originOffset : w.plan.arrivalOffset;
+    const view: WarpView = {
+      phrase: w.plan.phrase,
+      // Straight off the state, which carries it straight off the plan. There is
+      // no arithmetic between `planWarp` and the screen column.
+      echoX: w.state.echoX,
+      echoAlpha: w.state.echoAlpha,
+      worldMix: w.state.worldMix,
+      toTheme: w.toTheme,
+      cameraX: w.cameraX,
+    };
+    return {
+      frame: {
+        mode: 'level' as Mode,
+        ref: `${w.plan.from}  \u2192  ${w.plan.to}`,
+        stage: level.stage,
+        glyphs,
+        // `heldSpan` decides which copy of the phrase is the live one this
+        // frame. Both sit on the same column, which is why the renderer may
+        // make the swap whenever it likes -- and why this is asked rather than
+        // worked out a second time here.
+        cursor: heldSpan(w.state).first,
+        blocked: false,
+        score: score(level.typing, tuning),
+        keyStats: level.typing.keyStats,
+        layout: level.layout,
+        spaceThumb: level.spaceThumb,
+        keySet: level.keySet,
+        gilding: level.gilding,
+        gildPoints: gildPoints(),
+        scene: w.fromScene,
+        notice: noticeLines(),
+        warp: view,
+      },
+      rail: { offset, targetOffset: offset },
+    };
+  }
+
+  // --- secret rooms -----------------------------------------------------------
+
+  /**
+   * The return stack.
+   *
+   * `core/warp.ts` owns what pushing and popping one *mean*; this only holds it.
+   * In particular `skipFlashback` is the identity on it, which is why walking
+   * past a doorway is written below as a call rather than as a comment.
+   */
+  let returnStack: readonly FlashbackFrame[] = [];
+
+  /**
+   * The doorways in a part, and where each opens.
+   *
+   * The guarantee is consumed rather than restated: a destination the route
+   * *requires* is filtered out here, so a table edited into asking for a secret
+   * room would lose its doorway rather than quietly gate a level behind one.
+   * In a well-formed route the filter removes nothing, which is the point --
+   * `requiredRefs` is built from the stops and a flashback destination is a
+   * secret by construction.
+   */
+  function doorwaysIn(
+    ref: string,
+    glyphs: readonly Glyph[],
+    verseAt: readonly number[],
+  ): Doorway[] {
+    const here = routeRefFor(ref);
+    if (route === null || here === null) return [];
+    const required = new Set(requiredRefs(route).map(canonRef));
+    const text = glyphs.map((g) => g.ch).join('');
+    const out: Doorway[] = [];
+    for (const edge of flashbacksFrom(route, here)) {
+      if (required.has(canonRef(edge.to))) continue;
+      const at = locateEcho(text, echoFor(edge, progress.translation));
+      if (at < 0) continue;
+      const verse = verseAt[at];
+      let until = at;
+      while (until + 1 < verseAt.length && verseAt[until + 1] === verse) until += 1;
+      out.push({ edge, at, until });
+    }
+    return out;
+  }
+
+  /** The doorway standing open under the cursor right now, or none. */
+  function openDoorway(): Doorway | null {
+    if (warp !== null || reading !== null || level.reporting || level.flashback !== null) {
+      return null;
+    }
+    return level.doorways.find(
+      (d) => level.typing.cursor >= d.at && level.typing.cursor <= d.until,
+    ) ?? null;
+  }
+
+  /** The sentence in the strip under the rail, when something is standing open. */
+  function doorwayPrompt(): string | null {
+    if (level.flashback !== null) return 'tab: back to where you were';
+    const open = openDoorway();
+    if (open === null) return null;
+    // The key first, so the two prompts read as the same control, and the
+    // route's own note after it -- verbatim, because the note is the reason the
+    // room is worth stepping into and lower-casing it mangles a citation.
+    return `tab: a doorway \u00b7 ${open.edge.note}`;
+  }
+
+  /**
+   * Step through a doorway.
+   *
+   * The frame is pushed by `core/warp.ts`, which refuses a progression edge
+   * outright, and the room is remembered as *found* the moment it is entered --
+   * a player who steps in, turns round and walks straight back out has found it,
+   * and losing it off the map again would be the same as never having found it.
+   */
+  function enterDoorway(): void {
+    const open = openDoorway();
+    if (open === null || loading) return;
+    const here: FlashbackFrame = {
+      ref: level.ref,
+      unit: verseUnder(level),
+      cursor: level.typing.cursor,
+      damage,
+    };
+    const stepped = enterFlashback(open.edge, here, returnStack);
+    returnStack = stepped.stack;
+    progress = withDiscovered(progress, stepped.destination);
+    saveProgress(progress);
+    loading = true;
+    // Taken away now rather than when the crossing starts: the room is fetched
+    // first, and a keystroke landing on the rail in between would be typed into
+    // a passage the player has already stepped out of.
+    detachTyping();
+    void crossEdge(
+      open.edge, false, positionOf(stepped.destination), { flashback: here, doorway: open.edge },
+    )
+      .catch((error: unknown) => {
+        // The room would not open. Nothing has been spent: unwind the stack and
+        // leave the player exactly where they were, still typing.
+        returnStack = skipFlashback(returnStack.slice(0, -1));
+        overlay.showError(String(error instanceof Error ? error.message : error));
+        attachTyping();
+      })
+      .finally(() => {
+        loading = false;
+      });
+  }
+
+  /**
+   * Phase forward again, to the exact verse left.
+   *
+   * The frame comes back untouched, hearts and smudge included: damage taken
+   * inside a secret room is forgiven, because the alternative is a secret that
+   * costs the player the level it interrupted.
+   */
+  function leaveDoorway(): void {
+    const inside = level.flashback;
+    if (inside === null || loading || !insideFlashback(returnStack)) return;
+    const left = leaveFlashback(returnStack);
+    returnStack = left.stack;
+    const frame = left.frame;
+    const edge = level.doorwayHome;
+    loading = true;
+    detachTyping();
+    const back = { book: parseReference(frame.ref).book, chapter: parseReference(frame.ref).chapter, unit: frame.unit };
+    const restore = (): void => {
+      damage = frame.damage;
+    };
+    const done = edge === null
+      ? buildLevel(back, { cursor: frame.cursor }).then((next) => {
+          level = next;
+          restore();
+          attachTyping();
+        })
+      : crossEdge(edge, true, back, { cursor: frame.cursor }).then(() => {
+          const w = warp;
+          if (w === null) return;
+          const arrive = w.arrive;
+          warp = { ...w, arrive: () => { arrive(); restore(); } };
+        });
+    void done
+      .catch((error: unknown) => {
+        overlay.showError(String(error instanceof Error ? error.message : error));
+        attachTyping();
+      })
+      .finally(() => {
+        loading = false;
+      });
+  }
+
+  // --- reading ----------------------------------------------------------------
+
+  /** A lectio sitting: the ribbon, and where the ramp has got to. */
+  interface Reading {
+    state: LectioState;
+    readonly glyphs: readonly Glyph[];
+    readonly ref: string;
+  }
+
+  let reading: Reading | null = null;
+
+  /**
+   * Read without typing.
+   *
+   * Same ribbon, same rail, same focal guide, and the pace ramps for as long as
+   * the reader sustains it. The ribbon is classified against the *whole* board
+   * rather than the current stage: reading mode asks for no keys, and half a
+   * page greyed would be the curriculum answering a question this mode never
+   * puts. See docs/design/02-rail.md#lectio-mode.
+   */
+  function startReading(): void {
+    const section = sectionFor(level.book, level.chapter);
+    if (section === null) return;
+    const last = stages[stages.length - 1];
+    const keys = last === undefined ? new Set(FALLBACK_KEY_SET) : keySetFor(stages, last.stage);
+    reading = {
+      state: createLectio(tuning),
+      glyphs: buildRibbon(
+        section.units, 1, keys, progress.layout, progress.spaceThumb,
+      ).glyphs,
+      ref: level.ref,
+    };
+    overlay.close();
+    // The keyboard stays attached, and it is listened to for exactly one key:
+    // Escape. A mode that is easy to enter and hard to leave is worse than one
+    // that is hard to enter.
+    attachTyping();
+  }
+
+  function stopReading(): void {
+    if (reading === null) return;
+    reading = null;
+    attachTyping();
+  }
+
+  function readingFrame(r: Reading): { frame: FrameState; rail: RailState } {
+    const offset = lectioOffset(r.state, VIRTUAL_W, tuning);
+    // The pace, in the slot the WPM counter takes. Not a score and not a target:
+    // there is no failure in this mode and nothing here may add one.
+    const pace: Score = { wpm: r.state.wpm, accuracy: 1, medianLatencyMs: 0 };
+    return {
+      frame: {
+        mode: 'lectio' as Mode,
+        ref: r.ref,
+        stage: level.stage,
+        glyphs: r.glyphs,
+        cursor: Math.min(lectioCursor(r.state), r.glyphs.length),
+        blocked: false,
+        score: pace,
+        keyStats: {},
+        layout: level.layout,
+        spaceThumb: level.spaceThumb,
+        keySet: level.keySet,
+        scene: sceneStateFor(level, damage, cloud, tuning),
+        notice: noticeLines(),
+      },
+      rail: { offset, targetOffset: offset },
+    };
+  }
+
+  /**
+   * Travel to a passage from the map.
+   *
+   * Along a thread where there is one whose origin the player has finished --
+   * which is a warp, and the phrase survives the cut -- and by opening the
+   * chapter where there is not.
+   */
+  function travelTo(ref: string): void {
+    if (loading) return;
+    const target = routeRefFor(ref) ?? ref;
+    const done = new Set(progress.completed.map(canonRef));
+    const edge = route === null
+      ? null
+      : route.edges.find(
+          (e) => e.kind === 'progression' && e.to === target && done.has(canonRef(e.from)),
+        ) ?? null;
+    if (edge === null) {
+      goTo(positionOf(target), (message) => {
+        overlay.showError(message);
+      });
+      return;
+    }
+    overlay.close();
+    loading = true;
+    void crossEdge(edge, false, positionOf(target), {})
+      .catch((error: unknown) => {
+        overlay.showError(String(error instanceof Error ? error.message : error));
+        attachTyping();
+      })
+      .finally(() => {
+        loading = false;
+      });
+  }
+
+  /**
+   * The room the player is standing in, for a rebuild *in place*.
+   *
+   * Death, "back to the start of this part", a stage change and a keyboard
+   * change all reopen the part the player is already in. Inside a secret room
+   * that has to reopen the *room*: rebuilding it as an ordinary passage would
+   * drop the return frame on the floor and strand the player in Genesis 22 with
+   * a stack nothing will ever unwind. A room that eats the level it interrupted
+   * is worse than no room.
+   */
+  function hereOptions(): LevelOptions {
+    const frame = level.flashback;
+    if (frame === null) return {};
+    const home = level.doorwayHome;
+    return home === null ? { flashback: frame } : { flashback: frame, doorway: home };
   }
 
   function menuView(): MenuView {
@@ -1090,6 +1790,10 @@ async function boot(): Promise<void> {
   }
 
   function openMenu(): void {
+    // Reading stops when the menu opens. It is a sitting, not a setting, and one
+    // that carried on silently behind a panel would come back at a pace the
+    // player did not choose.
+    stopReading();
     bookmark();
     overlay.openMenu(menuView());
     // After opening it, not before. Walking off an undismissed opening screen
@@ -1101,16 +1805,40 @@ async function boot(): Promise<void> {
 
   const overlay: Overlay = createOverlay({
     requestMenu: openMenu,
-    resume: attachTyping,
+    requestMap: () => {
+      bookmark();
+      overlay.showMap(routeView());
+      // After raising it, for the same reason `openMenu` does: dismissing a
+      // panel hands the keyboard back, and the map needs it withheld.
+      detachTyping();
+    },
+    travel: (ref) => {
+      // Same as the menu's jump: travelling the map is leaving the room.
+      returnStack = [];
+      travelTo(ref);
+    },
+    startReading,
+    resume: () => {
+      // Resuming out of a panel is resuming the game, not the reading. A player
+      // who opened the menu mid-sitting and pressed Resume meant the rail.
+      stopReading();
+      attachTyping();
+    },
     restart: () => {
       goTo(
         { book: level.bookTitle, chapter: level.chapter, unit: level.chunk.first },
         (message) => {
           overlay.showError(message);
         },
+        true,
+        hereOptions(),
       );
     },
     jump: (edition, book, chapter) => {
+      // Going somewhere else on purpose is leaving the room, not stepping out of
+      // it: the level it interrupted is being abandoned too. Keeping the frame
+      // would owe the player a journey back that nothing will ever make.
+      returnStack = [];
       const previous = progress.translation;
       progress = { ...progress, translation: edition };
       goTo({ book, chapter, unit: 1 }, (message) => {
@@ -1130,6 +1858,7 @@ async function boot(): Promise<void> {
           overlay.showError(message);
         },
         false,
+        hereOptions(),
       );
       overlay.openMenu(menuView());
     },
@@ -1153,6 +1882,7 @@ async function boot(): Promise<void> {
           overlay.showError(message);
         },
         false,
+        hereOptions(),
       );
       overlay.openMenu(menuView());
     },
@@ -1171,6 +1901,7 @@ async function boot(): Promise<void> {
           overlay.showError(message);
         },
         false,
+        hereOptions(),
       );
       overlay.openMenu(menuView());
     },
@@ -1197,6 +1928,7 @@ async function boot(): Promise<void> {
     },
     startOver: () => {
       clearProgress();
+      returnStack = [];
       progress = DEFAULT_PROGRESS;
       coach = createCoach(progress.notesSeen);
       saveProgress(progress);
@@ -1237,6 +1969,7 @@ async function boot(): Promise<void> {
     importFile: (file) => {
       void importProgress(file)
         .then((imported) => {
+          returnStack = [];
           progress = imported;
           saveProgress(progress);
           goTo(progress.position, (message) => {
@@ -1252,6 +1985,15 @@ async function boot(): Promise<void> {
   // --- input ----------------------------------------------------------------
 
   function onInput(event: { type: string; value: string }): void {
+    // Nothing reaches the rail mid-crossing. The phrase is the only thing on
+    // screen and there is nothing to type on either side of it.
+    if (warp !== null) return;
+    if (reading !== null) {
+      // Reading asks for nothing, so it listens for one key: the way out. Escape
+      // backs out of the mode, which is what Escape means everywhere else too.
+      if (event.type === 'command' && event.value === 'escape') stopReading();
+      return;
+    }
     if (level.reporting) {
       // Enter is the forward action and Escape backs out, everywhere. The
       // report card had them the other way round, and Escape additionally
@@ -1278,6 +2020,13 @@ async function boot(): Promise<void> {
     }
     if (event.type === 'command') {
       if (event.value === 'escape') openMenu();
+      // The doorway. Tab steps through one standing open, and steps back out of
+      // a room already entered. Walking past it is typing on, which costs
+      // nothing at all -- see `skipFlashback`.
+      if (event.value === 'tab') {
+        if (level.flashback === null) enterDoorway();
+        else leaveDoorway();
+      }
       return;
     }
     level.started = true;
@@ -1287,7 +2036,13 @@ async function boot(): Promise<void> {
     scoreKeystroke(before, level.typing);
     resolveDefeats(before.cursor);
     bookmark();
-    if (atEnd(level.typing)) finishChunk();
+    if (!atEnd(level.typing)) return;
+    // The end of a secret room is the way out of it, not a report card: a room
+    // that recorded a session would fold the passage the player never chose
+    // into their history, and one that offered "next part" would carry them
+    // deeper into the flashback instead of back to the level it interrupted.
+    if (level.flashback === null) finishChunk();
+    else leaveDoorway();
   }
 
   /**
@@ -1400,9 +2155,14 @@ async function boot(): Promise<void> {
   function die(): void {
     damage = createDamage(tuning, maxHearts(tuning));
     cloud = createCloud();
-    goTo({ book: level.bookTitle, chapter: level.chapter, unit: level.chunk.first }, () => {
-      /* the part we are standing in is definitionally reachable */
-    });
+    goTo(
+      { book: level.bookTitle, chapter: level.chapter, unit: level.chunk.first },
+      () => {
+        /* the part we are standing in is definitionally reachable */
+      },
+      true,
+      hereOptions(),
+    );
   }
 
   // --- the only threat in the game -----------------------------------------
@@ -1454,7 +2214,7 @@ async function boot(): Promise<void> {
     const step = stepSound(
       audio,
       songbook,
-      { theme: level.theme, combo: damage.combo, cues },
+      { theme: level.scene.theme, combo: damage.combo, cues },
       dtMs,
       tuning,
     );
@@ -1479,8 +2239,11 @@ async function boot(): Promise<void> {
 
     // Nothing in the world runs while a panel is up or the report card is
     // showing. In particular the cloud does not: opening the menu must never
-    // cost the player a heart.
-    const live = !level.reporting && level.started && !overlay.isOpen();
+    // cost the player a heart. A crossing and a reading sitting are their own
+    // modes and run on their own clocks below.
+    const paused = overlay.isOpen();
+    const live = !level.reporting && level.started && !paused
+      && warp === null && reading === null;
     if (live) {
       level.typing = tick(level.typing, dtMs);
       level.animMs += dtMs;
@@ -1501,15 +2264,48 @@ async function boot(): Promise<void> {
       level.cameraX = Math.abs(delta) < 1 ? camera : level.cameraX + delta * CAMERA_LERP;
     }
 
-    const target = layoutRail(level.glyphs, level.typing.cursor, VIRTUAL_W, tuning).offset;
-    level.rail = stepRail(level.rail, target, tuning);
-    renderer.render(
-      drawFrame(
-        frameFor(level, damage, cloud, tuning, gildPoints(), noteText(coach)),
-        level.rail,
-        tuning,
-      ),
-    );
+    // A crossing. Time is injected here and nowhere else in it: the whole state
+    // is a function of the clock, `echoX` is carried through from the plan, and
+    // nothing in the phase can move the held phrase.
+    if (warp !== null && !paused) {
+      warp.state = stepWarp(warp.state, dtMs, tuning);
+      if (warpComplete(warp.state)) {
+        const finished = warp;
+        warp = null;
+        finished.arrive();
+      }
+    }
+
+    // A reading sitting. The ramp climbs while it is sustained and *holds* when
+    // it is not -- it never falls back, because the one mode in the game that
+    // exists for a day without pressure must not punish a reader for blinking.
+    if (reading !== null) {
+      reading.state = paused
+        ? pauseLectio(reading.state, dtMs)
+        : stepLectio(reading.state, dtMs, true, tuning);
+      if (lectioFinished(reading.state, reading.glyphs.length)) stopReading();
+    }
+
+    const drawn = warp !== null
+      ? warpFrame(warp)
+      : reading !== null
+        ? readingFrame(reading)
+        : null;
+    if (drawn === null) {
+      const target = layoutRail(level.glyphs, level.typing.cursor, VIRTUAL_W, tuning).offset;
+      level.rail = stepRail(level.rail, target, tuning);
+      renderer.render(
+        drawFrame(
+          frameFor(
+            level, damage, cloud, tuning, gildPoints(), noteText(coach), doorwayPrompt(),
+          ),
+          level.rail,
+          tuning,
+        ),
+      );
+    } else {
+      renderer.render(drawFrame(drawn.frame, drawn.rail, tuning));
+    }
     stepAudio(live ? dtMs : 0);
     requestAnimationFrame(loop);
   };

@@ -50,7 +50,7 @@
 import { CELL_W, focalX } from './rail.js';
 import { tuningValue } from './tuning.js';
 import type { RouteEdge } from './route.js';
-import type { DamageState, ReturnFrame, Tuning } from './types.js';
+import type { ReturnFrame, Tuning } from './types.js';
 
 // --- the echo phrase --------------------------------------------------------
 
@@ -250,31 +250,21 @@ export function heldSpan(state: WarpState): EchoSpan {
 // --- flashbacks -------------------------------------------------------------
 
 /**
- * A saved position to come back to.
+ * A saved position to come back to: the shared `ReturnFrame`.
  *
- * `core/types.ts` has a `ReturnFrame` with `ref`, `cursor` and `damage`, which
- * is three of the five things the scenery doc requires a round trip to restore:
- * it has no verse. A chapter reference plus a glyph cursor cannot say which
- * verse the player was on, so a flashback taken at Genesis 22 and returned from
- * would put the scribe back in the right chapter at the wrong place. The frame
- * is defined here with the field it needs; `asReturnFrame` narrows it back to
- * the shared type for anything that only wants those three.
+ * This was a second, local interface for a while, because `core/types.ts` had a
+ * `ReturnFrame` with `ref`, `cursor` and `damage` -- three of the five things
+ * docs/design/05-scenery-warps.md#warps requires a round trip to restore. It
+ * had no verse, and a chapter reference plus a glyph cursor cannot say which
+ * verse the player was on: the cursor indexes one chunk's ribbon, not the
+ * chapter. A flashback taken at Genesis 22 and returned from would have landed
+ * the scribe in the right chapter at the wrong place.
+ *
+ * Two types for one thing is how the two drift, so the field went where it
+ * belonged and the local copy became this alias. Callers that already speak
+ * `ReturnFrame` -- `GameState.returnStack` among them -- need no conversion.
  */
-export interface FlashbackFrame {
-  /** The chapter left behind, e.g. `John 19`. */
-  readonly ref: string;
-  /** 1-based verse. The field `ReturnFrame` is missing. */
-  readonly unit: number;
-  /** Glyph index within the ribbon. */
-  readonly cursor: number;
-  /** Hearts, smudge and combo, exactly as they stood. */
-  readonly damage: DamageState;
-}
-
-/** The shared-type projection, for callers that do not need the verse. */
-export function asReturnFrame(frame: FlashbackFrame): ReturnFrame {
-  return { ref: frame.ref, cursor: frame.cursor, damage: frame.damage };
-}
+export type FlashbackFrame = ReturnFrame;
 
 /** True while the player is inside a secret room. */
 export function insideFlashback(stack: readonly FlashbackFrame[]): boolean {

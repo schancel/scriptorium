@@ -27,7 +27,6 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import {
-  asReturnFrame,
   beginWarp,
   echoFor,
   enterFlashback,
@@ -47,7 +46,7 @@ import { bookFileName, loadBook, parseReference, sectionFor } from './corpus.js'
 import { CELL_W, focalX } from './rail.js';
 import { applyError, createDamage } from './damage.js';
 import { loadTuning, tuningValue } from './tuning.js';
-import type { Tuning } from './types.js';
+import type { ReturnFrame, Tuning } from './types.js';
 
 function dataUrl(name: string): URL | null {
   for (const rel of ['../../data/', '../data/']) {
@@ -313,9 +312,17 @@ test('a progression edge is not a doorway, and no doorway can be left twice', ()
   assert.throws(() => leaveFlashback([]), /no flashback to leave/);
 });
 
-test('the frame narrows to the shared ReturnFrame, minus the verse it has no field for', () => {
+test('the frame IS the shared ReturnFrame, verse included, and not a second copy of it', () => {
   const frame = frameAt();
-  const narrowed = asReturnFrame(frame);
-  assert.deepEqual(narrowed, { ref: frame.ref, cursor: frame.cursor, damage: frame.damage });
-  assert.equal('unit' in narrowed, false);
+  // Assignable both ways, at compile time: `FlashbackFrame` is `ReturnFrame`.
+  // Two interfaces for one thing is how the two drift, and the field the shared
+  // one was missing is the verse -- a chapter reference plus a glyph cursor
+  // cannot say which verse the player was on, because the cursor indexes one
+  // chunk's ribbon rather than the chapter.
+  const shared: ReturnFrame = frame;
+  const back: FlashbackFrame = shared;
+  assert.deepEqual(back, frame);
+  assert.equal('unit' in shared, true, 'the shared frame carries the verse');
+  assert.equal(shared.unit, UNIT);
+  assert.equal(back.unit, UNIT);
 });

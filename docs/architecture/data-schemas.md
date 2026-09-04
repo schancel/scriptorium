@@ -68,10 +68,11 @@ Browser local storage, exportable to a file. Written by
 `core/progress.ts`.
 
 ```json
-{ "version": 4, "stage": 3, "translation": "WEB", "route": "pilgrimage",
+{ "version": 5, "stage": 3, "translation": "WEB", "route": "pilgrimage",
   "layout": "ansi", "spaceThumb": "rt",
   "position": { "book": "Genesis", "chapter": 1, "unit": 7 },
   "completed": ["Genesis 1"],
+  "discovered": ["Genesis 22"],
   "keyStats": { "a": { "hits": 812, "errors": 19, "totalMs": 276080,
                        "latencies": [340], "confusions": { "s": 4 } } },
   "recent": { "a": [ { "ok": true, "ms": 312 }, { "ok": false, "ms": null } ] },
@@ -112,6 +113,14 @@ same sentence twice. Both are stored rather than held for the session because a 
 returns after you have understood it is an insult. The menu can set them back, and it is
 the only thing that ever does.
 
+`discovered` names the flashback rooms the player has stepped into. It is separate from
+`completed` because a secret is revealed by being *found*, and a player who steps through
+the doorway, turns round and walks straight back out has still found it — see
+[the route](../design/04-route.md#two-kinds-of-edge). It is stored rather than held for
+the session because a reload would otherwise be a cheaper way to lose a room than walking
+out of one. It gates nothing: `requiredRefs` excludes every flashback destination by
+construction, so this list can only add to what the map shows.
+
 `promoted` marks the session that opened the gate. The history view needs it: the
 sessions *after* a promotion are slower, because a new stage lights up more of the page,
 and an unexplained dip in the curve is the single most likely reason a beginner concludes
@@ -127,6 +136,7 @@ not optional.
 | 2 | added `position`, `recent`, `spaceThumb`, and `promoted` on a history entry | every version 1 field is carried across unchanged; the new ones default (position to Genesis 1:1, `recent` to empty, `spaceThumb` to `rt`, `promoted` to false). Nothing is dropped. |
 | 3 | added `gilding` and `gildOffered` | every version 2 field is carried across unchanged — stage, position, `completed`, `keyStats`, `recent` and the whole history. Both new fields default to `false`, which is exactly what a version 2 record meant: the mode did not exist, so it was off and had never been offered. Nothing is dropped. |
 | 4 | added `firstRun` and `notesSeen` | every version 3 field is carried across unchanged — stage, translation, route, layout, `spaceThumb`, position, `completed`, `keyStats`, `recent`, the whole history, `gilding` and `gildOffered`. The two new fields default to *already done*: `firstRun` to false and `notesSeen` to every note. That is the only correct default, because a stored record is by definition one somebody has already been playing, and starting to explain the game to a player three weeks in would be worse than never having explained it at all. Nothing is dropped. |
+| 5 | added `discovered` | every version 4 field is carried across unchanged. `discovered` defaults to empty, which is the only honest default: nothing recorded a found room before the field existed, so the game does not know of any. It costs the player nothing — a flashback is optional by construction, and re-finding one is the same walk it was the first time. Nothing is dropped. |
 
 `core/progress.ts` defaults every field individually rather than trusting the stored
 blob, so a partially corrupt record loses the corrupt field and keeps the history.
