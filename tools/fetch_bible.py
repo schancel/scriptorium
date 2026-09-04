@@ -549,21 +549,21 @@ def main() -> int:
     editions = args.edition or ["web", "kjv"]
     cache = None if args.no_cache else args.cache
 
-    total_files = 0
     for edition in editions:
         meta = EDITIONS[edition]
         print(f"  {meta['label']} -- {meta['name']}", file=sys.stderr)
         books = fetch_edition(edition, cache)
         n = write_edition(edition, books)
-        total_files += n
         verses = sum(
             len(u) for t in books.values() for k, u in t.items() if k != "_ids"
         )
         print(f"    ok: {len(BOOKS)} books, {verses} verses, {n} files"
               f" -> data/texts/{edition}/", file=sys.stderr)
 
-    size = sum(p.stat().st_size for p in TEXTS.rglob("*.json"))
-    print(f"  data/texts: {total_files} files, {size / 1_048_576:.1f} MiB", file=sys.stderr)
+    on_disk = sorted(TEXTS.rglob("*.json"))
+    size = sum(p.stat().st_size for p in on_disk)
+    print(f"  data/texts: {len(on_disk)} files, {size / 1_048_576:.1f} MiB on disk",
+          file=sys.stderr)
     return 0
 
 

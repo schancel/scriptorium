@@ -12,7 +12,7 @@
         "j",
         "<space>"
       ],
-      "predictedCoverage": 0.2,
+      "predictedCoverage": 0.21,
       "description": "anchor drill only, no verses"
     },
     {
@@ -42,7 +42,7 @@
         "l",
         ";"
       ],
-      "predictedCoverage": 0.4,
+      "predictedCoverage": 0.46,
       "description": "scattered letters lit"
     },
     {
@@ -66,7 +66,7 @@
         "e",
         "i"
       ],
-      "predictedCoverage": 0.55,
+      "predictedCoverage": 0.61,
       "description": "short words fully lit"
     },
     {
@@ -92,7 +92,7 @@
         "r",
         "u"
       ],
-      "predictedCoverage": 0.62,
+      "predictedCoverage": 0.67,
       "description": "most short words"
     },
     {
@@ -120,7 +120,7 @@
         "t",
         "o"
       ],
-      "predictedCoverage": 0.75,
+      "predictedCoverage": 0.8,
       "description": "sentences mostly readable as typed"
     },
     {
@@ -150,7 +150,7 @@
         "n",
         "y"
       ],
-      "predictedCoverage": 0.82,
+      "predictedCoverage": 0.86,
       "description": "occasional greyed letter"
     },
     {
@@ -190,7 +190,7 @@
         "b",
         "p"
       ],
-      "predictedCoverage": 0.95,
+      "predictedCoverage": 0.94,
       "description": "all lowercase live"
     },
     {
@@ -200,7 +200,8 @@
         "x",
         "z",
         ",",
-        "."
+        ".",
+        "/"
       ],
       "keySet": [
         "f",
@@ -232,7 +233,8 @@
         "x",
         "z",
         ",",
-        "."
+        ".",
+        "/"
       ],
       "predictedCoverage": 0.97,
       "description": "punctuation joins in"
@@ -277,6 +279,7 @@
         "z",
         ",",
         ".",
+        "/",
         "<shift>",
         "'",
         ":",
@@ -330,6 +333,7 @@
         "z",
         ",",
         ".",
+        "/",
         "<shift>",
         "'",
         ":",

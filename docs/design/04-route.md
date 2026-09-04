@@ -46,18 +46,24 @@ so the game is not editorialising, only showing what the text already does.
 
 <!-- generates: data/routes/pilgrimage.json -->
 
-| id | kind | from | to | echo | note |
-|---|---|---|---|---|---|
-| `beginning` | progression | Genesis 1 | John 1 | `In the beginning` | John opens by quoting Genesis word for word |
-| `i-am` | progression | Exodus 3 | John 8 | `I AM` | The name given at the bush, claimed at the temple |
-| `shepherd` | progression | Psalm 23 | John 10 | `shepherd` | The psalm's image, claimed in the first person |
-| `forsaken` | progression | Psalm 22 | Matthew 27 | `My God, my God` | Quoted from the cross, verbatim |
-| `tree-of-life` | progression | Genesis 3 | Revelation 22 | `tree of life` | The tree barred at the start, open at the end |
-| `only-son` | flashback | John 19 | Genesis 22 | `son` | A father, an only son, a hill — seen from the cross |
-| `serpent` | flashback | John 3 | Numbers 21 | `serpent` | John 3:14 cites the bronze serpent outright |
-| `three-days` | flashback | Matthew 12 | Jonah 1 | `three days and three nights` | Jesus names Jonah as the sign |
-| `passover` | flashback | John 19 | Exodus 12 | `bone` | John quotes the Passover rule about unbroken bones |
-| `manna` | flashback | John 6 | Exodus 16 | `bread` | The bread-of-life discourse argues from the manna |
+| id | kind | from | to | echo | echo_kjv | note |
+|---|---|---|---|---|---|---|
+| `beginning` | progression | Genesis 1 | John 1 | `In the beginning` | — | John opens by quoting Genesis word for word |
+| `i-am` | progression | Exodus 3 | John 8 | `I AM` | — | The name given at the bush, claimed at the temple |
+| `shepherd` | progression | Psalm 23 | John 10 | `shepherd` | — | The psalm's image, claimed in the first person |
+| `forsaken` | progression | Psalm 22 | Matthew 27 | `My God, my God` | — | Quoted from the cross, verbatim |
+| `tree-of-life` | progression | Genesis 3 | Revelation 22 | `tree of life` | — | The tree barred at the start, open at the end |
+| `only-son` | flashback | John 19 | Genesis 22 | `your son` | `thy son` | A father, an only son, a hill — seen from the cross |
+| `serpent` | flashback | John 3 | Numbers 21 | `serpent` | — | John 3:14 cites the bronze serpent outright |
+| `three-days` | flashback | Matthew 12 | Jonah 1 | `three days and three nights` | — | Jesus names Jonah as the sign |
+| `passover` | flashback | John 19 | Exodus 12 | `bone` | — | John quotes the Passover rule about unbroken bones |
+| `manna` | flashback | John 6 | Exodus 16 | `bread` | — | The bread-of-life discourse argues from the manna |
+
+`echo_kjv` overrides `echo` when the King James wording differs. The `only-son` edge is
+the case that forced the column: WEB reads "your son" in both Genesis 22 and John 19,
+KJV reads "thy son" in both. The possessive pronoun is precisely what the translations
+disagree about, so a single shared string would have to collapse to the bare noun `son` --
+too common a word to read as a deliberate echo when it stays lit through a warp.
 
 **These echo phrases are verified against the actual text.** `make check` asserts each
 one occurs literally in *both* connected passages, under WEB and KJV both, because a

@@ -94,9 +94,10 @@ def main() -> int:
                     if body is None:
                         continue
                     checked += 1
-                    if e["echo"].lower() not in body.lower():
+                    phrase = e.get("echo_kjv") or e["echo"] if edition == "kjv" else e["echo"]
+                    if phrase.lower() not in body.lower():
                         errors.append(
-                            f"route: edge {e['id']}: echo {e['echo']!r} "
+                            f"route: edge {e['id']}: echo {phrase!r} "
                             f"not found in {edition} {e[side]}"
                         )
         print(f"    data: route/scene shape ok, {checked} echo lookup(s)")

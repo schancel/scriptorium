@@ -51,7 +51,9 @@ This is the mechanism that keeps docs honest; do not route around it.
 6. **Determinism.** `sim.js` is a pure function of `(state, inputs, dtMs, rng)`. Same
    seed and input trace must produce identical state.
 7. **One build step, no runtime dependencies.** `tsc` only -- no bundler, no framework,
-   no runtime deps, and neither `build/` nor `node_modules/` committed.
+   no runtime deps, and neither `build/` nor `node_modules/` committed. The game is served
+   over http (`make serve`), not opened from `file://` -- browsers block ES modules and
+   `fetch` on opaque origins, so no arrangement of source files could support it.
    -> `docs/decisions/0007-typescript-with-one-build-step.md`
 
 ## Standing prohibitions

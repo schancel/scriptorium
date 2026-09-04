@@ -16,22 +16,30 @@ mechanical discipline of a row-by-row tutor.
 
 | stage | keys | coverage | description |
 |---|---|---|---|
-| 0 | `f j <space>` | 0.20 | anchor drill only, no verses |
-| 1 | `a s d f g h j k l ;` | 0.40 | scattered letters lit |
-| 2 | `e i` | 0.55 | short words fully lit |
-| 3 | `r u` | 0.62 | most short words |
-| 4 | `t o` | 0.75 | sentences mostly readable as typed |
-| 5 | `n y` | 0.82 | occasional greyed letter |
-| 6 | `c m w v b p` | 0.95 | all lowercase live |
-| 7 | `q x z , .` | 0.97 | punctuation joins in |
+| 0 | `f j <space>` | 0.21 | anchor drill only, no verses |
+| 1 | `a s d f g h j k l ;` | 0.46 | scattered letters lit |
+| 2 | `e i` | 0.61 | short words fully lit |
+| 3 | `r u` | 0.67 | most short words |
+| 4 | `t o` | 0.80 | sentences mostly readable as typed |
+| 5 | `n y` | 0.86 | occasional greyed letter |
+| 6 | `c m w v b p` | 0.94 | all lowercase live |
+| 7 | `q x z , . /` | 0.97 | punctuation joins in |
 | 8 | `<shift> ' : ; -` | 1.00 | fully illuminated verses |
 | 9 | `0 1 2 3 4 5 6 7 8 9` | 1.00 | verse references, chapter navigation |
 
+`/` is in stage 7 because `?` is shift+`/` on US ANSI. Without it, every question mark in
+the corpus -- there are 6,557 -- stays permanently greyed, and stage 8 could never reach
+the "fully illuminated" coverage it claims.
+
 `keys` is cumulative in effect — each stage's key set is the union of its own row and
-every row above it. `coverage` is the *predicted* fraction of live keystrokes, from
-English letter frequency. It is a placeholder: `tools/build_wordlists.py` measures the
-real figure against the corpus and writes `data/coverage.json`, and these numbers get
-corrected from that measurement.
+every row above it. `coverage` is the **measured** fraction of live keystrokes, from `tools/build_wordlists.py`
+run over all 8.1 million characters of WEB and KJV. Re-run it after any change to this
+table; it writes the full breakdown to `data/coverage.json` and fails loudly if stage 1
+drops below `min_stage1_coverage`.
+
+Stages 1-5 beat the original letter-frequency estimate by a wide margin -- stage 1 lights
+up 46% of keystrokes rather than the predicted 40%, which is the difference between the
+first hour feeling like typing and feeling like watching.
 
 Stage 8 matters more than its position suggests. Proper two-handed shifting — left shift
 for right-hand capitals and vice versa — is a skill two-finger typists never acquire, and

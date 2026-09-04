@@ -7,6 +7,7 @@
       "from": "Genesis 1",
       "to": "John 1",
       "echo": "In the beginning",
+      "echo_kjv": null,
       "note": "John opens by quoting Genesis word for word"
     },
     {
@@ -15,6 +16,7 @@
       "from": "Exodus 3",
       "to": "John 8",
       "echo": "I AM",
+      "echo_kjv": null,
       "note": "The name given at the bush, claimed at the temple"
     },
     {
@@ -23,6 +25,7 @@
       "from": "Psalm 23",
       "to": "John 10",
       "echo": "shepherd",
+      "echo_kjv": null,
       "note": "The psalm's image, claimed in the first person"
     },
     {
@@ -31,6 +34,7 @@
       "from": "Psalm 22",
       "to": "Matthew 27",
       "echo": "My God, my God",
+      "echo_kjv": null,
       "note": "Quoted from the cross, verbatim"
     },
     {
@@ -39,6 +43,7 @@
       "from": "Genesis 3",
       "to": "Revelation 22",
       "echo": "tree of life",
+      "echo_kjv": null,
       "note": "The tree barred at the start, open at the end"
     },
     {
@@ -46,7 +51,8 @@
       "kind": "flashback",
       "from": "John 19",
       "to": "Genesis 22",
-      "echo": "son",
+      "echo": "your son",
+      "echo_kjv": "thy son",
       "note": "A father, an only son, a hill — seen from the cross"
     },
     {
@@ -55,6 +61,7 @@
       "from": "John 3",
       "to": "Numbers 21",
       "echo": "serpent",
+      "echo_kjv": null,
       "note": "John 3:14 cites the bronze serpent outright"
     },
     {
@@ -63,6 +70,7 @@
       "from": "Matthew 12",
       "to": "Jonah 1",
       "echo": "three days and three nights",
+      "echo_kjv": null,
       "note": "Jesus names Jonah as the sign"
     },
     {
@@ -71,6 +79,7 @@
       "from": "John 19",
       "to": "Exodus 12",
       "echo": "bone",
+      "echo_kjv": null,
       "note": "John quotes the Passover rule about unbroken bones"
     },
     {
@@ -79,6 +88,7 @@
       "from": "John 6",
       "to": "Exodus 16",
       "echo": "bread",
+      "echo_kjv": null,
       "note": "The bread-of-life discourse argues from the manna"
     }
   ],

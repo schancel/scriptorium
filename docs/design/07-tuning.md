@@ -17,6 +17,7 @@ first evening a real beginner plays it and something feels wrong.
 | `grey_snap_ms` | 0 | ms | Delay before a greyed run auto-advances. Zero means the cursor snaps; anything above ~60 makes the player wait on the game. |
 | `min_stage1_coverage` | 0.30 | fraction | If measured stage-1 live coverage falls below this, the curriculum boundaries must move. Hard floor. |
 | `gate_accuracy` | 0.95 | fraction | Accuracy required on a stage's new keys to advance. |
+| `mastery_min_samples` | 20 | keystrokes | Hits on a key before earned fade-out may retire its overlay highlight. Without a floor, one lucky keystroke removes the crutch. |
 | `gate_window` | 200 | keystrokes | Trailing window the gate is measured over. |
 | `gate_latency_base_ms` | 600 | ms | Median keystroke latency allowed at stage 0. |
 | `gate_latency_step_ms` | 25 | ms | Tightening per stage. This is the anti-hunt-and-peck lever. |

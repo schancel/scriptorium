@@ -3,6 +3,7 @@
     "grey_snap_ms": 0,
     "min_stage1_coverage": 0.3,
     "gate_accuracy": 0.95,
+    "mastery_min_samples": 20,
     "gate_window": 200,
     "gate_latency_base_ms": 600,
     "gate_latency_step_ms": 25,
@@ -46,6 +47,10 @@
     "gate_accuracy": {
       "unit": "fraction",
       "description": "Accuracy required on a stage's new keys to advance."
+    },
+    "mastery_min_samples": {
+      "unit": "keystrokes",
+      "description": "Hits on a key before earned fade-out may retire its overlay highlight. Without a floor, one lucky keystroke removes the crutch."
     },
     "gate_window": {
       "unit": "keystrokes",
