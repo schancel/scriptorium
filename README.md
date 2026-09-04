@@ -48,6 +48,10 @@ open http://localhost:8000
 | `data/` | Texts, routes, scenery. Several files are **generated** from `docs/`. |
 | `tools/` | Text importers and the docs→data compiler. |
 
+## What is outstanding
+
+[`TODO.md`](TODO.md) — open decisions, known problems, and what is not built yet.
+
 ## Contributing, human or agent
 
 Read [`AGENTS.md`](AGENTS.md) first — it is short and it is binding. The short version:
