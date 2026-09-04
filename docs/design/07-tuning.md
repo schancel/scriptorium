@@ -29,8 +29,8 @@ first evening a real beginner plays it and something feels wrong.
 | `cloud_smudge` | 25 | smudge | Smudge added when the cloud lands. |
 | `smudge_max` | 100 | smudge | Full meter. Reaching it costs one heart and resets. |
 | `smudge_per_error_base` | 12 | smudge | Added per mistyped key at stage 0. |
-| `smudge_per_error_step` | 2 | smudge | Added per stage, so tolerance narrows as skill grows. |
-| `smudge_decay_per_key` | 2 | smudge | Removed per correct keystroke. Clean typing cleans the page. |
+| `smudge_per_error_step` | 1 | smudge | Added per stage, so tolerance narrows as skill grows -- but never past what the gate itself demands. See the ramp invariant in [pacing](03-pacing.md#the-ramp-must-not-outrun-the-gate). |
+| `smudge_decay_per_key` | 3 | smudge | Removed per correct keystroke. Clean typing cleans the page. |
 | `hearts_start` | 3 | hearts | Starting health. |
 | `hearts_max` | 5 | hearts | Cap, including quill-nib upgrades. |
 | `combo_tempo_max` | 1.25 | ratio | Music tempo multiplier at maximum combo. |

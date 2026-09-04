@@ -301,3 +301,28 @@ test('death costs the verse, not the hearts', () => {
   assert.equal(back.damage.smudge, 0, 'respawning onto a nearly full meter is a wall, not a checkpoint');
   assert.equal(respawn(candle, TUNING, 2).damage.hearts, maxHearts(TUNING, 2));
 });
+
+// --- the ramp invariant -----------------------------------------------------
+// docs/design/03-pacing.md#the-ramp-must-not-outrun-the-gate
+//
+// Error cost climbs with stage, but the gate demands a fixed accuracy to reach
+// a stage at all. If the ramp outruns the gate, the game kills players for
+// typing at exactly the standard it promoted them for -- which it did, before
+// this was pinned down: 1.3x margin at stage 9, and 5-7 deaths a chapter.
+
+test('a player at the gate accuracy stays clear of break-even at every stage', () => {
+  const stages = (loadDataFile('curriculum.json') as { stages: unknown[] }).stages.length;
+  const permittedErrorRate = 1 - tuningValue(TUNING, 'gate_accuracy');
+  const decay = tuningValue(TUNING, 'smudge_decay_per_key');
+
+  for (let stage = 0; stage < stages; stage++) {
+    const breakEven = decay / smudgePerError(stage, TUNING);
+    const headroom = breakEven / permittedErrorRate;
+    assert.ok(
+      headroom >= 2,
+      `stage ${String(stage)}: break-even error rate ${(breakEven * 100).toFixed(1)}%` +
+        ` is only ${headroom.toFixed(1)}x the ${(permittedErrorRate * 100).toFixed(0)}%` +
+        ` the gate permits. A player meeting the standard must be comfortably safe.`,
+    );
+  }
+});

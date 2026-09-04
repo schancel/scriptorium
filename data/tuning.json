@@ -15,8 +15,8 @@
     "cloud_smudge": 25,
     "smudge_max": 100,
     "smudge_per_error_base": 12,
-    "smudge_per_error_step": 2,
-    "smudge_decay_per_key": 2,
+    "smudge_per_error_step": 1,
+    "smudge_decay_per_key": 3,
     "hearts_start": 3,
     "hearts_max": 5,
     "combo_tempo_max": 1.25,
@@ -98,7 +98,7 @@
     },
     "smudge_per_error_step": {
       "unit": "smudge",
-      "description": "Added per stage, so tolerance narrows as skill grows."
+      "description": "Added per stage, so tolerance narrows as skill grows -- but never past what the gate itself demands. See the ramp invariant in [pacing](03-pacing.md#the-ramp-must-not-outrun-the-gate)."
     },
     "smudge_decay_per_key": {
       "unit": "smudge",

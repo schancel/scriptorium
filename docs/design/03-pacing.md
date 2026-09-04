@@ -51,6 +51,26 @@ continuing — standard in typing tutors, and non-negotiable for habit formation
 | `quill_nib` | Quill nib | Permanent upgrade: extra heart, slower cloud, or wider smudge tolerance | Behind flashback rooms |
 | `wax_seal` | Wax seal | Unlocks routes and cosmetics | Awarded for a perfect chapter |
 
+### The ramp must not outrun the gate
+
+Error cost rises with stage so tolerance narrows as skill grows. But the *gate* also
+demands a fixed accuracy (`gate_accuracy`, 95%) to reach a stage at all. If the ramp
+climbs faster than that, the game eventually kills players for typing at exactly the
+standard it just promoted them for.
+
+It did. Measured over a simulated chapter with errors arriving in bursts, a 95%-accuracy
+player -- one who legitimately earned the stage -- lost 6-8 hearts at stage 5 and 16-23 at
+stage 9, dying 5-7 times. The first tuning made error cost climb to 30 while decay stayed
+flat at 2, so the break-even error rate fell to 6.7% against a gate demanding 5%: a
+margin of 1.3x, which any burst erases.
+
+**The invariant:** at every stage, the break-even error rate --
+`smudge_decay_per_key / (smudge_per_error_base + stage * smudge_per_error_step)` --
+must be at least **twice** the error rate the gate permits (`1 - gate_accuracy`). A player
+meeting the standard the game set must be comfortably safe, not marginally.
+
+Current tuning holds it at 5.0x at stage 0 falling to 2.9x at stage 9. There is a test.
+
 ### Say "part", not "candle"
 
 **Candle is our word, not the player's.** It is useful internal vocabulary -- it names
