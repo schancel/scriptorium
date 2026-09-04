@@ -32,6 +32,58 @@ A **theme** is the reusable bundle: palette, tileset, parallax layers, and tune.
 | `tomb` | near-black, cold blue | the grave, catacombs | `passion-chorale` |
 | `apocalypse` | white-gold, void black | new creation, the end | `helmsley` |
 
+## A chapter is not one place
+
+The scene map resolves at chapter granularity, and some chapters move faster than that.
+
+Genesis 1 is the clearest case: one row, one theme, thirty-one verses. But the chapter is
+a transformation — formless void, then light, then the sky parting the waters, then dry
+land, then stars, then living things, then a garden and a man in it. Rendered as a single
+static room it reads, in the owner's words, as *"a cavern or something, rather than like
+moving through space, to earth, to eden."*
+
+That is not a theme chosen badly. It is a resolution problem, and it has three faces:
+
+- **Genesis 1** needs the world to change under the player as he types it.
+- **Jerusalem** needs landmarks — a city is a place you arrive at, not a texture that
+  repeats. Better brick will not fix it; the gate and the wall and the temple have to
+  appear.
+- **The Gospels** have almost no set pieces at all, while Exodus has four. The New
+  Testament passages carry the least visual weight in the game and should carry the most.
+
+All three are the same fix.
+
+### Verse ranges
+
+`range` accepts `Book C:V-V` as well as `Book C` and `Book C-C`. A verse range wins over
+a chapter range covering the same ground, so a chapter row stays a useful default and a
+chapter that moves can be authored finely without rewriting the ones that do not.
+
+Genesis 1, authored as the six days it is:
+
+| range | reads as |
+|---|---|
+| `Genesis 1:1-2` | the void — no ground, no horizon, only dark |
+| `Genesis 1:3-5` | light breaking over it |
+| `Genesis 1:6-8` | the sky parting the waters |
+| `Genesis 1:9-13` | dry land, and green on it |
+| `Genesis 1:14-19` | stars in the expanse |
+| `Genesis 1:20-25` | living things |
+| `Genesis 1:26-31` | a garden, and it is very good |
+
+### Between two scenes, the palette moves and the tiles cut
+
+Interpolating tile art is not worth attempting and would look like neither thing.
+Interpolating a **palette** is trivial and carries almost all of the effect, because the
+palette is what the eye reads as *time of day, place, mood*.
+
+So: colour eases from one scene's palette to the next across the boundary, and tiles
+change at the boundary itself. Land does not fade into water; the light over both moves
+continuously. That is also how the warp already works, and for the same reason.
+
+The transition is driven by **position in the passage, not by elapsed time** — the world
+must not change while the player is thinking. Same rule as everything else here.
+
 ## Set pieces
 
 A **set piece** is a one-off scripted flourish for a specific passage — optional per
@@ -69,6 +121,12 @@ those into rects inside the scenery band, and nowhere else. Ten little renderers
 with its own idea of the palette and the bands, is ten ways for the picture to disagree
 with itself — and a flourish that could reach below the band would be scenery competing
 with the rail it exists to serve.
+
+**The Gospels want set pieces more than anything else does.** They have almost none
+while Exodus has four, so the passages the route is built to reach carry the least
+weight on screen. The world responding is the right register — a storm going flat on the
+water, light at the transfiguration, the stone moved — rather than anything the player
+gains.
 
 `rising_water` physically raises the level as the flood does. `parted_walls` stands the
 sea up on either side of the rail. `darkness_at_noon` drains the palette to greyscale

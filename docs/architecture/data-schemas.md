@@ -57,7 +57,9 @@ alone is ~200 KB, which is why nothing is bundled up front.
   "scenes": [ { "range": "Exodus 14", "theme": "sea", "setpiece": "parted_walls" } ] }
 ```
 
-`range` is `Book C` or `Book C-C`. Ranges must not overlap. Any routed passage without a
+`range` is `Book C`, `Book C-C`, or `Book C:V-V` for a chapter that moves faster than one
+scene can hold. A verse range wins over a chapter range covering the same ground, so
+chapter rows stay a useful default. Ranges of the same precision must not overlap. Any routed passage without a
 row resolves to `abbey`. A text with no scene file at all resolves entirely to `abbey`,
 which is the expected outcome for user-imported books.
 
