@@ -39,21 +39,29 @@ alone.
    across a window one verse either side of the boundary. At 0 the world changes
    between one verse and the next; much above 3 and Genesis 1 is one long crossfade
    with no places in it. Two was chosen on the argument, not on the screen.
-9. **Who joins after Genesis 1, and after John 8.** The followers table in
-   `docs/design/11-followers.md#who-joins-after-what` names one person per passage,
-   and two of the nineteen were judgement calls rather than readings. *Genesis 1* has
-   no named person in it, so it hands over **Eve** on Genesis 1:27 while Adam comes
-   from Genesis 3 as the design doc asks — she therefore joins before he does, which
-   is right by the text and slightly odd by the story. *John 8* hands over **the
-   woman he did not condemn**, carrying the stone that was put down; it is the
-   memorable image of the chapter and it is faithful, but it is also the only figure
-   in the line whose passage is about her rather than about what she carried. Both
-   are a row in a table and cost a line to change.
+9. **Who joins after John 8.** *Genesis 1 and Genesis 3 are settled* — Adam then Eve,
+   after the owner's "Adam was created first"; the reasoning is beside the table in
+   `docs/design/11-followers.md#who-genesis-hands-over`. Still open: *John 8* hands over
+   **the woman he did not condemn**, carrying the stone that was put down. It is the
+   memorable image of the chapter and it is faithful, but it is the only figure in the
+   line whose passage is about her rather than about what she carried. One row in a
+   table.
 10. **Genesis 1 keeps its chapter row.** `Genesis 1 | apocalypse | light_from_dark` still
    sits under the seven verse rows as the default, so a *warp* into Genesis 1 arrives on
    the apocalypse rather than on the void, and only the level itself resolves finely. It
    is the documented behaviour — a chapter citation is a question about the chapter —
    but the first frame of a crossing into verse 1 is arguably the void's.
+
+11. **Should exclamation marks be forbidden everywhere?** `core/copy.test.ts` bans them
+   from every player-facing string. The rule came from `docs/design/10-first-run.md`,
+   where it is about *praise*: never congratulate a grown man for typing a letter. That
+   reasoning is sound for copy that judges the player and wrong as a blanket, because a
+   follower arriving or a stage opening is the world doing something, not a verdict on
+   him. The ban was written that broadly because "no praise" is hard to test and "no `!`"
+   is trivial — a testable proxy that overreached. The owner asked why, on the way to
+   suggesting a party member could arrive with some energy. Narrowing it means splitting
+   the test corpus into copy that evaluates him and copy about the world, and keeping the
+   ban tight on the first only.
 
 ## Agreed, specified, not yet built
 
@@ -78,7 +86,11 @@ place named, so none of this depends on remembering a conversation.
    while a strike plays, which is a change to load-bearing behaviour — the camera being
    purely word-driven — and so wants deciding rather than slipping in.
    → measured in `docs/design/03-pacing.md`
-4. **Mark the mode on the progress curve.** Gilded and non-gilded parts share one history
+4. **A follower arrives with no acknowledgement.** Finish Moriah and Abraham is simply
+   walking behind you, unremarked. One line in the strip under the rail, in the same
+   style as the first-run notes — shown once, gone as you type on. Blocked on decision
+   11 above, since what it may say depends on how wide the exclamation ban stays.
+5. **Mark the mode on the progress curve.** Gilded and non-gilded parts share one history
    line with nothing separating them. The owner went from 22 wpm to 75 by switching modes
    in one sitting; on the curve that draws a cliff which reads as a breakthrough and is
    not one. Needs a flag on the history entry and a note on the chart, like the
