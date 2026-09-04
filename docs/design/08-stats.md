@@ -30,9 +30,36 @@ An error is recorded against the printing key, unchanged: what failed is the pro
 of the character, and the platform delivers a composed character or nothing — the player
 cannot get the modifier wrong on its own.
 
-Only live characters count toward any of these. Greyed characters are not typed and must
-never inflate WPM — an easy and tempting bug, since it would make early stages look
-flattering.
+### Which characters count depends on the mode
+
+With **gilding off** — the default, and the beginner's game — only live characters count
+toward any of these. Greyed characters are not typed and must never inflate WPM: an easy
+and tempting bug, since it would make the early stages look flattering and the progress
+curve a lie.
+
+With **[gilding](01-illumination.md#gilding-a-mode-for-people-who-already-type) on**,
+every producible character is asked for and every one of them is typed, so every one of
+them counts. There is nothing left to inflate — the player really did strike those keys —
+and *excluding* them would be the dishonest number, reporting a fluent typist as slower
+than a beginner for typing more of the page.
+
+The two are not comparable with each other, and nothing in the game pretends they are: the
+mode is a property of the session, and a session's WPM is measured against what that
+session asked for.
+
+One thing does **not** change with the mode. A gilded character contributes **no key
+statistics at all** — no hit, no error, no latency, no confusion. It is a character
+*typed* rather than a character the curriculum *asked for*, and `keyStats` is the table
+the [mastery gate](06-curriculum.md#the-mastery-gate) is computed from. Gilded keys are
+untaught by definition, so keeping them out of that table is what makes "the gate counts
+only the current stage's keys" true by construction rather than by an argument about
+pruning further downstream. See
+[ADR 0008](../decisions/0008-gilding-permissive-input.md#why-gilding-must-not-open-the-gate).
+
+The cost is real and is accepted: in gilding mode at an early stage, the report card and
+the earned fade-out see only the taught half of what the player typed. That is the right
+trade — the card is a reading of progress through *the curriculum*, and a gilded `z` at
+stage 1 is not progress through it.
 
 ## Live HUD
 

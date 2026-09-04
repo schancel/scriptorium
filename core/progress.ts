@@ -29,11 +29,14 @@ import { evaluateGate, stageAt } from './curriculum.js';
 import { tuningValue } from './tuning.js';
 
 /**
- * Bumped from 1 when `position` and `recent` were added. A record at any older
- * version is *migrated*, never discarded: months of a beginner's curve is the
- * one thing in this program that cannot be regenerated.
+ * Bumped to 2 when `position` and `recent` were added, and to 3 for the gilding
+ * mode and whether its offer has been made. A record at any older version is
+ * *migrated*, never discarded: months of a beginner's curve is the one thing in
+ * this program that cannot be regenerated.
+ *
+ * See the version table in docs/architecture/data-schemas.md#progress.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;   // tuning-exempt: a schema version, not a tunable
 
 // --- the record -------------------------------------------------------------
 
@@ -92,6 +95,23 @@ export interface Progress {
   /** The trailing window the mastery gate is measured over. */
   readonly recent: Readonly<Record<Key, readonly Attempt[]>>;
   readonly history: readonly HistoryEntry[];
+  /**
+   * Gilding: every character required, nothing auto-advanced.
+   *
+   * Off by default and remembered per player, because it is a statement about
+   * the person at the keyboard rather than about the passage in front of them.
+   * A fluent typist should turn it on once, not once a session. See
+   * docs/decisions/0008-gilding-permissive-input.md.
+   */
+  readonly gilding: boolean;
+  /**
+   * Whether the game has already offered gilding.
+   *
+   * Stored so the offer is made once. Offer, never impose -- and an offer that
+   * reappears every time the player has a good session has stopped being an
+   * offer and become nagging, which is the same failure in a politer voice.
+   */
+  readonly gildOffered: boolean;
 }
 
 /** Genesis 1:1. The first verse of the first chapter of the first book. */
@@ -110,6 +130,8 @@ export const DEFAULT_PROGRESS: Progress = {
   keyStats: {},
   recent: {},
   history: [],
+  gilding: false,
+  gildOffered: false,
 };
 
 // --- migration --------------------------------------------------------------
@@ -178,7 +200,9 @@ function migrateHistory(value: unknown): readonly HistoryEntry[] {
  * the alternative to a partial read is discarding the history entirely. A
  * version 1 record -- one written before the player's position was saved --
  * keeps its stage, its statistics and its whole history, and simply resumes at
- * the beginning of the book. That is the migration the version field exists for.
+ * the beginning of the book. A version 2 record keeps all of that and comes
+ * back with gilding off, which is what it was doing anyway. That is the
+ * migration the version field exists for; nothing is ever dropped.
  */
 export function migrate(parsed: unknown): Progress {
   if (!isRecord(parsed)) return DEFAULT_PROGRESS;
@@ -198,6 +222,10 @@ export function migrate(parsed: unknown): Progress {
       : {},
     recent: migrateAttempts(parsed['recent']),
     history: migrateHistory(parsed['history']),
+    // Both default to false, which is exactly what a version 2 record meant:
+    // the mode did not exist, so it was off and had never been offered.
+    gilding: parsed['gilding'] === true,
+    gildOffered: parsed['gildOffered'] === true,
   };
 }
 
@@ -394,6 +422,74 @@ export function recordSession(
 /** Move the bookmark without recording a session. */
 export function withPosition(progress: Progress, position: Position): Progress {
   return { ...progress, position };
+}
+
+// --- the two switches the player owns ---------------------------------------
+
+/**
+ * Turn gilding on or off.
+ *
+ * Nothing else changes -- not the stage, not the window, not the history. The
+ * mode decides what the passage asks for, and asking for more of a passage is
+ * not a statement about what the player has learned.
+ *
+ * There is deliberately no path by which the *game* calls this: it is reached
+ * from the menu and from answering the offer, both of which are the player
+ * saying so. See docs/decisions/0008-gilding-permissive-input.md.
+ */
+export function setGilding(progress: Progress, gilding: boolean): Progress {
+  return { ...progress, gilding };
+}
+
+/**
+ * Set the stage directly, as the menu does.
+ *
+ * This is the honest route for someone who already types -- one control, said
+ * out loud -- and it is the reason gilding is allowed to leave the gate alone.
+ * ADR 0008 names it explicitly as the alternative to gilding opening gates: a
+ * player who wants to skip ahead should say so, rather than have a side effect
+ * of a difficulty mode do it quietly on their behalf.
+ *
+ * The trailing window is emptied, for exactly the reason `promote` empties it:
+ * it holds the *old* stage's new keys, which are no longer the keys the gate is
+ * asking about. Lifetime `keyStats` and the whole history are untouched -- this
+ * changes what the player is being taught next, not what they have done.
+ *
+ * The stage is clamped into the curriculum's own range rather than trusted, so
+ * a hand-edited record or a stale menu cannot ask for a stage that does not
+ * exist.
+ */
+export function setStage(progress: Progress, stage: number, stages: readonly Stage[]): Progress {
+  const wanted = stageAt(stages, Math.trunc(stage)).stage;
+  if (wanted === progress.stage) return progress;
+  return { ...progress, stage: wanted, recent: {} };
+}
+
+/**
+ * Should the game offer gilding?
+ *
+ * Offer, never impose. This returns whether to *ask*; turning the mode on is
+ * `setGilding`, and only the player's answer calls it. Silently removing a
+ * scaffold from someone having a good day is the failure this shape exists to
+ * make impossible -- there is no code path from this function to the mode.
+ *
+ * The evidence required is `gild_offer_sessions` consecutive finished sessions
+ * at or above `gild_offer_wpm`. One fast part is a short verse; a run of them
+ * is a typist. Once asked, never asked again: `gildOffered` is set whichever
+ * way the player answers.
+ */
+export function shouldOfferGilding(progress: Progress, tuning: Tuning): boolean {
+  if (progress.gilding || progress.gildOffered) return false;
+  const need = Math.max(1, Math.trunc(tuningValue(tuning, 'gild_offer_sessions')));
+  const wpm = tuningValue(tuning, 'gild_offer_wpm');
+  const recent = progress.history.slice(-need);
+  if (recent.length < need) return false;
+  return recent.every((entry) => entry.wpm >= wpm);
+}
+
+/** Remember that the offer has been made, whichever way it was answered. */
+export function withGildOffered(progress: Progress): Progress {
+  return { ...progress, gildOffered: true };
 }
 
 /**

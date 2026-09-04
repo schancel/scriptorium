@@ -218,6 +218,24 @@ export interface FrameState {
    */
   readonly spaceThumb?: Thumb;
   /**
+   * Gilding mode, if the platform is running it.
+   *
+   * Absent means off, which is what every existing frame means. On, it changes
+   * two things and nothing else: a greyed character the player has typed is
+   * drawn gold rather than dim, and the cursor is allowed to rest on a greyed
+   * character, because in this mode it is a target. The classification itself is
+   * untouched -- an untaught letter ahead of the cursor is still dim, because it
+   * is still untaught. See
+   * docs/design/01-illumination.md#gilding-a-mode-for-people-who-already-type.
+   */
+  readonly gilding?: boolean;
+  /**
+   * Points earned by gilding, cumulative over the level. Drawn in the HUD when
+   * gilding is on and omitted entirely when it is off -- a score of zero in a
+   * mode with no scoring in it would be a number the player cannot move.
+   */
+  readonly gildPoints?: number;
+  /**
    * The world between the HUD and the rail: theme, scribe, monsters, cloud and
    * hearts.
    *
@@ -673,9 +691,15 @@ function pushHud(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
     op: 'text', value: state.ref, x: refX, y: M.hudTextY,
     style: 'hud', color: pal('hud'),
   });
+  // The gild total joins the centre line rather than taking a corner of its own:
+  // it is a score for the same stretch of typing the WPM and accuracy describe,
+  // and the corners are already the player's health and their stage.
+  const gild = state.gilding === true
+    ? `    GILD ${Math.round(state.gildPoints ?? 0)}`
+    : '';
   cmds.push({
     op: 'text',
-    value: `WPM ${Math.round(state.score.wpm)}    ACC ${pct(state.score.accuracy)}%`,
+    value: `WPM ${Math.round(state.score.wpm)}    ACC ${pct(state.score.accuracy)}%${gild}`,
     x: M.vw / 2, y: M.hudTextY, style: 'hud-center', color: pal('gold'),
   });
   if (scene !== undefined) pushSmudgeMeter(cmds, scene, tuning);
@@ -685,8 +709,24 @@ function pushHud(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
   });
 }
 
-/** The first live glyph at or after the cursor: the key the player owes us. */
+/**
+ * The glyph the player owes us, which the overlay lights the keys of.
+ *
+ * Off, that is the first *live* glyph at or after the cursor: the greyed run in
+ * between is not being asked for, so pointing past it is right.
+ *
+ * On, it is the glyph under the cursor and nothing further. A gilded character
+ * carries no strokes, so the overlay lights nothing while the cursor sits on
+ * one -- which is correct twice over. Pointing at the next live character would
+ * name a key the player is not being asked for yet, and pointing at the greyed
+ * one would show a beginner where an untaught key lives, which illumination
+ * exists to avoid. The mode is for people who do not need the overlay.
+ */
 function nextLiveGlyph(state: FrameState): Glyph | null {
+  if (state.gilding === true) {
+    const here = state.glyphs[state.cursor];
+    return here === undefined || here.strokes.length === 0 ? null : here;
+  }
   for (let i = state.cursor; i < state.glyphs.length; i++) {
     const g = state.glyphs[i];
     if (g !== undefined && g.live) return g;
@@ -774,10 +814,23 @@ function pushRail(cmds: DrawCmd[], state: FrameState, rail: RailState, tuning: T
  * A greyed glyph is dim wherever it sits, including behind the cursor: it was
  * never typed, so showing it as done would credit the player with a keystroke
  * they did not make.
+ *
+ * Unless it *was* typed. In gilding mode a greyed character behind the cursor
+ * has been struck, and it is drawn gold -- the page gilding itself behind the
+ * scribe, which is the whole metaphor the mode is named for and the only
+ * feedback that says the extra work registered. Ahead of the cursor it is still
+ * dim, because it is still an untaught letter; the mode changes what is asked
+ * for, not what has been taught.
  */
 function glyphStyle(i: number, state: FrameState): string {
   const g = state.glyphs[i];
-  if (g === undefined || !g.live) return 'rail-dim';
+  if (g === undefined) return 'rail-dim';
+  if (!g.live) {
+    if (state.gilding !== true || !g.producible) return 'rail-dim';
+    if (i < state.cursor) return 'rail-gild';
+    if (i === state.cursor) return state.blocked ? 'rail-error' : 'rail-cursor';
+    return 'rail-dim';
+  }
   if (i < state.cursor) return 'rail-done';
   if (i === state.cursor) return state.blocked ? 'rail-error' : 'rail-cursor';
   return 'rail-live';
@@ -787,6 +840,7 @@ function styleColour(style: string): string {
   if (style === 'rail-dim') return 'dim';
   if (style === 'rail-done') return 'done';
   if (style === 'rail-cursor') return 'gold';
+  if (style === 'rail-gild') return 'gold';
   if (style === 'rail-error') return 'error';
   return 'live';
 }

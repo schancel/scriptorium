@@ -32,6 +32,24 @@ export interface OverlayHandlers {
    * exposes is a switch that does not exist.
    */
   setCloud(enabled: boolean): void;
+  /**
+   * The player set their own stage.
+   *
+   * ADR 0008 names this as the honest route for someone who already types:
+   * gilding deliberately does not open the mastery gate, so skipping ahead has
+   * to be a control the player operates out loud rather than a side effect of
+   * a difficulty mode.
+   */
+  setStage(stage: number): void;
+  /**
+   * The player asked for gilding on or off.
+   *
+   * The only other caller of this rule is the player's answer to the offer.
+   * Nothing in the game may turn the mode on by itself: silently removing a
+   * scaffold from someone having a good day is the failure ADR 0008 exists to
+   * avoid.
+   */
+  setGilding(on: boolean): void;
   startOver(): void;
   exportFile(): void;
   importFile(file: File): void;
@@ -57,6 +75,11 @@ export interface MenuView {
   readonly spaceThumb: Thumb;
   /** Whether the blot-cloud is armed. See `OverlayHandlers.setCloud`. */
   readonly cloudEnabled: boolean;
+  /** The stage the player is on, and every stage they could choose instead. */
+  readonly stage: number;
+  readonly stages: readonly { readonly stage: number; readonly description: string }[];
+  /** Whether gilding is on. See `OverlayHandlers.setGilding`. */
+  readonly gilding: boolean;
   readonly history: readonly HistoryEntry[];
 }
 
@@ -64,6 +87,12 @@ export interface Overlay {
   isOpen(): boolean;
   openMenu(view: MenuView): void;
   showPromotion(promotion: Promotion, onDismiss: () => void): void;
+  /**
+   * Ask whether the player wants gilding. `onAnswer` is called with their
+   * answer -- including `false`, which is a real answer and is remembered, so
+   * the question is asked once rather than after every good session.
+   */
+  showGildOffer(onAnswer: (accept: boolean) => void): void;
   showError(message: string): void;
   /** Say out loud whether the sound is on. The control is the only indicator. */
   showAudio(on: boolean): void;
@@ -113,6 +142,8 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const layoutSelect = need('menu-layout', HTMLSelectElement);
   const thumbSelect = need('menu-thumb', HTMLSelectElement);
   const cloudSelect = need('menu-cloud', HTMLSelectElement);
+  const stageSelect = need('menu-stage-select', HTMLSelectElement);
+  const gildingSelect = need('menu-gilding', HTMLSelectElement);
   const errorLine = need('menu-error', HTMLParagraphElement);
   const resumeButton = need('menu-resume', HTMLButtonElement);
   const restartButton = need('menu-restart', HTMLButtonElement);
@@ -129,6 +160,10 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const promotionCoverage = need('promotion-coverage', HTMLParagraphElement);
   const promotionOk = need('promotion-ok', HTMLButtonElement);
 
+  const gildPanel = need('panel-gild', HTMLDivElement);
+  const gildYes = need('gild-yes', HTMLButtonElement);
+  const gildNo = need('gild-no', HTMLButtonElement);
+
   for (const entry of CANON) {
     const option = document.createElement('option');
     option.value = entry.title;
@@ -137,6 +172,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   }
 
   let dismissPromotion: (() => void) | null = null;
+  let answerGild: ((accept: boolean) => void) | null = null;
 
   function isOpen(): boolean {
     return !overlay.hidden;
@@ -146,7 +182,9 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     overlay.hidden = true;
     menuPanel.hidden = true;
     promotionPanel.hidden = true;
+    gildPanel.hidden = true;
     dismissPromotion = null;
+    answerGild = null;
   }
 
   function showError(message: string): void {
@@ -200,6 +238,24 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     }
   }
 
+  /**
+   * The stage picker.
+   *
+   * Built from the curriculum the game actually loaded rather than from a list
+   * spelled here, so a stage cannot appear in the menu that the gate and the
+   * illumination sets have never heard of.
+   */
+  function renderStages(view: MenuView): void {
+    stageSelect.replaceChildren();
+    for (const row of view.stages) {
+      const option = document.createElement('option');
+      option.value = String(row.stage);
+      option.textContent = `${String(row.stage)} — ${row.description}`;
+      stageSelect.append(option);
+    }
+    stageSelect.value = String(view.stage);
+  }
+
   function openMenu(view: MenuView): void {
     where.textContent = view.where;
     stageLine.textContent = view.stageLine;
@@ -209,9 +265,12 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     layoutSelect.value = view.layout;
     thumbSelect.value = view.spaceThumb;
     cloudSelect.value = view.cloudEnabled ? 'on' : 'off';
+    gildingSelect.value = view.gilding ? 'on' : 'off';
+    renderStages(view);
     errorLine.textContent = '';
     renderHistory(view.history);
     promotionPanel.hidden = true;
+    gildPanel.hidden = true;
     menuPanel.hidden = false;
     overlay.hidden = false;
     resumeButton.focus();
@@ -250,6 +309,30 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     if (done !== null) done();
   }
 
+  /**
+   * The offer.
+   *
+   * It states what the mode does and what it does *not* do -- it will not move
+   * the player's stage -- because the one thing a player might reasonably hope
+   * for here is a shortcut through the curriculum, and letting them find out
+   * otherwise by playing would be a worse way to say it. The stage control is
+   * named in the same breath, since that is the honest route.
+   */
+  function showGildOffer(onAnswer: (accept: boolean) => void): void {
+    answerGild = onAnswer;
+    menuPanel.hidden = true;
+    promotionPanel.hidden = true;
+    gildPanel.hidden = false;
+    overlay.hidden = false;
+    gildNo.focus();
+  }
+
+  function answer(accept: boolean): void {
+    const done = answerGild;
+    close();
+    if (done !== null) done(accept);
+  }
+
   function go(): void {
     const chapter = Number.parseInt(chapterInput.value, 10);
     if (!Number.isInteger(chapter) || chapter < 1) {
@@ -286,6 +369,19 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   cloudSelect.addEventListener('change', () => {
     handlers.setCloud(cloudSelect.value !== 'off');
   });
+  gildingSelect.addEventListener('change', () => {
+    handlers.setGilding(gildingSelect.value === 'on');
+  });
+  stageSelect.addEventListener('change', () => {
+    const stage = Number.parseInt(stageSelect.value, 10);
+    if (Number.isInteger(stage)) handlers.setStage(stage);
+  });
+  gildYes.addEventListener('click', () => {
+    answer(true);
+  });
+  gildNo.addEventListener('click', () => {
+    answer(false);
+  });
   chapterInput.addEventListener('keydown', (event: KeyboardEvent) => {
     if (event.key === 'Enter') go();
   });
@@ -316,6 +412,12 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     if (!isOpen()) return;
     if (event.key === 'Escape') {
       event.preventDefault();
+      if (!gildPanel.hidden) {
+        // Escaping the offer is "not now", and it is remembered like any other
+        // answer. Leaving it unanswered would bring it back tomorrow.
+        answer(false);
+        return;
+      }
       if (!promotionPanel.hidden) {
         dismiss();
         return;
@@ -330,5 +432,5 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     }
   });
 
-  return { isOpen, openMenu, showPromotion, showError, showAudio, close };
+  return { isOpen, openMenu, showPromotion, showGildOffer, showError, showAudio, close };
 }

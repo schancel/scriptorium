@@ -19,6 +19,10 @@ import {
   migrate,
   promote,
   recordSession,
+  setGilding,
+  setStage,
+  shouldOfferGilding,
+  withGildOffered,
   withPosition,
 } from './progress.js';
 
@@ -282,4 +286,140 @@ test('a player who finishes the curriculum is not offered an eleventh stage', ()
     tuning,
   );
   assert.equal(evaluatePromotion(atTheEnd, stages, tuning), null);
+});
+
+
+// --- gilding: the mode, the offer, and the stage control --------------------
+//
+// docs/decisions/0008-gilding-permissive-input.md.
+
+/** The version 2 record exactly as docs/architecture/data-schemas.md published it. */
+const V2_RECORD = {
+  version: 2,
+  stage: V1_STAGE,
+  translation: 'KJV',
+  route: 'pilgrimage',
+  layout: 'iso',
+  spaceThumb: 'lt',
+  position: { book: 'Psalms', chapter: 23, unit: 4 },   // tuning-exempt: fixture
+  completed: ['Genesis 1'],
+  keyStats: { a: stat(V1_HITS, V1_ERRORS, V1_LATENCY_MS) },
+  recent: { a: [{ ok: true, ms: V1_LATENCY_MS }, { ok: false, ms: null }] },
+  history: [
+    {
+      date: '2026-08-01', stage: V1_STAGE, ref: 'Genesis 1',
+      wpm: V1_WPM, accuracy: V1_ACCURACY, promoted: true,
+    },
+  ],
+};
+
+test('a version 2 record migrates with its history and statistics intact', () => {
+  const migrated = migrate(V2_RECORD);
+
+  assert.equal(migrated.version, SCHEMA_VERSION);
+  assert.notEqual(SCHEMA_VERSION, 2);
+  // Nothing a player earned may be dropped by a format change.
+  assert.equal(migrated.stage, V1_STAGE);
+  assert.equal(migrated.translation, 'KJV');
+  assert.equal(migrated.layout, 'iso');
+  assert.equal(migrated.spaceThumb, 'lt');
+  assert.deepEqual(migrated.position, { book: 'Psalms', chapter: 23, unit: 4 }); // tuning-exempt: fixture
+  assert.deepEqual(migrated.completed, ['Genesis 1']);
+  assert.equal(migrated.keyStats['a']?.hits, V1_HITS);
+  assert.equal(migrated.keyStats['a']?.errors, V1_ERRORS);
+  assert.equal(migrated.recent['a']?.length, 2);   // tuning-exempt: two attempts in the fixture
+  assert.equal(migrated.history.length, 1);
+  assert.equal(migrated.history[0]?.wpm, V1_WPM);
+  assert.equal(migrated.history[0]?.promoted, true);
+
+  // And the fields version 2 never had come back as what version 2 meant: the
+  // mode did not exist, so it was off and had never been offered.
+  assert.equal(migrated.gilding, false);
+  assert.equal(migrated.gildOffered, false);
+});
+
+test('the gilding mode survives a reload', () => {
+  const on = setGilding(migrate(V2_RECORD), true);
+  const reloaded = migrate(JSON.parse(JSON.stringify(on)) as unknown);
+  assert.equal(reloaded.gilding, true);
+  assert.deepEqual(reloaded, on, 'the record did not round-trip');
+
+  const off = migrate(JSON.parse(JSON.stringify(setGilding(on, false))) as unknown);
+  assert.equal(off.gilding, false);
+});
+
+test('turning gilding on changes nothing else -- not the stage, not the window', () => {
+  const before = play(withPosition(DEFAULT_PROGRESS, SOMEWHERE), stat(perKey, 1, fastMs));
+  const after = setGilding(before, true);
+  assert.deepEqual({ ...after, gilding: before.gilding }, before);
+});
+
+test('the menu can set the stage directly, and that is the only thing it moves', () => {
+  const before = play(withPosition(DEFAULT_PROGRESS, SOMEWHERE), stat(perKey, 1, fastMs));
+  const last = stages[stages.length - 1];
+  assert.ok(last !== undefined);
+
+  const jumped = setStage(before, last.stage, stages);
+  assert.equal(jumped.stage, last.stage);
+  // The history and the lifetime totals are what the player did; a stage change
+  // is a statement about what they are being taught next.
+  assert.deepEqual(jumped.history, before.history);
+  assert.deepEqual(jumped.keyStats, before.keyStats);
+  assert.deepEqual(jumped.position, before.position);
+  // The window held the *old* stage's new keys, which the gate no longer asks
+  // about -- the same reason `promote` empties it.
+  assert.deepEqual(jumped.recent, {});
+});
+
+test('a stage the curriculum does not have is clamped, not accepted', () => {
+  const last = stages[stages.length - 1];
+  const first = stages[0];
+  assert.ok(last !== undefined && first !== undefined);
+  const beyond = last.stage + stages.length;
+  assert.equal(setStage(DEFAULT_PROGRESS, beyond, stages).stage, last.stage);
+  assert.equal(setStage(DEFAULT_PROGRESS, -1, stages).stage, first.stage);
+});
+
+test('the offer is made only after sustained pace, and only ever offered', () => {
+  const need = Math.trunc(tuningValue(tuning, 'gild_offer_sessions'));
+  const fast = tuningValue(tuning, 'gild_offer_wpm');
+  const entry = (wpm: number) => ({
+    date: '2026-09-03', stage: 1, ref: 'Genesis 1:1-3', wpm, accuracy: 1, promoted: false,
+  });
+
+  // Not enough evidence yet: one fast part is a short verse.
+  const few = { ...DEFAULT_PROGRESS, history: Array.from({ length: need - 1 }, () => entry(fast)) };
+  assert.equal(shouldOfferGilding(few, tuning), false);
+
+  // A slow session inside the window is a player who still needs the scaffold.
+  const mixed = {
+    ...DEFAULT_PROGRESS,
+    history: [...Array.from({ length: need - 1 }, () => entry(fast)), entry(fast - 1)],
+  };
+  assert.equal(shouldOfferGilding(mixed, tuning), false);
+
+  const earned = { ...DEFAULT_PROGRESS, history: Array.from({ length: need }, () => entry(fast)) };
+  assert.equal(shouldOfferGilding(earned, tuning), true);
+
+  // OFFER, NEVER IMPOSE. Asking does not turn it on: the mode is still off, and
+  // only `setGilding` -- which nothing but the player's answer calls -- moves it.
+  assert.equal(earned.gilding, false);
+  assert.equal(withGildOffered(earned).gilding, false);
+});
+
+test('the offer is made once, whichever way it is answered', () => {
+  const need = Math.trunc(tuningValue(tuning, 'gild_offer_sessions'));
+  const fast = tuningValue(tuning, 'gild_offer_wpm');
+  const earned = {
+    ...DEFAULT_PROGRESS,
+    history: Array.from({ length: need }, () => ({
+      date: '2026-09-03', stage: 1, ref: 'Genesis 1:1-3', wpm: fast, accuracy: 1, promoted: false,
+    })),
+  };
+
+  // "Not now" is a real answer and is remembered; asking again after every good
+  // session is imposition in a politer voice.
+  assert.equal(shouldOfferGilding(withGildOffered(earned), tuning), false);
+  // And a player already gilding is never asked.
+  assert.equal(shouldOfferGilding(setGilding(earned, true), tuning), false);
 });

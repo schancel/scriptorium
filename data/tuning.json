@@ -35,6 +35,8 @@
     "combo_drop_bonus": 0.2,
     "gild_score_per_char": 2,
     "gild_page_bonus": 50,
+    "gild_offer_wpm": 60,
+    "gild_offer_sessions": 3,
     "bonus_word_chance": 0.15,
     "master_volume": 0.35,
     "audio_default_on": 0,
@@ -176,11 +178,19 @@
     },
     "gild_score_per_char": {
       "unit": "points",
-      "description": "Awarded per greyed character typed correctly."
+      "description": "Awarded per greyed character typed correctly, in [gilding mode](01-illumination.md#gilding-a-mode-for-people-who-already-type)."
     },
     "gild_page_bonus": {
       "unit": "points",
       "description": "Awarded for a part in which every character was typed."
+    },
+    "gild_offer_wpm": {
+      "unit": "wpm",
+      "description": "Pace at which the game *offers* gilding. Well above a beginner's ceiling and well below the fluent typist it is for; it only ever opens a dialogue, never a mode."
+    },
+    "gild_offer_sessions": {
+      "unit": "sessions",
+      "description": "Consecutive sessions at that pace before the offer is made. One fast part is a short verse, not a fluent typist."
     },
     "bonus_word_chance": {
       "unit": "probability",

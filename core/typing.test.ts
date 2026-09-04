@@ -6,7 +6,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import type { Glyph, KeyStat, Stage, Tuning } from './types.js';
-import { applyKey, atEnd, createTypingState, median, score, tick } from './typing.js';
+import {
+  applyKey, askedFor, atEnd, createTypingState, gildScore, median, score, tick,
+} from './typing.js';
 import { classify } from './illumination.js';
 import { evaluateGate, keySetFor, loadStages } from './curriculum.js';
 import { loadTuning, tuningValue } from './tuning.js';
@@ -351,4 +353,196 @@ test('score reports the median latency across every key', () => {
   const state = typeAll(at(0, 'fjfj'), quickMs);
   assert.equal(score(state, tuning).medianLatencyMs, quickMs);
   assert.equal(score(state, tuning).accuracy, 1);
+});
+
+
+// --- gilding ----------------------------------------------------------------
+//
+// docs/design/01-illumination.md#gilding-a-mode-for-people-who-already-type and
+// docs/decisions/0008-gilding-permissive-input.md. The load-bearing one is the
+// gate: gilded keys are by definition untaught, and counting them would promote
+// a fluent typist through a curriculum they never did.
+
+/** Type the whole passage perfectly in the given mode. */
+function typeAllIn(glyphs: readonly Glyph[], gapMs: number, gilding: boolean) {
+  let state = createTypingState(glyphs, gilding);
+  // A bound, so a mode that fails to advance loops rather than hanging the run.
+  for (let guard = 0; guard <= glyphs.length * 2 && !atEnd(state); guard += 1) {
+    const glyph = state.glyphs[state.cursor];
+    if (glyph === undefined) break;
+    state = tick(state, gapMs);
+    state = applyKey(state, glyph.ch, tuning);
+  }
+  return state;
+}
+
+const GILD_VERSE = 'In the beginning God created the heavens and the earth.';
+
+test('gilding is off by default, and off is exactly what it always was', () => {
+  const glyphs = at(1, GILD_VERSE);
+  const plain = createTypingState(glyphs);
+  assert.equal(plain.gilding, false);
+  assert.equal(plain.gilded, 0);
+
+  // The cursor still opens on the first *live* glyph, snapping past the capital
+  // `I`, and typing only the live characters still finishes the passage.
+  assert.equal(plain.cursor, glyphs.findIndex((g) => g.live));
+  const done = typeAllIn(glyphs, 0, false);
+  assert.equal(atEnd(done), true);
+  assert.equal(done.correct, glyphs.filter((g) => g.live).length);
+  assert.equal(done.gilded, 0);
+  assert.equal(gildScore(done, tuning).points, 0);
+  assert.equal(gildScore(done, tuning).complete, false);
+});
+
+test('gilding off: a greyed character cannot be typed', () => {
+  const glyphs = at(1, GILD_VERSE);
+  const start = createTypingState(glyphs);
+  // `I` is greyed at stage 1 -- it needs <shift>. Pressing it is simply wrong.
+  const wrong = applyKey(start, 'I', tuning);
+  assert.equal(wrong.cursor, start.cursor);
+  assert.equal(wrong.correct, start.correct);
+  assert.equal(wrong.gilded, 0);
+  assert.equal(wrong.blocked, true);
+});
+
+test('gilding on: nothing auto-advances and every character is required', () => {
+  const glyphs = at(1, GILD_VERSE);
+  const start = createTypingState(glyphs, true);
+  // No snap: the cursor opens on the passage's first character, greyed or not.
+  assert.equal(start.cursor, 0);
+  assert.equal(glyphs[0]?.live, false, 'the fixture must open on a greyed character');
+
+  // Typing the next *live* character instead is an error against a known target
+  // -- the whole reason this is a mode rather than permissive input.
+  const nextLive = glyphs.find((g) => g.live);
+  assert.ok(nextLive !== undefined);
+  const fumbled = applyKey(start, nextLive.ch, tuning);
+  assert.equal(fumbled.cursor, 0, 'a wrong key advanced the cursor');
+  assert.equal(fumbled.blocked, true, 'a wrong key was not charged');
+  assert.equal(fumbled.correct, start.correct);
+
+  // The greyed character under the cursor is the thing being asked for.
+  const gilded = applyKey(start, glyphs[0]?.ch ?? '', tuning);
+  assert.equal(gilded.cursor, 1);
+  assert.equal(gilded.gilded, 1);
+  assert.equal(gilded.correct, 1);
+
+  const done = typeAllIn(glyphs, 0, true);
+  assert.equal(atEnd(done), true);
+  assert.equal(done.correct, glyphs.length, 'a character was skipped');
+  assert.equal(done.correct, askedFor(glyphs, true));
+});
+
+test('gilded characters score, and a fully gilded part earns the page bonus', () => {
+  const glyphs = at(1, GILD_VERSE);
+  const perChar = tuningValue(tuning, 'gild_score_per_char');
+  const bonus = tuningValue(tuning, 'gild_page_bonus');
+  const greyed = glyphs.filter((g) => !g.live).length;
+  assert.ok(greyed > 0, 'the fixture must have something to gild');
+
+  const done = typeAllIn(glyphs, 0, true);
+  const gild = gildScore(done, tuning);
+  assert.equal(gild.gilded, greyed);
+  assert.equal(gild.complete, true);
+  assert.equal(gild.points, greyed * perChar + bonus);
+});
+
+test('a part resumed halfway earns the per-character score but not the page bonus', () => {
+  const glyphs = at(1, GILD_VERSE);
+  const perChar = tuningValue(tuning, 'gild_score_per_char');
+  // Resuming mid-part is exactly what a candle does; the page was not filled.
+  const half = Math.floor(glyphs.length / 2);
+  let state = { ...createTypingState(glyphs, true), cursor: half };
+  while (!atEnd(state)) {
+    const glyph = state.glyphs[state.cursor];
+    if (glyph === undefined) break;
+    state = applyKey(state, glyph.ch, tuning);
+  }
+  const gild = gildScore(state, tuning);
+  assert.equal(gild.complete, false, 'half a page must not be a gilded page');
+  assert.equal(gild.points, gild.gilded * perChar);
+});
+
+test('THE MASTERY GATE GAINS NOTHING FROM GILDED KEYS, AT ANY STAGE', () => {
+  // The load-bearing property of the whole feature. Gilded keys are untaught by
+  // definition; counting them would promote a fluent typist through a
+  // curriculum they never did and make the stage numbers meaningless for the
+  // beginner they exist to serve.
+  const gapMs = tuningValue(tuning, 'gate_latency_floor_ms');
+  let checkedGilded = 0;
+
+  for (const stage of stages) {
+    const glyphs = at(stage.stage, GILD_VERSE);
+    const taught = new Set(keySetFor(stages, stage.stage));
+
+    const plain = typeAllIn(glyphs, gapMs, false);
+    const gilded = typeAllIn(glyphs, gapMs, true);
+    checkedGilded += gilded.gilded;
+
+    // Not merely "no untaught key leaked in": the two runs produce the *same*
+    // statistics, so gilding a whole passage cannot move the gate by any amount
+    // in any direction.
+    assert.deepEqual(
+      gilded.keyStats,
+      plain.keyStats,
+      `stage ${String(stage.stage)}: gilding changed the key statistics`,
+    );
+    for (const key of Object.keys(gilded.keyStats)) {
+      assert.ok(taught.has(key), `stage ${String(stage.stage)}: untaught key "${key}" was scored`);
+    }
+    assert.deepEqual(
+      evaluateGate(stage, gilded.keyStats, tuning),
+      evaluateGate(stage, plain.keyStats, tuning),
+      `stage ${String(stage.stage)}: gilding moved the gate`,
+    );
+  }
+
+  assert.ok(checkedGilded > 0, 'nothing was actually gilded, so nothing was proved');
+});
+
+test('a player who gilds a whole passage at stage 1 gains no gate progress on untaught keys', () => {
+  const glyphs = at(1, GILD_VERSE);
+  const taught = new Set(keySetFor(stages, 1));
+  const done = typeAllIn(glyphs, tuningValue(tuning, 'gate_latency_floor_ms'), true);
+
+  assert.ok(done.gilded > 0, 'the fixture gilded nothing at stage 1');
+  // Every untaught key in the passage -- `t`, `<shift>`, `.` and the rest -- has
+  // no statistics at all, so there is nothing for the gate to read.
+  for (const glyph of glyphs) {
+    for (const ch of [glyph.ch, glyph.ch.toLowerCase()]) {
+      if (taught.has(ch)) continue;
+      assert.equal(done.keyStats[ch], undefined, `untaught key "${ch}" gained statistics`);
+    }
+  }
+  assert.equal(done.keyStats['<shift>'], undefined, 'gilding a capital credited <shift>');
+});
+
+test('gilding on, WPM counts what was actually typed', () => {
+  // docs/design/08-stats.md#definitions: greyed characters must not inflate WPM
+  // when they were never asked for -- and must count when they were.
+  const glyphs = at(1, GILD_VERSE);
+  const gapMs = tuningValue(tuning, 'gate_latency_floor_ms');
+  const plain = typeAllIn(glyphs, gapMs, false);
+  const gilded = typeAllIn(glyphs, gapMs, true);
+
+  assert.equal(plain.correct, glyphs.filter((g) => g.live).length);
+  assert.equal(gilded.correct, glyphs.length);
+  assert.ok(
+    score(gilded, tuning).wpm > score(plain, tuning).wpm,
+    'gilding typed more characters and reported fewer words',
+  );
+});
+
+test('gilding still snaps past a character no keyboard can make', () => {
+  // An imported book, not the Bible: `ensure_ascii=False` in the importer means
+  // an em dash or a curly quote can reach the ribbon, and "every character is
+  // required" would otherwise be a wall no player could type past.
+  const glyphs = at(1, 'a—s');
+  assert.equal(glyphs[1]?.producible, false, 'the fixture is not testing what it claims');
+  const state = createTypingState(glyphs, true);
+  assert.equal(state.cursor, 0);
+  const after = applyKey(state, 'a', tuning);
+  assert.equal(after.cursor, 2, 'the em dash was not snapped past');
+  assert.equal(atEnd(applyKey(after, 's', tuning)), true);
 });

@@ -1,6 +1,6 @@
 # Illumination
 
-**Implemented by:** `core/illumination.ts`, `core/keyboard.ts`, `core/corpus.ts`
+**Implemented by:** `core/illumination.ts`, `core/keyboard.ts`, `core/corpus.ts`, `core/typing.ts`
 
 The central mechanic, and the reason the Bible works as a beginner corpus at all.
 
@@ -149,6 +149,55 @@ by definition untaught, so they cannot open a gate -- otherwise a fluent typist 
 promoted through a curriculum they never did, and the stage numbers would stop meaning
 anything for the beginner they exist to serve. Someone who wants to skip ahead sets their
 stage in the menu, which is one honest control rather than a hidden side effect.
+
+That is enforced by *construction*, not by care: a gilded character reaches `keyStats`
+with nothing at all -- no hit, no error, no latency -- so there is nothing in the table the
+gate reads for it to find. See [stats](08-stats.md#which-characters-count-depends-on-the-mode).
+
+### Producible is not the same as live
+
+Classification answers two questions per character, not one. `live` is a statement about
+the *stage*: every key this character costs has been taught. `producible` is a statement
+about the *board*: some keyboard makes this character at all.
+
+Illumination only needs the first. Gilding needs both, because "every character is
+required" would otherwise be a wall at the first em dash or curly quote in an imported
+book -- characters no key produces at any stage. Those still snap past in gilding mode,
+exactly as greyed runs do without it. The snap is instant and the cursor never rests on
+one, so nothing ambiguous is reintroduced: the character under the cursor is always a
+target the player can strike.
+
+Producibility never varies by stage and never affects `live`. The illumination invariant
+is untouched by the mode.
+
+### How it reads on screen
+
+- The character under the cursor is a target whether it is live or greyed, so the caret
+  rests on greyed characters and the error colour applies to them.
+- A greyed character **behind** the cursor -- one the player has typed -- is drawn **gold**.
+  The page gilds itself behind the scribe, which is the whole of the metaphor and the only
+  feedback that says the extra work registered.
+- A greyed character **ahead** of the cursor is still dim. It is still untaught; the mode
+  changes what is asked for, not what has been taught.
+- The keyboard overlay lights **nothing** while the cursor sits on a gilded character.
+  Pointing at the next live character would name a key that is not being asked for, and
+  pointing at the greyed one would show a beginner where an untaught key lives -- which is
+  the habit this whole mechanic exists to remove.
+- The HUD carries a **gild total** beside WPM and accuracy, and carries it only while the
+  mode is on: a score of zero in a mode with no scoring in it is a number the player
+  cannot move.
+
+### Being offered it
+
+The game may offer the mode after `gild_offer_sessions` consecutive sessions at or above
+`gild_offer_wpm`. It **offers**; it never switches itself on, and there is no code path
+from the check to the switch. The offer is made once and both answers are remembered --
+an offer that reappears after every good session has stopped being an offer.
+
+The offer says out loud that the mode will not move the player's stage, and names the
+menu's stage control in the same breath. The one thing a player might reasonably hope for
+here is a shortcut through the curriculum, and letting them discover otherwise by playing
+would be a worse way to say it.
 
 ## Feel
 

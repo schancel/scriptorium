@@ -79,7 +79,7 @@ continuing — standard in typing tutors, and non-negotiable for habit formation
 |---|---|---|---|
 | `ink_pot` | Ink pot | Restores one heart | Dropped for a clean verse streak, or hidden on side platforms |
 | `candle` | Candle | Checkpoint — death returns here | Placed at verse boundaries through a level |
-| `gold_leaf` | Gold leaf | Score multiplier for the rest of the level | Hidden on side platforms |
+| `gold_leaf` | Gold leaf | Score multiplier for the rest of the level | Awarded for a part gilded completely, or hidden on side platforms |
 | `quill_nib` | Quill nib | Permanent upgrade: extra heart, slower cloud, or wider smudge tolerance | Behind flashback rooms |
 | `wax_seal` | Wax seal | Unlocks routes and cosmetics | Awarded for a perfect chapter |
 

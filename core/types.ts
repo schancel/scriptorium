@@ -90,6 +90,19 @@ export interface Glyph {
    * and to the overlay that is supposed to point at it.
    */
   readonly strokes: readonly Stroke[];
+  /**
+   * True when *some* keyboard produces this character at all.
+   *
+   * Not the same as `live`, and the difference is the whole of what gilding
+   * needs. A capital at stage 1 is producible but untaught: greyed today, and
+   * required the moment gilding is on. A curly quote or an em dash in an
+   * imported book is producible by nobody, at any stage, so gilding has to snap
+   * past it exactly as illumination does -- otherwise "every character is
+   * required" walls the player at a character no key on the board can make.
+   *
+   * Every live glyph is producible; the converse does not hold.
+   */
+  readonly producible: boolean;
 }
 
 // --- typing -----------------------------------------------------------------
@@ -112,6 +125,29 @@ export interface TypingState {
   /** Every keypress, corrections included. */
   readonly keystrokes: number;
   readonly correct: number;
+  /**
+   * Gilding mode: every producible character is required and nothing
+   * auto-advances.
+   *
+   * It rides on the typing state rather than being passed to each call because
+   * `applyKey` and `tick` must agree about it on every frame: one of them
+   * snapping a greyed run the other is waiting on would put the cursor
+   * somewhere neither of them thinks it is. Off by default, which is exactly
+   * today's behaviour.
+   *
+   * See docs/design/01-illumination.md#gilding-a-mode-for-people-who-already-type
+   * and docs/decisions/0008-gilding-permissive-input.md.
+   */
+  readonly gilding: boolean;
+  /**
+   * Characters outside the current stage typed correctly: the gilded ones.
+   *
+   * Counted apart from `correct` because they are a different quantity --
+   * characters *typed* rather than characters the curriculum *asked for*. They
+   * score, and they never reach `keyStats`, which is what makes the mastery
+   * gate structurally unable to see them.
+   */
+  readonly gilded: number;
   /** Time spent typing this passage. */
   readonly elapsedMs: number;
   /** Time since the last keystroke; drives the blot-cloud. */

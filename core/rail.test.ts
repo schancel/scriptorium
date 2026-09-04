@@ -73,9 +73,11 @@ const LIVE_CHARS = new Set<string>([...`asdfghjkl;`, ` `]);
 
 function classify(text: string): Glyph[] {
   return [...text].map((ch) => {
-    if (!LIVE_CHARS.has(ch)) return { ch, live: false, strokes: [] };
+    // Greyed but producible: every character in Genesis 1 is on the board, it is
+    // only the keys that are untaught at stage 1.
+    if (!LIVE_CHARS.has(ch)) return { ch, live: false, strokes: [], producible: true };
     const key: Key = ch === ` ` ? `<space>` : ch;
-    return { ch, live: true, strokes: [{ key, finger: fingerFor(key, `ansi`) }] };
+    return { ch, live: true, strokes: [{ key, finger: fingerFor(key, `ansi`) }], producible: true };
   });
 }
 
@@ -523,4 +525,86 @@ test(`space is credited to the thumb the player actually uses`, () => {
     const row = reportCard(stats, `ansi`, thumb).fingers.find((r) => r.finger === thumb);
     assert.equal(row?.hits, 8); // tuning-exempt: matches the fixture above
   }
+});
+
+
+// --- gilding on the rail ----------------------------------------------------
+//
+// docs/design/01-illumination.md#gilding-a-mode-for-people-who-already-type.
+// The page gilds itself behind the scribe: a greyed character he has typed is
+// gold, and one he has not is still dim, because it is still untaught.
+
+const DIM = PALETTE_ORDER.indexOf(`dim`);
+
+/** The colour the ribbon drew a given glyph index in. */
+function glyphColour(cmds: readonly DrawCmd[], glyphs: readonly Glyph[], i: number, offset: number): number | null {
+  const x = i * CELL_W + offset;
+  for (const c of cmds) {
+    if (c.op !== `text`) continue;
+    if (c.x === x && c.value === glyphs[i]?.ch) return c.color;
+  }
+  return null;
+}
+
+/** The first greyed, non-space glyph in the ribbon. */
+const FIRST_GREYED = SPACED.findIndex((g) => !g.live && g.ch !== ` `);
+
+test(`the fixture has a greyed character to gild`, () => {
+  assert.ok(FIRST_GREYED >= 0);
+  assert.equal(SPACED[FIRST_GREYED]?.producible, true);
+});
+
+test(`a greyed character behind the cursor is dim normally and gold when gilded`, () => {
+  const cursor = FIRST_GREYED + 1;
+  const { offset } = layoutRail(SPACED, cursor, VIRTUAL_W, TUNING);
+  const rail = createRail(offset);
+
+  // Off: it was never typed, so drawing it as done would credit a keystroke the
+  // player never made.
+  const plain = drawFrame(frame(SPACED, cursor), rail, TUNING);
+  assert.equal(glyphColour(plain, SPACED, FIRST_GREYED, offset), DIM);
+
+  // On: it was typed. Gold is the only feedback that says the extra work landed.
+  const gilded = drawFrame({ ...frame(SPACED, cursor), gilding: true }, rail, TUNING);
+  assert.equal(glyphColour(gilded, SPACED, FIRST_GREYED, offset), GOLD);
+});
+
+test(`a greyed character ahead of the cursor stays dim even while gilding`, () => {
+  // The mode changes what is asked for, not what has been taught -- and showing
+  // an untaught letter as lit is the one thing illumination exists to prevent.
+  const { offset } = layoutRail(SPACED, 0, VIRTUAL_W, TUNING);
+  const cmds = drawFrame({ ...frame(SPACED, 0), gilding: true }, createRail(offset), TUNING);
+  const ahead = SPACED.findIndex((g, i) => i > 0 && !g.live && g.ch !== ` `);
+  assert.ok(ahead > 0);
+  assert.equal(glyphColour(cmds, SPACED, ahead, offset), DIM);
+});
+
+test(`the gild total is in the HUD when gilding, and absent when not`, () => {
+  const rail = createRail(0);
+  const points = 42;   // tuning-exempt: test fixture
+  const on = drawFrame({ ...frame(SPACED, 0), gilding: true, gildPoints: points }, rail, TUNING);
+  const off = drawFrame(frame(SPACED, 0), rail, TUNING);
+  const hud = (cmds: readonly DrawCmd[]): string =>
+    cmds.filter((c): c is Extract<DrawCmd, { op: `text` }> => c.op === `text`)
+      .map((c) => c.value).find((v) => v.startsWith(`WPM `)) ?? ``;
+
+  assert.ok(hud(on).includes(`GILD ${String(points)}`));
+  // A score of zero in a mode with no scoring in it is a number the player
+  // cannot move, so it is not drawn at all.
+  assert.ok(!hud(off).includes(`GILD`));
+});
+
+test(`gilding points the overlay at the character under the cursor, or at nothing`, () => {
+  // A gilded character carries no strokes, so nothing lights. Pointing at the
+  // next live character instead would name a key that is not being asked for,
+  // and pointing at the greyed one would show a beginner where an untaught key
+  // lives -- which is the habit illumination exists to remove.
+  const cmds = drawFrame({ ...frame(SPACED, FIRST_GREYED), gilding: true }, createRail(0), TUNING);
+  assert.equal(highlightedKeyWidth(cmds), 0, `an untaught key was pointed at`);
+  const hint = cmds.some((c) => c.op === `text` && c.value.startsWith(`next: `));
+  assert.equal(hint, false, `the hint named a key the curriculum has not taught`);
+
+  // Off, the same cursor points past the greyed run at the next live key.
+  const plain = drawFrame(frame(SPACED, FIRST_GREYED), createRail(0), TUNING);
+  assert.ok(highlightedKeyWidth(plain) > 0);
 });

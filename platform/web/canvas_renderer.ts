@@ -93,6 +93,9 @@ const STYLES: Readonly<Record<string, TextStyle>> = {
   'rail-done': { font: `17px ${MONO}`, align: 'left', baseline: 'alphabetic' },
   'rail-cursor': { font: `bold 17px ${MONO}`, align: 'left', baseline: 'alphabetic' },
   'rail-error': { font: `bold 17px ${MONO}`, align: 'left', baseline: 'alphabetic' },
+  // A gilded character: greyed by the curriculum, typed anyway. Same metrics as
+  // every other rail glyph -- one 12px cell -- and gold by its palette slot.
+  'rail-gild': { font: `17px ${MONO}`, align: 'left', baseline: 'alphabetic' },
   hud: { font: `bold 11px ${SANS}`, align: 'left', baseline: 'middle' },
   'hud-center': { font: `bold 11px ${SANS}`, align: 'center', baseline: 'middle' },
   'hud-right': { font: `bold 11px ${SANS}`, align: 'right', baseline: 'middle' },

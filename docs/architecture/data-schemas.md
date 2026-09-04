@@ -68,7 +68,7 @@ Browser local storage, exportable to a file. Written by
 `core/progress.ts`.
 
 ```json
-{ "version": 2, "stage": 3, "translation": "WEB", "route": "pilgrimage",
+{ "version": 3, "stage": 3, "translation": "WEB", "route": "pilgrimage",
   "layout": "ansi", "spaceThumb": "rt",
   "position": { "book": "Genesis", "chapter": 1, "unit": 7 },
   "completed": ["Genesis 1"],
@@ -76,7 +76,8 @@ Browser local storage, exportable to a file. Written by
                        "latencies": [340], "confusions": { "s": 4 } } },
   "recent": { "a": [ { "ok": true, "ms": 312 }, { "ok": false, "ms": null } ] },
   "history": [ { "date": "2026-09-03", "stage": 3, "ref": "Genesis 1:1-3",
-                 "wpm": 14.2, "accuracy": 0.97, "promoted": false } ] }
+                 "wpm": 14.2, "accuracy": 0.97, "promoted": false } ],
+  "gilding": false, "gildOffered": false }
 ```
 
 `position` is the bookmark: the translation is `translation`, and `unit` is the
@@ -91,6 +92,15 @@ first bad hour into their accuracy for ever, so the gate they have actually earn
 opens. `recent` is pruned to the new keys on every save and emptied on promotion, which
 is also what keeps it a few kilobytes rather than a few hundred.
 
+`gilding` is the [gilding mode](../design/01-illumination.md#gilding-a-mode-for-people-who-already-type):
+every producible character required, nothing auto-advanced. Off by default. It is a fact
+about the person at the keyboard rather than about the passage, which is why it is stored
+rather than asked once a session. `gildOffered` records that the game has *offered* it, so
+the question is asked once however it was answered — the game never turns the mode on
+itself, and an offer that returns after every good session has stopped being an offer.
+Neither field touches the gate: see
+[ADR 0008](../decisions/0008-gilding-permissive-input.md#why-gilding-must-not-open-the-gate).
+
 `promoted` marks the session that opened the gate. The history view needs it: the
 sessions *after* a promotion are slower, because a new stage lights up more of the page,
 and an unexplained dip in the curve is the single most likely reason a beginner concludes
@@ -104,6 +114,7 @@ not optional.
 |---|---|---|
 | 1 | initial: stage, translation, route, completed, keyStats, history | — |
 | 2 | added `position`, `recent`, `spaceThumb`, and `promoted` on a history entry | every version 1 field is carried across unchanged; the new ones default (position to Genesis 1:1, `recent` to empty, `spaceThumb` to `rt`, `promoted` to false). Nothing is dropped. |
+| 3 | added `gilding` and `gildOffered` | every version 2 field is carried across unchanged — stage, position, `completed`, `keyStats`, `recent` and the whole history. Both new fields default to `false`, which is exactly what a version 2 record meant: the mode did not exist, so it was off and had never been offered. Nothing is dropped. |
 
 `core/progress.ts` defaults every field individually rather than trusting the stored
 blob, so a partially corrupt record loses the corrupt field and keeps the history.

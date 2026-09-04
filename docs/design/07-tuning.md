@@ -47,8 +47,10 @@ first evening a real beginner plays it and something feels wrong.
 | `strike_pose_ms` | 200 | ms | How long the scribe holds the strike pose after felling a monster. |
 | `monster_drop_chance` | 0.20 | probability | Chance a felled monster leaves an ink pot. |
 | `combo_drop_bonus` | 0.20 | probability | Added to that chance at a full combo, scaling linearly from none. Losing the combo only returns the chance to its base; nothing is ever taken away. |
-| `gild_score_per_char` | 2 | points | Awarded per greyed character typed correctly. |
+| `gild_score_per_char` | 2 | points | Awarded per greyed character typed correctly, in [gilding mode](01-illumination.md#gilding-a-mode-for-people-who-already-type). |
 | `gild_page_bonus` | 50 | points | Awarded for a part in which every character was typed. |
+| `gild_offer_wpm` | 60 | wpm | Pace at which the game *offers* gilding. Well above a beginner's ceiling and well below the fluent typist it is for; it only ever opens a dialogue, never a mode. |
+| `gild_offer_sessions` | 3 | sessions | Consecutive sessions at that pace before the offer is made. One fast part is a short verse, not a fluent typist. |
 | `bonus_word_chance` | 0.15 | probability | Chance a verse offers a side-platform bonus word. |
 | `master_volume` | 0.35 | gain | Default output gain. |
 | `audio_default_on` | 0 | boolean | Audio starts muted. Browsers block autoplay and a beginner does not need a surprise. |

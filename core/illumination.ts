@@ -66,8 +66,22 @@ function requiredKeys(ch: string, keySet: ReadonlySet<Key>): readonly Key[] | nu
 }
 
 /**
- * Every stroke a character costs, in striking order, or null when it cannot be
- * typed at this stage at all.
+ * How a character stands against the current stage.
+ *
+ * Three answers, not two, and the third is what gilding turns on. `untaught`
+ * and `unproducible` are both greyed and look identical on the rail, but they
+ * are different facts: a capital at stage 1 is a key the player has not been
+ * taught *yet*, while a curly quote is a character no board makes at any stage.
+ * Illumination treats them the same; gilding cannot, or "every character is
+ * required" becomes a wall at the first em dash in an imported book.
+ */
+type Classification =
+  | { readonly kind: 'live'; readonly strokes: Stroke[] }
+  | { readonly kind: 'untaught' }
+  | { readonly kind: 'unproducible' };
+
+/**
+ * Every stroke a character costs, in striking order, or why it costs none.
  *
  * The shift stroke is the reason this exists. Its key is fixed -- the
  * curriculum teaches one `<shift>` -- but its *finger* depends on the letter:
@@ -79,12 +93,12 @@ function strokesFor(
   keySet: ReadonlySet<Key>,
   layout: KeyboardLayout,
   spaceThumb: Thumb,
-): Stroke[] | null {
+): Classification {
   const required = requiredKeys(ch, keySet);
-  if (required === null) return null;
-  if (!required.every((k) => keySet.has(k))) return null;
+  if (required === null) return { kind: 'unproducible' };
+  if (!required.every((k) => keySet.has(k))) return { kind: 'untaught' };
   const primaryKey = required[required.length - 1];
-  if (primaryKey === undefined) return null;
+  if (primaryKey === undefined) return { kind: 'unproducible' };
 
   const primary: Stroke = { key: primaryKey, finger: fingerFor(primaryKey, layout, spaceThumb) };
   const strokes: Stroke[] = [];
@@ -95,7 +109,7 @@ function strokesFor(
     strokes.push({ key, finger });
   }
   strokes.push(primary);
-  return strokes;
+  return { kind: 'live', strokes };
 }
 
 /**
@@ -131,6 +145,12 @@ export function fingerFor(
  * it costs, modifiers first and the printing key last; a greyed one carries
  * none, because there is nothing the player is being asked to strike.
  *
+ * Each glyph also carries whether the character is producible *at all*. That is
+ * not a statement about the stage and it never affects `live`: it separates the
+ * letter the player has not been taught yet from the one no keyboard makes, so
+ * that gilding can require the first and snap past the second. See
+ * `docs/design/01-illumination.md#gilding-a-mode-for-people-who-already-type`.
+ *
  * @param text   the passage exactly as printed
  * @param keySet everything typable at the current stage, from `keySetFor`
  * @param layout used only to name the finger on live glyphs
@@ -145,11 +165,11 @@ export function classify(
 ): Glyph[] {
   const glyphs: Glyph[] = [];
   for (const ch of text) {
-    const strokes = strokesFor(ch, keySet, layout, spaceThumb);
-    if (strokes === null) {
-      glyphs.push({ ch, live: false, strokes: [] });
+    const classified = strokesFor(ch, keySet, layout, spaceThumb);
+    if (classified.kind === 'live') {
+      glyphs.push({ ch, live: true, strokes: classified.strokes, producible: true });
     } else {
-      glyphs.push({ ch, live: true, strokes });
+      glyphs.push({ ch, live: false, strokes: [], producible: classified.kind === 'untaught' });
     }
   }
   return glyphs;

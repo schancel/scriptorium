@@ -327,3 +327,63 @@ test('layout changes the finger for the keys that actually move', () => {
     assert.equal(fingerFor(key, 'ansi'), fingerFor(key, 'iso'));
   }
 });
+
+
+// --- producible, which is not the same as live ------------------------------
+//
+// Gilding requires every character the player *could* type, so classification
+// has to separate the letter that is untaught from the one no board makes.
+// docs/design/01-illumination.md#gilding-a-mode-for-people-who-already-type
+
+test('a live glyph is always producible, at every stage, over the real sentences', () => {
+  for (const stage of stages) {
+    const keySet = keySetFor(stages, stage.stage);
+    for (const sentence of SENTENCES) {
+      for (const glyph of classify(sentence, keySet, 'ansi')) {
+        if (glyph.live) assert.equal(glyph.producible, true, glyph.ch);
+      }
+    }
+  }
+});
+
+test('an untaught character is producible; one no keyboard makes is not', () => {
+  const stage1 = keySetFor(stages, 1);
+  // `I` needs <shift>, taught at stage 8: greyed here, and gilding must ask for
+  // it. The em dash and the curly quote are on nobody's board at any stage.
+  const glyphs = classify('I—s’', stage1, 'ansi');
+  assert.deepEqual(
+    glyphs.map((g) => [g.ch, g.live, g.producible]),
+    [['I', false, true], ['—', false, false], ['s', true, true], ['’', false, false]],
+  );
+});
+
+test('producibility is a fact about the board, so it never varies by stage', () => {
+  for (const ch of ['—', '’', '…']) {
+    for (const stage of stages) {
+      const glyph = classify(ch, keySetFor(stages, stage.stage), 'ansi')[0];
+      assert.equal(glyph?.producible, false, `${ch} at stage ${String(stage.stage)}`);
+    }
+  }
+  // And a character the board makes stays producible at stage 0, where almost
+  // nothing is taught.
+  for (const ch of ['z', 'Q', '?', '!', '(']) {
+    const glyph = classify(ch, keySetFor(stages, 0), 'ansi')[0];
+    assert.equal(glyph?.producible, true, ch);
+    assert.equal(glyph?.live, false, `${ch} must not be live at stage 0`);
+  }
+});
+
+test('producibility never changes what is live -- the illumination invariant is untouched', () => {
+  for (const stage of stages) {
+    for (const layout of ['ansi', 'iso'] as const) {
+      for (const sentence of SENTENCES) {
+        const glyphs = classify(sentence, keySetFor(stages, stage.stage), layout);
+        for (const glyph of glyphs) {
+          // Every producible-but-greyed glyph still carries no strokes: nothing
+          // is being *asked for*, which is what greyed means.
+          if (!glyph.live) assert.equal(glyph.strokes.length, 0, glyph.ch);
+        }
+      }
+    }
+  }
+});

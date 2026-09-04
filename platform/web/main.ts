@@ -35,7 +35,7 @@ import { createOverlay, type MenuView, type Overlay } from './overlay.js';
 import { loadTuning } from '../../core/tuning.js';
 import { keySetFor, loadStages, stageAt } from '../../core/curriculum.js';
 import { classify } from '../../core/illumination.js';
-import { applyKey, atEnd, createTypingState, score, tick } from '../../core/typing.js';
+import { applyKey, atEnd, createTypingState, gildScore, score, tick } from '../../core/typing.js';
 import { createRail, layoutRail, stepRail } from '../../core/rail.js';
 import {
   VIRTUAL_W, drawFrame, sceneLayout, type FrameState, type SceneCandle, type SceneState,
@@ -45,7 +45,7 @@ import {
   createCloud, createEntity, monstersAt, stepCloud, stepEntities, stepMonsters,
   strikeDurationMs, strikeWord, type Entity,
 } from '../../core/entities.js';
-import { dropsInkPot } from '../../core/items.js';
+import { applyItem, createPlayer, dropsInkPot, type PlayerState } from '../../core/items.js';
 import {
   applyCloudStrike, applyCorrect, applyError, createDamage, isDead, maxHearts,
   restoreHeart,
@@ -75,6 +75,10 @@ import {
   evaluatePromotion,
   promote,
   recordSession,
+  setGilding,
+  setStage,
+  shouldOfferGilding,
+  withGildOffered,
   withPosition,
 } from '../../core/progress.js';
 import {
@@ -135,7 +139,7 @@ const FALLBACK_TUNING = {
     warp_echo_hold_ms: 900, lectio_start_wpm: 180, lectio_ramp_wpm: 20, lectio_max_wpm: 700,
     candle_interval: 3, bonus_word_chance: 0.15, master_volume: 0.35, audio_default_on: 0,
     monster_burst_ms: 320, strike_pose_ms: 200, monster_drop_chance: 0.2, combo_drop_bonus: 0.2,
-    gild_score_per_char: 2, gild_page_bonus: 50,
+    gild_score_per_char: 2, gild_page_bonus: 50, gild_offer_wpm: 60, gild_offer_sessions: 3,
     wpm_chars_per_word: 5, history_max_sessions: 500,
   },
 };
@@ -402,10 +406,18 @@ function buildRibbon(
   return { glyphs, verseAt };
 }
 
-/** First live glyph at or after `from`; `glyphs.length` when there is none. */
-function firstLiveAt(glyphs: readonly Glyph[], from: number): number {
+/**
+ * First glyph the player owes at or after `from`; `glyphs.length` when there is
+ * none.
+ *
+ * In gilding mode that is the first *producible* glyph rather than the first
+ * live one, or resuming mid-part would drop the cursor past the untaught
+ * characters the mode exists to ask for.
+ */
+function firstOwedAt(glyphs: readonly Glyph[], from: number, gilding: boolean): number {
   for (let i = Math.max(0, from); i < glyphs.length; i += 1) {
-    if (glyphs[i]?.live === true) return i;
+    const g = glyphs[i];
+    if (g !== undefined && (gilding ? g.producible : g.live)) return i;
   }
   return glyphs.length;
 }
@@ -429,6 +441,8 @@ interface Level {
   readonly verseAt: number[];
   readonly keySet: readonly Key[];
   readonly stage: number;
+  /** Whether this part was built in gilding mode; fixed for its lifetime. */
+  readonly gilding: boolean;
   readonly layout: KeyboardLayout;
   readonly spaceThumb: Thumb;
   typing: TypingState;
@@ -519,6 +533,7 @@ function frameFor(
   damage: DamageState,
   cloud: BlotCloud,
   tuning: Tuning,
+  gildPoints: number,
 ): FrameState {
   const candle = `${String(level.chunkIndex + 1)}/${String(level.chunks.length)}`;
   return {
@@ -533,6 +548,8 @@ function frameFor(
     layout: level.layout,
     spaceThumb: level.spaceThumb,
     keySet: level.keySet,
+    gilding: level.gilding,
+    gildPoints,
     scene: sceneFor(level, damage, cloud, tuning),
   };
 }
@@ -614,6 +631,34 @@ async function boot(): Promise<void> {
    */
   let cloudEnabled = true;
 
+  // --- gilding's score ------------------------------------------------------
+  //
+  // The first points in the game, and they belong to the level rather than to
+  // the part: gold leaf multiplies "for the rest of the level", so both the
+  // running total and the multiplier reset when a new chapter is opened and at
+  // no other time.
+  //
+  // `gildBanked` holds the parts already finished. The part in progress is
+  // added at draw time, so the number moves as the player gilds -- except while
+  // the report card is up, when it has already been banked and adding it again
+  // would count it twice.
+  let gildBanked = 0;
+  /**
+   * The gold leaf this level is carrying.
+   *
+   * A whole `PlayerState` for one field, deliberately: `applyItem` is the one
+   * implementation of what gold leaf *does*, and a second copy of "add one to
+   * the multiplier" here would be a rule living in the platform. Only
+   * `scoreMultiplier` is read off it.
+   */
+  let leaf: PlayerState = createPlayer(damage);
+
+  /** Points this level has earned, including the part still being typed. */
+  function gildPoints(): number {
+    const inProgress = level.reporting ? 0 : gildScore(level.typing, tuning).points;
+    return gildBanked + inProgress * leaf.scoreMultiplier;
+  }
+
   function keySetAt(stage: number): ReadonlySet<Key> {
     return stages.length === 0 ? new Set(FALLBACK_KEY_SET) : keySetFor(stages, stage);
   }
@@ -653,8 +698,10 @@ async function boot(): Promise<void> {
     // Resume on the verse the player left, not at the top of the chunk: the
     // chunk is the checkpoint, but there is no reason to make them retype the
     // verses they already finished inside it.
-    const resumeAt = firstLiveAt(glyphs, offsetOfUnit(verseAt, Math.max(chunk.first, at.unit)));
-    const base = createTypingState(glyphs);
+    const resumeAt = firstOwedAt(
+      glyphs, offsetOfUnit(verseAt, Math.max(chunk.first, at.unit)), progress.gilding,
+    );
+    const base = createTypingState(glyphs, progress.gilding);
     const typing = resumeAt <= base.cursor ? base : { ...base, cursor: resumeAt };
 
     const theme = themeFor(scenes, book.title, chapter);
@@ -676,6 +723,7 @@ async function boot(): Promise<void> {
       verseAt,
       keySet: [...keySet],
       stage: progress.stage,
+      gilding: progress.gilding,
       layout: progress.layout,
       spaceThumb: progress.spaceThumb,
       typing,
@@ -774,6 +822,24 @@ async function boot(): Promise<void> {
     const final = score(level.typing, tuning);
     const lastChunk = level.chunkIndex === level.chunks.length - 1;
 
+    // Bank what this part gilded, then take the gold leaf a fully gilded page
+    // earns -- in that order, so the leaf multiplies the *rest* of the level
+    // rather than the page that won it.
+    const gild = gildScore(level.typing, tuning);
+    gildBanked += gild.points * leaf.scoreMultiplier;
+    if (gild.complete) {
+      leaf = applyItem(
+        leaf,
+        'gold_leaf',
+        {
+          ref: `${level.bookTitle} ${String(level.chapter)}`,
+          unit: level.chunk.first,
+          unitCount: level.chunks.length,
+        },
+        tuning,
+      ).player;
+    }
+
     progress = recordSession(
       progress,
       {
@@ -794,14 +860,42 @@ async function boot(): Promise<void> {
     const promotion = stages.length === 0 ? null : evaluatePromotion(progress, stages, tuning);
     if (promotion !== null) {
       progress = promote(progress, promotion.to);
-      saveProgress(progress);
+    }
+    // Asked after the session is folded in, and never acted on here: this only
+    // decides whether to *ask*. The mode is turned on by `answerGildOffer`,
+    // which is the player's answer and nothing else. See
+    // docs/decisions/0008-gilding-permissive-input.md.
+    const offering = shouldOfferGilding(progress, tuning);
+    saveProgress(progress);
+
+    if (promotion !== null) {
       detachTyping();
       // The report card is already on the canvas behind this; dismissing the
-      // notice hands the keyboard back and reveals it.
-      overlay.showPromotion(promotion, attachTyping);
+      // notice hands the keyboard back and reveals it. A gilding offer waiting
+      // behind it takes its turn rather than being dropped -- or being stacked
+      // on top of the promotion, which would be two panels at once.
+      overlay.showPromotion(promotion, offering ? offerGilding : attachTyping);
       return;
     }
-    saveProgress(progress);
+    if (offering) {
+      detachTyping();
+      offerGilding();
+    }
+  }
+
+  /**
+   * Offer the mode. Never turn it on.
+   *
+   * Both answers are remembered, so the question is asked once. "Not now" is a
+   * real answer -- the menu still has the switch -- and the alternative, asking
+   * again after every good session, is imposition wearing an offer's clothes.
+   */
+  function offerGilding(): void {
+    overlay.showGildOffer((accept) => {
+      progress = withGildOffered(setGilding(progress, accept));
+      saveProgress(progress);
+      attachTyping();
+    });
   }
 
   // --- navigation -----------------------------------------------------------
@@ -818,6 +912,13 @@ async function boot(): Promise<void> {
     loading = true;
     void buildLevel(at)
       .then((next) => {
+        // Gold leaf lasts "for the rest of the level", and a level is a chapter.
+        // Crossing into another one resets both the multiplier and the running
+        // gild total; moving between parts of the same chapter does not.
+        if (next.bookTitle !== level.bookTitle || next.chapter !== level.chapter) {
+          gildBanked = 0;
+          leaf = createPlayer(damage);
+        }
         level = next;
         progress = withPosition(progress, {
           book: next.bookTitle,
@@ -841,6 +942,9 @@ async function boot(): Promise<void> {
   function menuView(): MenuView {
     const stage = stages.length === 0 ? null : stageAt(stages, progress.stage);
     return {
+      stage: progress.stage,
+      stages: stages.map((s) => ({ stage: s.stage, description: s.description })),
+      gilding: progress.gilding,
       where:
         `${level.bookTitle} ${String(level.chapter)}:${String(level.chunk.first)}-` +
         `${String(level.chunk.last)} · ${progress.translation} · part ` +
@@ -890,6 +994,47 @@ async function boot(): Promise<void> {
       saveProgress(progress);
       // The ribbon carries a finger per glyph, so it has to be rebuilt; the
       // player keeps their place.
+      goTo(
+        { book: level.bookTitle, chapter: level.chapter, unit: verseUnder(level) },
+        (message) => {
+          overlay.showError(message);
+        },
+        false,
+      );
+      overlay.openMenu(menuView());
+    },
+    /**
+     * The player set their stage by hand.
+     *
+     * The honest route for someone who already types, and the reason gilding is
+     * allowed to leave the mastery gate alone: skipping ahead is one control
+     * the player operates, not a hidden consequence of a difficulty mode.
+     * See docs/decisions/0008-gilding-permissive-input.md.
+     */
+    setStage: (stage) => {
+      if (stages.length === 0) return;
+      progress = setStage(progress, stage, stages);
+      saveProgress(progress);
+      // A stage change relights the page, so the ribbon has to be reclassified.
+      // The player keeps their verse.
+      goTo(
+        { book: level.bookTitle, chapter: level.chapter, unit: verseUnder(level) },
+        (message) => {
+          overlay.showError(message);
+        },
+        false,
+      );
+      overlay.openMenu(menuView());
+    },
+    /**
+     * The player asked for gilding on or off. The only other caller is their
+     * answer to the offer; nothing in the game turns it on by itself.
+     */
+    setGilding: (on) => {
+      progress = setGilding(progress, on);
+      saveProgress(progress);
+      // The typing state carries the mode, so the part has to be rebuilt for it
+      // to take effect. Same treatment as a keyboard change: keep the verse.
       goTo(
         { book: level.bookTitle, chapter: level.chapter, unit: verseUnder(level) },
         (message) => {
@@ -1165,7 +1310,9 @@ async function boot(): Promise<void> {
 
     const target = layoutRail(level.glyphs, level.typing.cursor, VIRTUAL_W, tuning).offset;
     level.rail = stepRail(level.rail, target, tuning);
-    renderer.render(drawFrame(frameFor(level, damage, cloud, tuning), level.rail, tuning));
+    renderer.render(
+      drawFrame(frameFor(level, damage, cloud, tuning, gildPoints()), level.rail, tuning),
+    );
     stepAudio(live ? dtMs : 0);
     requestAnimationFrame(loop);
   };

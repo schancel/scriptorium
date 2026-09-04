@@ -67,6 +67,20 @@ capital into the median twice. So at stage 8 the accuracy half of the gate is ca
 largely by shifting, which is the point — a stage-8 player who never shifts correctly
 cannot pass by typing colons well. See [stats](08-stats.md#definitions).
 
+**The gate counts only this stage's new keys, in both modes.** With
+[gilding](01-illumination.md#gilding-a-mode-for-people-who-already-type) on, a player types
+the untaught characters too -- and none of it reaches the gate, because a gilded character
+records no key statistics at all. Counting them would promote a fluent typist through a
+curriculum they never did, and the stage numbers would stop measuring what they claim for
+the beginner they exist to serve. See
+[ADR 0008](../decisions/0008-gilding-permissive-input.md#why-gilding-must-not-open-the-gate).
+
+**The menu sets the stage directly.** That is the honest route for someone who already
+types, and it is what makes leaving the gate alone affordable: skipping ahead is one
+control the player operates out loud rather than a hidden consequence of a difficulty
+mode. Setting it clears the trailing window -- which held the old stage's new keys -- and
+touches nothing else: not the history, not the lifetime totals, not the bookmark.
+
 Both conditions are required, and the second one is the important one. Accuracy alone can
 be satisfied by typing slowly and looking down — which is exactly the habit being
 replaced. **Slow-but-accurate is the hunt-and-peck signature and must not pass the gate.**

@@ -170,6 +170,37 @@
     </div>
   </div>
 
+  <!-- The gilding offer. Offered after a run of fast sessions, asked once, and
+       answered either way -- the game never turns the mode on by itself.
+       ADR 0008. -->
+  <div class="panel" id="panel-gild" hidden>
+    <h2>Type every letter?</h2>
+    <p class="lead">
+      You have been typing fast enough that the greyed-out letters are probably
+      getting in your way rather than out of it.
+    </p>
+    <p>
+      <b>Gilding</b> turns them back on. Every character in the passage is
+      required, nothing skips ahead on its own, and the letters your stage has
+      not taught yet turn gold as you type them. Fill a whole part and you earn
+      gold leaf.
+    </p>
+    <p class="dim">
+      It will not move your stage: the mastery gate still measures only the keys
+      your stage teaches, in either mode. If you want to skip ahead, set your
+      stage in the menu — that is the direct way, and it is one control instead
+      of a side effect.
+    </p>
+    <p class="dim">
+      Either answer is fine and this is the only time you will be asked. The
+      menu has the switch from now on.
+    </p>
+    <div class="row">
+      <button id="gild-yes" class="primary" type="button">Turn gilding on</button>
+      <button id="gild-no" type="button">No, leave it as it is</button>
+    </div>
+  </div>
+
   <!-- The menu: where you are, where else you could be, and the way out. -->
   <div class="panel" id="panel-menu" hidden>
     <p class="panel-hint"><b>Esc</b> closes this and picks up where you left off &middot; changes save as you make them</p>
@@ -209,6 +240,29 @@
     <p class="dim">
       The overlay must match the board under your hands, and the report card has
       a row for the thumb you actually use.
+    </p>
+
+    <h3>Your stage</h3>
+    <div class="row">
+      <label>Stage <select id="menu-stage-select"></select></label>
+      <label>Type every letter
+        <select id="menu-gilding">
+          <option value="off">Off</option>
+          <option value="on">On — gilding</option>
+        </select>
+      </label>
+    </div>
+    <p class="dim">
+      The stage decides which letters are lit. Setting it yourself is the honest
+      way to skip ahead if you already type — nothing else moves it except
+      earning it.
+    </p>
+    <p class="dim">
+      <b>Gilding</b> is for people who already type. With it on, every character
+      is required and nothing skips ahead on its own; the letters your stage has
+      not taught turn gold as you type them, and filling a whole part earns gold
+      leaf. It does not move your stage — the mastery gate measures only the
+      keys your stage teaches, in either mode.
     </p>
 
     <!-- The one pressure in the game, and the switch that turns it off.
