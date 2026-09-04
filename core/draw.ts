@@ -349,11 +349,17 @@ export interface FrameState {
    */
   readonly gilding?: boolean;
   /**
-   * Points earned by gilding, cumulative over the level. Drawn in the HUD when
-   * gilding is on and omitted entirely when it is off -- a score of zero in a
-   * mode with no scoring in it would be a number the player cannot move.
+   * Points earned in this level: gilding, plus what the items were worth.
+   *
+   * Drawn in the HUD whenever there is a score to draw -- gilding on, or points
+   * actually earned -- and omitted at zero with the mode off, because a number
+   * nobody can move is not worth the room. It was gilding-only until an ink pot
+   * taken on full hearts started scoring
+   * (docs/design/03-pacing.md#an-ink-pot-at-full-hearts-must-still-be-worth-something),
+   * at which point a beginner could earn points the HUD would not show him --
+   * which is the same silence the change was made to end.
    */
-  readonly gildPoints?: number;
+  readonly points?: number;
   /**
    * The world between the HUD and the rail: theme, scribe, monsters, cloud and
    * hearts.
@@ -1574,12 +1580,16 @@ function pushHud(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
     op: 'text', value: state.ref, x: refX, y: M.hudTextY,
     style: 'hud', color: pal('hud'),
   });
-  // The gild total joins the centre line rather than taking a corner of its own:
-  // it is a score for the same stretch of typing the WPM and accuracy describe,
-  // and the corners are already the player's health and their stage.
-  const gild = state.gilding === true
-    ? `    GILD ${Math.round(state.gildPoints ?? 0)}`
-    : '';
+  // The score joins the centre line rather than taking a corner of its own: it is
+  // a score for the same stretch of typing the WPM and accuracy describe, and the
+  // corners are already the player's health and their stage.
+  //
+  // Shown while gilding, which always has a score to show, and otherwise only
+  // once something has actually been earned -- an ink pot taken on full hearts.
+  // Zero with nothing scoring is left off: a number the player cannot move is
+  // one more thing on a screen whose whole job is to hold his eye on one place.
+  const points = Math.round(state.points ?? 0);
+  const score = state.gilding === true || points > 0 ? `    SCORE ${points}` : '';
   // Reading mode reports the pace it is flowing at and nothing else. An accuracy
   // in a mode with no keystrokes in it would be a number the player cannot move,
   // and a WPM would read as a score for something he is not doing.
@@ -1587,7 +1597,7 @@ function pushHud(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
     op: 'text',
     value: state.mode === 'lectio'
       ? `READING    ${Math.round(state.score.wpm)} wpm`
-      : `WPM ${Math.round(state.score.wpm)}    ACC ${pct(state.score.accuracy)}%${gild}`,
+      : `WPM ${Math.round(state.score.wpm)}    ACC ${pct(state.score.accuracy)}%${score}`,
     x: M.vw / 2, y: M.hudTextY, style: 'hud-center', color: pal('gold'),
   });
   if (scene !== undefined) pushSmudgeMeter(cmds, scene, tuning);

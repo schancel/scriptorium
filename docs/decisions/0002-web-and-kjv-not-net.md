@@ -18,8 +18,21 @@ as an unlockable hard mode. Both are public domain.
   repository's licensing.
 - WEB is modern English with contemporary spelling and punctuation, which suits the
   curriculum — a beginner does not need `-eth` endings while learning home row.
-- KJV becomes a genuine difficulty axis rather than a gimmick: archaic morphology and
-  heavier comma density make it measurably harder to type.
+- KJV becomes a genuine difficulty axis rather than a gimmick: archaic morphology makes it
+  measurably harder to type. Measured over both shipped texts, one KJV word in 29 carries an
+  archaic ending or pronoun against one in 737 for WEB, it has three times the colons and
+  semicolons, and its sentences run half as long again.
+
+  This bullet originally also claimed *heavier comma density*, and that is not true of the
+  texts we ship: both sit at 8.8 commas per 100 words. The claim was never measured. It is
+  corrected rather than deleted because the surrounding decision rests on the difficulty
+  being real, and it is — just not for that reason. The game must not assert something its
+  own data does not support, and the menu copy quotes the measured figures.
+
+- How the difficulty step is *presented* is
+  [the route](../design/04-route.md#two-texts-and-the-second-act): a section of its own in
+  the menu, with the reason. Two proper nouns in a dropdown present a difficulty step as a
+  preference about wording.
 - Shipping two translations means [warp echo phrases](../design/04-route.md#edges) must be
   verified against both, since wording differs. This is checked.
 

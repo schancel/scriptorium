@@ -183,9 +183,11 @@ is untouched by the mode.
   Pointing at the next live character would name a key that is not being asked for, and
   pointing at the greyed one would show a beginner where an untaught key lives -- which is
   the habit this whole mechanic exists to remove.
-- The HUD carries a **gild total** beside WPM and accuracy, and carries it only while the
-  mode is on: a score of zero in a mode with no scoring in it is a number the player
-  cannot move.
+- The HUD carries the **score** beside WPM and accuracy — the gild total is the bulk of it
+  in this mode — and carries it whenever the player has one. It is absent at zero: a number
+  nobody can move is not worth the room. It is no longer gilding-only, because an
+  [ink pot at full hearts](03-pacing.md#an-ink-pot-at-full-hearts-must-still-be-worth-something)
+  scores too, and points paid into a counter the player cannot see are not paid at all.
 
 ### Being offered it
 

@@ -130,10 +130,42 @@ typing that scrubs a full smudge meter back to a clean page, so top tempo means 
 the player can feel, and it moves on its own if either smudge row is ever retuned.
 
 Besides the music there is a short vocabulary of cues — `error`, `smudge_full`,
-`heart_lost`, `cloud`, `candle`, `promotion`, `warp` — emitted as `sfx` events for the
-platform to realise. There is deliberately **no per-keystroke click**. A tutor that
-clatters on every key trains the player to listen for the sound instead of watching the
-rail, and holding the eye still is the one thing the rail exists to do.
+`heart_lost`, `cloud`, `candle`, `stomp`, `ink`, `promotion`, `warp` — emitted as `sfx`
+events for the platform to realise. There is deliberately **no per-keystroke click**. A
+tutor that clatters on every key trains the player to listen for the sound instead of
+watching the rail, and holding the eye still is the one thing the rail exists to do.
+
+`core/sound.ts` names the cues and `platform/web/web_audio.ts` gives each one a voice, and
+the two halves have to be edited together: the platform ignores a cue id it has no entry
+for, so a cue named in core and unrealised in the platform is a field nobody keeps. It
+would fire, silently, for ever.
+
+### The two strikes
+
+The pacing doc gives each enemy [its own verb](03-pacing.md#defeating-a-monster-must-read-as-an-action)
+— a skeleton is stomped, a bat is inked — and for a while both rang one `defeat` cue. Two
+things the player can plainly see the difference between sounded identical, which is the
+audio quietly contradicting the picture.
+
+So there are two cues, named after the verbs, and `StrikeVerb` and the cue ids are the
+same two words: the platform passes the verb straight through rather than looking it up,
+and there is no table in which the two could come to disagree.
+
+| cue | reads as | voice |
+|---|---|---|
+| `stomp` | weight landing | Low pulse at 50% duty — the full, hollow square, the heaviest timbre the chip has. The arp *descends* and makes exactly one pass before sitting on the root for the last third of the note; that held root is the landing. |
+| `ink` | something thrown, bursting | High pulse at 12.5% duty — thin and nasal, which is what a small hard object sounds like here. The arp climbs in stacked fourths and then drops back on its last step: the arc, then the burst spreading rather than continuing to rise. |
+
+Both stay in the family the `candle` and the old `defeat` cue established — an
+arpeggiated pulse voice, short, over before the next word — because they are the same
+kind of news at different weights, and the game has to keep sounding like one instrument.
+The `stomp` keeps the melody channel the `defeat` cue used; the `ink` is on `pulse2`, so a
+stomp and a throw landing on the same keystroke are both heard rather than one cutting the
+other off a single voice.
+
+Both are the only cues whose weight the combo moves, for the reason the `defeat` cue's did:
+felling a monster on a long clean run should sound like it. Neither ever falls below its
+own resting velocity, so breaking a combo quietens nothing.
 
 Audio starts muted (`audio_default_on`). Browsers block autoplay, and a beginner
 concentrating hard does not need a surprise fanfare.

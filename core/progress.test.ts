@@ -20,6 +20,7 @@ import {
   promote,
   recordSession,
   replayFirstRun,
+  setCloudEnabled,
   setGilding,
   setStage,
   shouldOfferGilding,
@@ -146,6 +147,7 @@ test('a version 1 record keeps everything it had and gains a position', () => {
   // having explained it, so a stored record defaults to "already done".
   assert.equal(migrated.firstRun, false, 'a returning player was shown the opening screen');
   assert.deepEqual([...migrated.notesSeen], [...NOTE_ORDER]);
+  assert.equal(migrated.cloudEnabled, true, 'a migration disarmed the only pressure in the game');
 });
 
 test('a record round-trips through JSON unchanged', () => {
@@ -350,6 +352,31 @@ test('a version 2 record migrates with its history and statistics intact', () =>
   assert.equal(migrated.gildOffered, false);
   assert.equal(migrated.firstRun, false);
   assert.deepEqual([...migrated.notesSeen], [...NOTE_ORDER]);
+  // The cloud was armed in every session that record ever had, because the
+  // switch did not survive a reload. Defaulting it off would take the game's
+  // only pressure away from a player who never asked for that.
+  assert.equal(migrated.cloudEnabled, true);
+});
+
+test('the blot-cloud switch survives a reload, and moves nothing else', () => {
+  // ADR 0004 requires the switch. Held for the session, it came back armed at
+  // every reload, so the player who wanted it off had to find it again every
+  // evening -- which is the same as not having it.
+  const before = play(withPosition(DEFAULT_PROGRESS, SOMEWHERE), stat(perKey, 1, fastMs));
+  assert.equal(before.cloudEnabled, true, 'a new record must arrive with the threat armed');
+
+  const off = setCloudEnabled(before, false);
+  assert.equal(off.cloudEnabled, false);
+  assert.deepEqual({ ...off, cloudEnabled: before.cloudEnabled }, before,
+    'disarming the cloud moved something other than the cloud');
+
+  const reloaded = migrate(JSON.parse(JSON.stringify(off)) as unknown);
+  assert.equal(reloaded.cloudEnabled, false, 'the reload re-armed a threat the player turned off');
+  assert.deepEqual(reloaded, off, 'the record did not round-trip');
+
+  // And back on again, the same way.
+  const on = migrate(JSON.parse(JSON.stringify(setCloudEnabled(off, true))) as unknown);
+  assert.equal(on.cloudEnabled, true);
 });
 
 test('the gilding mode survives a reload', () => {

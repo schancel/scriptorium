@@ -3,7 +3,7 @@
     {
       "id": "ink_pot",
       "name": "Ink pot",
-      "effect": "Restores one heart",
+      "effect": "Restores one heart, or `ink_pot_points` when hearts are already full",
       "source": "Dropped for a clean verse streak, or hidden on side platforms"
     },
     {

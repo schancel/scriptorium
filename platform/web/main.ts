@@ -68,13 +68,14 @@ import {
   beginStrike, createCloud, createEntity, monstersAt, stepCloud, stepEntities, stepMonsters,
   stepStrikes, strikeReachPx, strikeWord, type Entity, type Strike,
 } from '../../core/entities.js';
-import { applyItem, createPlayer, dropsInkPot, type PlayerState } from '../../core/items.js';
+import {
+  applyItem, createPlayer, dropsInkPot, type PickupSite, type PlayerState,
+} from '../../core/items.js';
 import {
   createCoach, crossedGreyed, noteText, onOwedSpace, stepCoach, type CoachState,
 } from '../../core/onboarding.js';
 import {
   applyCloudStrike, applyCorrect, applyError, createDamage, isDead, maxHearts,
-  restoreHeart,
 } from '../../core/damage.js';
 import { draws, seedFrom } from '../../core/rng.js';
 import {
@@ -104,6 +105,7 @@ import {
   promote,
   recordSession,
   replayFirstRun,
+  setCloudEnabled,
   setGilding,
   setStage,
   shouldOfferGilding,
@@ -724,7 +726,7 @@ function frameFor(
   damage: DamageState,
   cloud: BlotCloud,
   tuning: Tuning,
-  gildPoints: number,
+  points: number,
   note: string | null,
   doorway: string | null,
   report: ReportMemory,
@@ -743,7 +745,7 @@ function frameFor(
     spaceThumb: level.spaceThumb,
     keySet: level.keySet,
     gilding: level.gilding,
-    gildPoints,
+    points,
     // The record's memory, not the part's. The card reads the hands over every
     // part the player has typed -- a hundred and fifty keystrokes spread over
     // nine fingers is noise, and nine means built from it would be a diagnosis
@@ -854,44 +856,56 @@ async function boot(): Promise<void> {
   // not the passage's: finishing a part must not quietly hand back a heart.
   let damage: DamageState = createDamage(tuning);
   let cloud: BlotCloud = createCloud();
-  /**
-   * Whether the blot-cloud is armed.
-   *
-   * ADR 0004 requires this switch to exist and to stay, and `stepCloud` has
-   * always taken it -- but it was hard-wired true here, so the switch the ADR
-   * describes was reachable from nowhere. It is a menu control now. It lives for
-   * the session rather than in the progress record, because persisting it means
-   * a field in `core/progress.ts` and a migration, and the ADR asks for a way to
-   * turn the threat off rather than for a remembered preference.
-   */
-  let cloudEnabled = true;
+  // Whether the blot-cloud is armed is `progress.cloudEnabled` and is read
+  // straight off the record wherever it is needed. It was a session variable
+  // here, which meant the switch ADR 0004 requires came back on at every reload
+  // -- so the player who most needed it turned off had to find it again every
+  // evening, and the game quietly overruled him in between.
 
-  // --- gilding's score ------------------------------------------------------
+  // --- the level's score ----------------------------------------------------
   //
-  // The first points in the game, and they belong to the level rather than to
-  // the part: gold leaf multiplies "for the rest of the level", so both the
-  // running total and the multiplier reset when a new chapter is opened and at
-  // no other time.
+  // The points belong to the level rather than to the part: gold leaf multiplies
+  // "for the rest of the level", so the running total and the multiplier both
+  // reset when a new chapter is opened and at no other time.
   //
-  // `gildBanked` holds the parts already finished. The part in progress is
-  // added at draw time, so the number moves as the player gilds -- except while
-  // the report card is up, when it has already been banked and adding it again
-  // would count it twice.
+  // `gildBanked` holds the gilding earned by the parts already finished. The
+  // part in progress is added at draw time, so the number moves as the player
+  // gilds -- except while the report card is up, when it has already been banked
+  // and adding it again would count it twice.
   let gildBanked = 0;
   /**
-   * The gold leaf this level is carrying.
+   * The player, as this level has him: the gold leaf he is carrying and what the
+   * items he has picked up were worth.
    *
-   * A whole `PlayerState` for one field, deliberately: `applyItem` is the one
-   * implementation of what gold leaf *does*, and a second copy of "add one to
-   * the multiplier" here would be a rule living in the platform. Only
-   * `scoreMultiplier` is read off it.
+   * A whole `PlayerState` deliberately, and it is grown rather than duplicated:
+   * `applyItem` is the one implementation of what an item *does*, so a copy of
+   * "add one to the multiplier" or "a pot on full hearts is worth points" here
+   * would be a rule living in the platform. `damage` is the player's and outlives
+   * any one level, so it is held separately and handed to `applyItem` on the way
+   * in; only `scoreMultiplier` and `score` are read back off this.
    */
   let leaf: PlayerState = createPlayer(damage);
 
+  /**
+   * Where a pickup happened.
+   *
+   * Only a candle and a wax seal read any of it, and neither is dropped by a
+   * monster -- but `applyItem` takes one for every item, and one definition here
+   * is what stops the platform being the place an item quietly works differently
+   * depending on which call site found it.
+   */
+  function pickupSite(): PickupSite {
+    return {
+      ref: `${level.bookTitle} ${String(level.chapter)}`,
+      unit: level.chunk.first,
+      unitCount: level.chunks.length,
+    };
+  }
+
   /** Points this level has earned, including the part still being typed. */
-  function gildPoints(): number {
+  function levelScore(): number {
     const inProgress = level.reporting ? 0 : gildScore(level.typing, tuning).points;
-    return gildBanked + inProgress * leaf.scoreMultiplier;
+    return gildBanked + inProgress * leaf.scoreMultiplier + leaf.score;
   }
 
   function keySetAt(stage: number): ReadonlySet<Key> {
@@ -1166,16 +1180,7 @@ async function boot(): Promise<void> {
     const gild = gildScore(level.typing, tuning);
     gildBanked += gild.points * leaf.scoreMultiplier;
     if (gild.complete) {
-      leaf = applyItem(
-        leaf,
-        'gold_leaf',
-        {
-          ref: `${level.bookTitle} ${String(level.chapter)}`,
-          unit: level.chunk.first,
-          unitCount: level.chunks.length,
-        },
-        tuning,
-      ).player;
+      leaf = applyItem(leaf, 'gold_leaf', pickupSite(), tuning).player;
     }
 
     progress = recordSession(
@@ -1551,7 +1556,7 @@ async function boot(): Promise<void> {
         spaceThumb: level.spaceThumb,
         keySet: level.keySet,
         gilding: level.gilding,
-        gildPoints: gildPoints(),
+        points: levelScore(),
         scene: w.fromScene,
         notice: noticeLines(),
         warp: view,
@@ -1830,6 +1835,7 @@ async function boot(): Promise<void> {
 
   function menuView(): MenuView {
     const stage = stages.length === 0 ? null : stageAt(stages, progress.stage);
+    const last = stages[stages.length - 1];
     return {
       stage: progress.stage,
       stages: stages.map((s) => ({ stage: s.stage, description: s.description })),
@@ -1847,7 +1853,11 @@ async function boot(): Promise<void> {
       chapter: level.chapter,
       layout: progress.layout,
       spaceThumb: progress.spaceThumb,
-      cloudEnabled,
+      cloudEnabled: progress.cloudEnabled,
+      // The last stage the curriculum has, if it loaded. Said, never enforced:
+      // the second translation is offered from the first evening, and locking it
+      // behind this would make it invisible again.
+      curriculumFinished: last !== undefined && progress.stage >= last.stage,
       history: progress.history,
     };
   }
@@ -1927,18 +1937,48 @@ async function boot(): Promise<void> {
         hereOptions(),
       );
     },
-    jump: (edition, book, chapter) => {
+    jump: (book, chapter) => {
       // Going somewhere else on purpose is leaving the room, not stepping out of
       // it: the level it interrupted is being abandoned too. Keeping the frame
       // would owe the player a journey back that nothing will ever make.
       returnStack = [];
-      const previous = progress.translation;
-      progress = { ...progress, translation: edition };
       goTo({ book, chapter, unit: 1 }, (message) => {
-        progress = { ...progress, translation: previous };
         overlay.openMenu(menuView());
         overlay.showError(message);
       });
+    },
+    /**
+     * The player chose which translation to type.
+     *
+     * A difficulty step said out loud, not a preference about wording -- see
+     * docs/design/04-route.md#two-texts-and-the-second-act. It rebuilds the part
+     * in place, keeping the verse, because the two texts are versified alike and
+     * being thrown back to the top of the chapter for changing the prose would
+     * be a cost the choice does not carry.
+     *
+     * Nothing about it touches the stage, the trailing window or the gate. The
+     * same keys are lit in either text and the same accuracy is demanded of them;
+     * a translation that could open a gate would be a way to be promoted for
+     * typing different words rather than for typing the same ones better.
+     */
+    setEdition: (edition) => {
+      if (edition === progress.translation) return;
+      const previous = progress.translation;
+      progress = { ...progress, translation: edition };
+      goTo(
+        { book: level.bookTitle, chapter: level.chapter, unit: verseUnder(level) },
+        (message) => {
+          // The other text has no file for this book. Put the record back rather
+          // than leaving the menu claiming an edition the game is not typing.
+          progress = { ...progress, translation: previous };
+          saveProgress(progress);
+          overlay.openMenu(menuView());
+          overlay.showError(message);
+        },
+        false,
+        hereOptions(),
+      );
+      overlay.openMenu(menuView());
     },
     setKeyboard: (layout, spaceThumb) => {
       progress = { ...progress, layout, spaceThumb };
@@ -1999,7 +2039,8 @@ async function boot(): Promise<void> {
       overlay.openMenu(menuView());
     },
     setCloud: (enabled) => {
-      cloudEnabled = enabled;
+      progress = setCloudEnabled(progress, enabled);
+      saveProgress(progress);
       // Disarmed mid-telegraph, it goes away at once rather than finishing the
       // approach it was already making. A switch that let one last strike
       // through would read as not having worked.
@@ -2201,15 +2242,34 @@ async function boot(): Promise<void> {
         // Granted as it is dropped rather than left lying to be collected. A
         // pickup that could be walked past would be a way to lose something by
         // being slow, and that is the one thing this game does not have.
-        damage = restoreHeart(damage, tuning);
+        //
+        // Through `applyItem`, which is the one place that knows what a pot is
+        // worth. It was `restoreHeart` called directly here, which is how a pot
+        // taken on full hearts came to do nothing at all: the cap swallowed it
+        // and the platform had no idea. The pot is worth points instead now,
+        // and the rule lives in core where the doc can reach it.
+        const pot = applyItem({ ...leaf, damage }, 'ink_pot', pickupSite(), tuning);
+        leaf = pot.player;
+        damage = pot.player.damage;
       }
       const struck = strikeWord(level.monsters, word, drops);
       level.monsters = struck.entities;
       // One blow per monster felled, each with the verb its kind is felled by: a
       // skeleton is stomped and a bat is inked. Appended rather than replacing
       // whatever was already playing -- see the field's comment.
-      for (const felled of struck.defeated) level.strikes.push(beginStrike(felled));
-      cues.push('defeat');
+      //
+      // And one cue per blow, named by that same verb. `StrikeVerb` and the two
+      // strike cues in `core/sound.ts` are the same two words on purpose: the
+      // verb is passed straight through rather than looked up, so the noise the
+      // player hears cannot come to disagree with the blow he is watching. Both
+      // rang a single `defeat` cue until now, which told the ear the stomp and
+      // the throw were the same event when the whole point of the pair is that
+      // they are not.
+      for (const felled of struck.defeated) {
+        const strike = beginStrike(felled);
+        level.strikes.push(strike);
+        cues.push(strike.verb);
+      }
     }
   }
 
@@ -2277,7 +2337,7 @@ async function boot(): Promise<void> {
     const telegraphing = cloud.phase !== 'absent';
     const step = stepCloud(
       cloud,
-      { stage: level.stage, correctKey: correctThisFrame, enabled: cloudEnabled },
+      { stage: level.stage, correctKey: correctThisFrame, enabled: progress.cloudEnabled },
       dtMs,
       tuning,
     );
@@ -2390,7 +2450,7 @@ async function boot(): Promise<void> {
       renderer.render(
         drawFrame(
           frameFor(
-            level, damage, cloud, tuning, gildPoints(), noteText(coach), doorwayPrompt(),
+            level, damage, cloud, tuning, levelScore(), noteText(coach), doorwayPrompt(),
             reportMemory(),
           ),
           level.rail,

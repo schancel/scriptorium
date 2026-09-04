@@ -1,6 +1,6 @@
 # The route
 
-**Implemented by:** `core/route.ts`, `core/warp.ts`
+**Implemented by:** `core/route.ts`, `core/warp.ts`, `platform/web/overlay.ts`
 
 ## A graph, not a reading plan
 
@@ -102,6 +102,44 @@ Routes are data, so alternates are cheap:
 - **Wisdom** — Proverbs and Psalms. Short, self-contained lines where every verse is a
   complete thought. The gentlest possible first hour, and the best route for someone who
   finds Genesis daunting.
+
+## Two texts, and the second act
+
+[ADR 0002](../decisions/0002-web-and-kjv-not-net.md) ships two public-domain translations:
+the **World English Bible**, which is the default, and the **King James Version**, which is
+harder to type. Both loaded and the menu could switch between them long before anything
+said *why* — the control was a dropdown of two proper nouns, which presents a difficulty
+step as a preference about wording.
+
+It is not a preference. Measured over both shipped texts:
+
+| | WEB | KJV |
+|---|---|---|
+| Words carrying an archaic ending or pronoun (`-eth`, `-est`, thee, thou, thy, thine, ye) | 1 in 737 | **1 in 29** |
+| Colons and semicolons per 100 words | 1.0 | **3.0** |
+| Mean sentence length, in words | 19 | **29** |
+| Commas per 100 words | 8.8 | 8.8 |
+
+The last row is there because it is the one people expect to move, and it does not. The
+archaic morphology is the real cost — a word in thirty is a spelling the player's fingers
+have no habit for — and the sentences are half as long again, held together by colons and
+semicolons rather than broken by full stops, so there is further to go before a rest.
+
+**So the menu says that, in the player's own terms**, in a section of its own rather than
+as a second item in the go-somewhere-else row. It names what changes, gives the two numbers
+that matter, and says out loud what it does *not* do.
+
+**It is not a stage, and it must never become one.** The curriculum, the illumination sets
+and the [mastery gate](06-curriculum.md#the-mastery-gate) are identical in either text: the
+same keys are lit, and the same accuracy and latency are demanded of them. A player who
+switches has changed the prose, not the standard. Nothing about the translation may be
+allowed to reach the gate — the gate measures whether a key has been learned, and typing
+`knowest` does not teach a different `k`.
+
+What it *is* is the honest answer to "I have finished the curriculum, what now" — a second
+pass over the same keys in harder prose. The menu says so when the player reaches the last
+stage, and offers it before then to anyone who wants it early. It is offered, not gated:
+locking it would make it invisible again, which is the problem this section exists to fix.
 
 ## Genealogies
 

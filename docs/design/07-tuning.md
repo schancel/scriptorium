@@ -49,6 +49,7 @@ first evening a real beginner plays it and something feels wrong.
 | `ink_ms` | 420 | ms | The whole ink throw: the flung nib's flight, and the burst it makes on the bat. |
 | `monster_drop_chance` | 0.20 | probability | Chance a felled monster leaves an ink pot. |
 | `combo_drop_bonus` | 0.20 | probability | Added to that chance at a full combo, scaling linearly from none. Losing the combo only returns the chance to its base; nothing is ever taken away. |
+| `ink_pot_points` | 25 | points | What an ink pot is worth when the player's hearts are already full. Roughly half a fully gilded part (`gild_page_bonus`), because a pot is a small piece of luck and a finished page is work. See [pacing](03-pacing.md#an-ink-pot-at-full-hearts-must-still-be-worth-something). |
 | `gild_score_per_char` | 2 | points | Awarded per greyed character typed correctly, in [gilding mode](01-illumination.md#gilding-a-mode-for-people-who-already-type). |
 | `gild_page_bonus` | 50 | points | Awarded for a part in which every character was typed. |
 | `gild_offer_wpm` | 60 | wpm | Pace at which the game *offers* gilding. Well above a beginner's ceiling and well below the fluent typist it is for; it only ever opens a dialogue, never a mode. |

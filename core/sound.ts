@@ -23,10 +23,10 @@
  *
  * **The combo drives the tempo.** The music accelerating under a clean run is
  * the whole reward mechanism -- see the design doc -- and `comboTempoRatio`
- * bounds it at `combo_tempo_max`. It also decides how hard the `defeat` cue is
- * struck, which is the only other thing in the audio the combo touches: felling
- * a monster on a long clean run should sound like it. Both are bounded, and
- * breaking a combo only ever returns them to base.
+ * bounds it at `combo_tempo_max`. It also decides how hard the two *strike*
+ * cues are struck, which is the only other thing in the audio the combo
+ * touches: felling a monster on a long clean run should sound like it. Both are
+ * bounded, and breaking a combo only ever returns them to base.
  */
 
 import {
@@ -60,9 +60,31 @@ export type Cue =
   | 'heart_lost'
   | 'cloud'
   | 'candle'
-  | 'defeat'
+  | 'stomp'
+  | 'ink'
   | 'promotion'
   | 'warp';
+
+/**
+ * The two cues a felled monster rings, named after the verb that fells it.
+ *
+ * A skeleton is stomped and a bat is inked -- two verbs the player can see the
+ * difference between (docs/design/03-pacing.md#defeating-a-monster-must-read-as-an-action),
+ * and until this pair existed both rang one `defeat` cue, so the ear was told
+ * the two were the same event. The cue id *is* `StrikeVerb`, so the platform
+ * passes the verb straight through and there is no table in which a verb could
+ * come to disagree with the noise it makes.
+ */
+export type StrikeCue = 'stomp' | 'ink';
+
+/** Both of them, in the order the pacing doc's verb table lists the enemies. */
+export const STRIKE_CUES: readonly StrikeCue[] = ['stomp', 'ink'];
+
+const IS_STRIKE: ReadonlySet<string> = new Set<string>(STRIKE_CUES);
+
+function isStrikeCue(cue: Cue): cue is StrikeCue {
+  return IS_STRIKE.has(cue);
+}
 
 /**
  * How loud each cue is, as a MIDI velocity. Voice design rather than a feel
@@ -76,24 +98,30 @@ const CUE_VELOCITY: Readonly<Record<Cue, number>> = {
   heart_lost: 110, // tuning-exempt: cue mix
   cloud: 60,       // tuning-exempt: cue mix
   candle: 84,      // tuning-exempt: cue mix
-  defeat: 82,      // tuning-exempt: cue mix
+  // Weight landing: the heaviest of the three good-news voices at rest.
+  stomp: 86,       // tuning-exempt: cue mix
+  // Something small thrown: lighter than the boot, and it has further to carry.
+  ink: 78,         // tuning-exempt: cue mix
   promotion: 112,  // tuning-exempt: cue mix
   warp: 90,        // tuning-exempt: cue mix
 };
 
 /**
- * How hard the defeat cue rings at a full combo.
+ * How hard each strike cue rings at a full combo.
  *
- * The one cue whose weight is not fixed, and the only place the combo shows up
+ * The only cues whose weight is not fixed, and the only place the combo shows up
  * in the audio besides the tempo. A run of clean typing should be *audible* when
  * it lands a blow, and velocity is the cheapest honest way to say so: the same
- * voice, played harder. It never falls below `CUE_VELOCITY.defeat`, so losing a
- * combo quietens nothing that was already sounding.
+ * voice, played harder. Neither ever falls below its own row in `CUE_VELOCITY`,
+ * so losing a combo quietens nothing that was already sounding.
  *
  * Cue mix, like the table above: voice design rather than a difficulty knob, and
  * the one number a player would want to turn is `master_volume`.
  */
-const DEFEAT_VELOCITY_FULL = 118; // tuning-exempt: cue mix
+const STRIKE_VELOCITY_FULL: Readonly<Record<StrikeCue, number>> = {
+  stomp: 120, // tuning-exempt: cue mix
+  ink: 112,   // tuning-exempt: cue mix
+};
 
 // --- state ------------------------------------------------------------------
 
@@ -155,16 +183,17 @@ export function masterGain(tuning: Tuning): number {
 /**
  * How hard one cue is struck this frame.
  *
- * Every cue but `defeat` is a fixed weight. `defeat` is scaled by the combo,
- * between its own row and `DEFEAT_VELOCITY_FULL`, at `comboForFullTempo` -- the
- * same milestone the tempo uses, so "a full combo" is one thing in this game.
+ * Every cue but the two strikes is a fixed weight. A strike is scaled by the
+ * combo, between its own row and `STRIKE_VELOCITY_FULL`, at `comboForFullTempo`
+ * -- the same milestone the tempo uses, so "a full combo" is one thing in this
+ * game.
  */
 function cueVelocity(cue: Cue, combo: number, tuning: Tuning): number {
   const base = CUE_VELOCITY[cue];
-  if (cue !== 'defeat') return base;
+  if (!isStrikeCue(cue)) return base;
   const full = comboForFullTempo(tuning);
   const fraction = full > 0 ? Math.min(1, Math.max(0, combo / full)) : 1;
-  return Math.round(base + fraction * (DEFEAT_VELOCITY_FULL - base));
+  return Math.round(base + fraction * (STRIKE_VELOCITY_FULL[cue] - base));
 }
 
 function cueEvents(cues: readonly Cue[], combo: number, tuning: Tuning): SoundEvent[] {

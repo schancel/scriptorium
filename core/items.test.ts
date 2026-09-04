@@ -85,9 +85,35 @@ test('a documented item with no implementation is a loud failure, not a shrug', 
 
 test('an ink pot restores one heart, and only up to the cap', () => {
   const hurt = createPlayer({ hearts: 1, smudge: 0, combo: 0 });
-  assert.equal(applyItem(hurt, 'ink_pot', SITE, TUNING).player.damage.hearts, 2);
+  const healed = applyItem(hurt, 'ink_pot', SITE, TUNING).player;
+  assert.equal(healed.damage.hearts, 2);
+  // A heart is what the pot is for. Nothing else moves while there is one to give.
+  assert.equal(healed.score, hurt.score);
+});
+
+test('AN INK POT ON FULL HEARTS IS WORTH POINTS, NOT NOTHING', () => {
+  // The cap swallowed it, so a pot dropped on full hearts did nothing at all --
+  // which is most of the early game, because a beginner typing cleanly enough to
+  // earn a drop is by construction a beginner who has not lost a heart. The game
+  // showed him a reward and gave him nothing.
+  // docs/design/03-pacing.md#an-ink-pot-at-full-hearts-must-still-be-worth-something
   const full = player();
-  assert.equal(applyItem(full, 'ink_pot', SITE, TUNING).player.damage.hearts, full.damage.hearts);
+  const worth = tuningValue(TUNING, 'ink_pot_points');
+  assert.ok(worth > 0);
+
+  const paid = applyItem(full, 'ink_pot', SITE, TUNING).player;
+  assert.equal(paid.damage.hearts, full.damage.hearts, 'a full player was given a heart');
+  assert.equal(paid.score, full.score + worth);
+  // And nothing else moved: a lucky drop must never change what the game asks
+  // of the player. Hearts, the smudge meter and the cloud are all off limits.
+  assert.deepEqual({ ...paid, score: full.score }, full);
+
+  // Gold leaf multiplies it, at the moment of pickup, like everything else the
+  // level earns -- so leaf taken later cannot retroactively enrich a pot taken
+  // before it.
+  const rich = applyItem(full, 'gold_leaf', SITE, TUNING).player;
+  assert.equal(applyItem(rich, 'ink_pot', SITE, TUNING).player.score, rich.score + worth * rich.scoreMultiplier);
+  assert.ok(rich.scoreMultiplier > 1);
 });
 
 test('a candle is a checkpoint at the chunk boundary core/corpus.ts already cut', () => {

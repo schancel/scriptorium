@@ -318,6 +318,16 @@ export interface PlayerState {
   readonly upgrades: Upgrades;
   /** Multiplies score for the rest of the level. Starts at 1. */
   readonly scoreMultiplier: number;
+  /**
+   * Points earned in this level by picking things up, already multiplied.
+   *
+   * Separate from the gilding total, which the typing state carries: this is
+   * what the *items* were worth, and at present that is an ink pot taken on full
+   * hearts. Level-scoped, like `scoreMultiplier` and for the same reason -- gold
+   * leaf lasts "for the rest of the level", so what it multiplied has to end
+   * with the level too.
+   */
+  readonly score: number;
   /** Chapters sealed, by reference. Unlocks routes and cosmetics. */
   readonly seals: readonly string[];
   readonly checkpoint: Checkpoint | null;

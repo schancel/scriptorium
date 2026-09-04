@@ -32,14 +32,15 @@ import { tuningValue } from './tuning.js';
 
 /**
  * Bumped to 2 when `position` and `recent` were added, to 3 for the gilding
- * mode and whether its offer has been made, to 4 for the first run, and to 5
- * for the secret rooms the player has found. A record at any older version is
- * *migrated*, never discarded: months of a beginner's curve is the one thing in
- * this program that cannot be regenerated.
+ * mode and whether its offer has been made, to 4 for the first run, to 5 for
+ * the secret rooms the player has found, and to 6 for whether the blot-cloud is
+ * armed. A record at any older version is *migrated*, never discarded: months of
+ * a beginner's curve is the one thing in this program that cannot be
+ * regenerated.
  *
  * See the version table in docs/architecture/data-schemas.md#progress.
  */
-export const SCHEMA_VERSION = 5;   // tuning-exempt: a schema version, not a tunable
+export const SCHEMA_VERSION = 6;   // tuning-exempt: a schema version, not a tunable
 
 // --- the record -------------------------------------------------------------
 
@@ -148,6 +149,20 @@ export interface Progress {
    * is an insult, and a closed tab is not a reason to be told twice.
    */
   readonly notesSeen: readonly NoteId[];
+  /**
+   * Whether the blot-cloud is armed.
+   *
+   * ADR 0004 requires the one pressure in the game to be switchable off, because
+   * it is there to motivate and may turn out to stress this particular player
+   * instead. The switch existed and was held for the session, so a player who
+   * turned the threat off got it back on the next reload -- which is the same as
+   * not having the switch, only more annoying, since he has to find it again
+   * every evening.
+   *
+   * It is a fact about the person at the keyboard rather than about the passage,
+   * exactly like `gilding`, and it is stored for the same reason.
+   */
+  readonly cloudEnabled: boolean;
 }
 
 /** Genesis 1:1. The first verse of the first chapter of the first book. */
@@ -171,6 +186,7 @@ export const DEFAULT_PROGRESS: Progress = {
   gildOffered: false,
   firstRun: true,
   notesSeen: [],
+  cloudEnabled: true,
 };
 
 // --- migration --------------------------------------------------------------
@@ -295,6 +311,13 @@ export function migrate(parsed: unknown): Progress {
     // played it. Both fields therefore default to "already done".
     firstRun: parsed['firstRun'] === true,
     notesSeen: migrateNotes(parsed['notesSeen']),
+    // On unless the record says otherwise, which is exactly what a version 5
+    // record meant: the switch did not survive a reload, so every session began
+    // with the cloud armed. Requiring an explicit `false` rather than an
+    // explicit `true` is what keeps that true across the migration -- defaulting
+    // it off would silently remove the only pressure in the game from every
+    // player who has ever played it.
+    cloudEnabled: parsed['cloudEnabled'] !== false,
   };
 }
 
@@ -520,6 +543,21 @@ export function withDiscovered(progress: Progress, ref: string): Progress {
  */
 export function setGilding(progress: Progress, gilding: boolean): Progress {
   return { ...progress, gilding };
+}
+
+/**
+ * Arm or disarm the blot-cloud.
+ *
+ * The switch ADR 0004 requires, and nothing else moves with it: not the stage,
+ * not the window, not the history. Turning the threat off changes what the game
+ * does while the player is not typing, and says nothing about what he has
+ * learned -- so, like gilding, it is stored and it never touches the gate.
+ *
+ * There is no path by which the game calls this. The cloud is armed in a new
+ * record and only the player turns it off.
+ */
+export function setCloudEnabled(progress: Progress, cloudEnabled: boolean): Progress {
+  return { ...progress, cloudEnabled };
 }
 
 /**

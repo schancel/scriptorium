@@ -538,19 +538,31 @@ test(`a greyed character ahead of the cursor stays dim even while gilding`, () =
   assert.equal(glyphColour(cmds, SPACED, ahead, offset), DIM);
 });
 
-test(`the gild total is in the HUD when gilding, and absent when not`, () => {
+test(`the score is in the HUD whenever there is one, and absent when there is not`, () => {
   const rail = createRail(0);
   const points = 42;   // tuning-exempt: test fixture
-  const on = drawFrame({ ...frame(SPACED, 0), gilding: true, gildPoints: points }, rail, TUNING);
-  const off = drawFrame(frame(SPACED, 0), rail, TUNING);
   const hud = (cmds: readonly DrawCmd[]): string =>
     cmds.filter((c): c is Extract<DrawCmd, { op: `text` }> => c.op === `text`)
       .map((c) => c.value).find((v) => v.startsWith(`WPM `)) ?? ``;
 
-  assert.ok(hud(on).includes(`GILD ${String(points)}`));
-  // A score of zero in a mode with no scoring in it is a number the player
-  // cannot move, so it is not drawn at all.
-  assert.ok(!hud(off).includes(`GILD`));
+  const gilding = drawFrame({ ...frame(SPACED, 0), gilding: true, points }, rail, TUNING);
+  assert.ok(hud(gilding).includes(`SCORE ${String(points)}`));
+
+  // And with the mode off. An ink pot taken on full hearts scores, so a player
+  // who has never gilded can have points -- and paying them into a counter he
+  // cannot see would be the same silence that change was made to end.
+  const earned = drawFrame({ ...frame(SPACED, 0), points }, rail, TUNING);
+  assert.ok(hud(earned).includes(`SCORE ${String(points)}`));
+
+  // Zero with nothing scoring is left off: a number the player cannot move is
+  // one more thing on a screen whose whole job is to hold his eye on one place.
+  const nothing = drawFrame(frame(SPACED, 0), rail, TUNING);
+  assert.ok(!hud(nothing).includes(`SCORE`));
+  assert.ok(!hud(drawFrame({ ...frame(SPACED, 0), points: 0 }, rail, TUNING)).includes(`SCORE`));
+
+  // But gilding always shows one, even at nought: the mode is scoring, and a
+  // total that appeared only once it was non-zero would read as broken.
+  assert.ok(hud(drawFrame({ ...frame(SPACED, 0), gilding: true }, rail, TUNING)).includes(`SCORE 0`));
 });
 
 test(`gilding points the overlay at the character under the cursor, or at nothing`, () => {

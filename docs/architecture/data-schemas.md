@@ -68,7 +68,7 @@ Browser local storage, exportable to a file. Written by
 `core/progress.ts`.
 
 ```json
-{ "version": 5, "stage": 3, "translation": "WEB", "route": "pilgrimage",
+{ "version": 6, "stage": 3, "translation": "WEB", "route": "pilgrimage",
   "layout": "ansi", "spaceThumb": "rt",
   "position": { "book": "Genesis", "chapter": 1, "unit": 7 },
   "completed": ["Genesis 1"],
@@ -79,7 +79,8 @@ Browser local storage, exportable to a file. Written by
   "history": [ { "date": "2026-09-03", "stage": 3, "ref": "Genesis 1:1-3",
                  "wpm": 14.2, "accuracy": 0.97, "promoted": false } ],
   "gilding": false, "gildOffered": false,
-  "firstRun": false, "notesSeen": ["greyed", "wrong", "space"] }
+  "firstRun": false, "notesSeen": ["greyed", "wrong", "space"],
+  "cloudEnabled": true }
 ```
 
 `position` is the bookmark: the translation is `translation`, and `unit` is the
@@ -121,6 +122,14 @@ the session because a reload would otherwise be a cheaper way to lose a room tha
 out of one. It gates nothing: `requiredRefs` excludes every flashback destination by
 construction, so this list can only add to what the map shows.
 
+`cloudEnabled` is whether the blot-cloud is armed —
+[ADR 0004](../decisions/0004-idle-threat-not-speed-timer.md) requires the one pressure in
+the game to be switchable off, since it exists to motivate and may stress this particular
+player instead. It is stored rather than held for the session for the same reason
+`gilding` is: it is a fact about the person at the keyboard, and a switch that comes back
+on at every reload is one the player has to find again every evening. Like `gilding` it
+touches nothing else — not the stage, not the window, not the gate.
+
 `promoted` marks the session that opened the gate. The history view needs it: the
 sessions *after* a promotion are slower, because a new stage lights up more of the page,
 and an unexplained dip in the curve is the single most likely reason a beginner concludes
@@ -137,6 +146,7 @@ not optional.
 | 3 | added `gilding` and `gildOffered` | every version 2 field is carried across unchanged — stage, position, `completed`, `keyStats`, `recent` and the whole history. Both new fields default to `false`, which is exactly what a version 2 record meant: the mode did not exist, so it was off and had never been offered. Nothing is dropped. |
 | 4 | added `firstRun` and `notesSeen` | every version 3 field is carried across unchanged — stage, translation, route, layout, `spaceThumb`, position, `completed`, `keyStats`, `recent`, the whole history, `gilding` and `gildOffered`. The two new fields default to *already done*: `firstRun` to false and `notesSeen` to every note. That is the only correct default, because a stored record is by definition one somebody has already been playing, and starting to explain the game to a player three weeks in would be worse than never having explained it at all. Nothing is dropped. |
 | 5 | added `discovered` | every version 4 field is carried across unchanged. `discovered` defaults to empty, which is the only honest default: nothing recorded a found room before the field existed, so the game does not know of any. It costs the player nothing — a flashback is optional by construction, and re-finding one is the same walk it was the first time. Nothing is dropped. |
+| 6 | added `cloudEnabled` | every version 5 field is carried across unchanged — stage, translation, route, layout, `spaceThumb`, position, `completed`, `discovered`, `keyStats`, `recent`, the whole history, `gilding`, `gildOffered`, `firstRun` and `notesSeen`. `cloudEnabled` defaults to `true`, and it is read as true unless the stored value is explicitly `false`. That is exactly what a version 5 record meant: the switch was held for the session only, so every session that record ever had began with the cloud armed. Defaulting it off would silently remove the game's only pressure from every player who has ever played it. Nothing is dropped. |
 
 `core/progress.ts` defaults every field individually rather than trusting the stored
 blob, so a partially corrupt record loses the corrupt field and keeps the history.

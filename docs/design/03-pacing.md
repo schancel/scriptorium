@@ -26,6 +26,12 @@ The idle threshold starts generous and tightens by stage — values in
 [tuning](07-tuning.md). It can be disabled outright if it turns out to stress rather than
 motivate; that switch is deliberate, not a debug leftover.
 
+**And the choice is remembered.** `cloudEnabled` is a field on the
+[progress record](../architecture/data-schemas.md#progress), not a session variable. A
+switch that comes back on at every reload is one the player has to find again every
+evening, which is the same as not having it — and the player most likely to want it off is
+the one least likely to enjoy hunting through a menu for it a second time.
+
 ## A monster is a word
 
 Monsters idle, and something has to happen to them or the platformer is scenery behind a
@@ -55,7 +61,7 @@ What follows from that, and what must stay true:
   collected: a pickup the player could walk past would be a way to lose something by being
   slow, and that is the one thing this game does not have.
 - **The combo is acknowledged, modestly.** A long clean run adds up to `combo_drop_bonus`
-  to the drop chance and rings the defeat cue harder. Breaking the combo returns both to
+  to the drop chance and rings the strike cue harder. Breaking the combo returns both to
   base; it never takes anything away, and there is no second failure mode hiding in it.
 
 ## Damage is metered
@@ -77,11 +83,37 @@ continuing — standard in typing tutors, and non-negotiable for habit formation
 
 | id | name | effect | source |
 |---|---|---|---|
-| `ink_pot` | Ink pot | Restores one heart | Dropped for a clean verse streak, or hidden on side platforms |
+| `ink_pot` | Ink pot | Restores one heart, or `ink_pot_points` when hearts are already full | Dropped for a clean verse streak, or hidden on side platforms |
 | `candle` | Candle | Checkpoint — death returns here | Placed at verse boundaries through a level |
 | `gold_leaf` | Gold leaf | Score multiplier for the rest of the level | Awarded for a part gilded completely, or hidden on side platforms |
 | `quill_nib` | Quill nib | Permanent upgrade: extra heart, slower cloud, or wider smudge tolerance | Behind flashback rooms |
 | `wax_seal` | Wax seal | Unlocks routes and cosmetics | Awarded for a perfect chapter |
+
+### An ink pot at full hearts must still be worth something
+
+`restoreHeart` caps at the maximum, so a pot dropped while the player is on full hearts
+used to do nothing whatever. That is most of the early game: a beginner who is typing
+cleanly enough to earn drops is, by construction, a beginner who has not lost a heart. The
+game showed him a reward and gave him nothing, which is a small lie — and the player it
+lies to most often is the one it can least afford to lose.
+
+**A pot at full hearts is worth `ink_pot_points` instead.** Score is the right currency
+because gilding already established one, and because it is the only thing in the game that
+can absorb a reward without changing the difficulty: hearts, smudge tolerance and the cloud
+all move what the game asks of the player, and a lucky drop must never do that.
+
+Two consequences follow, and both matter more than the rule itself:
+
+- **Gold leaf multiplies it**, like everything else earned in the level, because a pot is
+  earned in the level. The multiplier applies at the moment of pickup, so leaf taken later
+  does not retroactively enrich pots collected before it.
+- **The HUD carries the score whenever there is one**, not only while gilding is on.
+  Awarding points into a counter the player cannot see would be the same lie in a new
+  place. The total is still absent at zero: a number nobody can move is not worth the room.
+
+The alternative was to make drops rarer, so that a pot always lands on a player who can use
+it. That is worse. It reduces feedback for the beginner who needs feedback most, and it
+solves an honesty problem by making the game quieter rather than truer.
 
 ### Defeating a monster must read as an action
 
@@ -105,6 +137,13 @@ was struck. Each enemy now has its own verb, which is what a platformer does:
 
 Different verbs per enemy are worth the extra art: they make the enemies read as different
 things rather than as two sprites that both evaporate.
+
+**And different sounds, for the same reason.** Both verbs rang one `defeat` cue at first,
+so the ear was told they were the same event while the eye was being shown they were not.
+Each has its own cue now — `stomp` is weight landing, `ink` is something thrown and
+bursting — in the same family as the checkpoint's, because they are the same kind of news
+at different weights. The cue id *is* the verb, so no lookup stands between the blow and
+the noise it makes. See [music](09-music.md#the-two-strikes).
 
 **It stays feedback, never a skill check.** Both verbs resolve on word completion. There
 is no aim, no timing window, and no way to miss — ADR 0004 rules out anything that

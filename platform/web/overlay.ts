@@ -24,7 +24,17 @@ export interface OverlayHandlers {
   requestMenu(): void;
   resume(): void;
   restart(): void;
-  jump(edition: string, book: string, chapter: number): void;
+  jump(book: string, chapter: number): void;
+  /**
+   * The player chose which of the two translations to type.
+   *
+   * Its own control rather than a second field in the go-somewhere-else row,
+   * because it is a difficulty step and not a preference about wording -- see
+   * docs/design/04-route.md#two-texts-and-the-second-act. It changes the prose
+   * and nothing else: the same keys are lit in either text and the mastery gate
+   * asks the same of them, and nothing here may ever reach the gate.
+   */
+  setEdition(edition: string): void;
   setKeyboard(layout: KeyboardLayout, spaceThumb: Thumb): void;
   /**
    * The player asked for the blot-cloud on or off.
@@ -119,6 +129,15 @@ export interface MenuView {
   readonly stages: readonly { readonly stage: number; readonly description: string }[];
   /** Whether gilding is on. See `OverlayHandlers.setGilding`. */
   readonly gilding: boolean;
+  /**
+   * Whether the player has reached the last stage the curriculum has.
+   *
+   * The one place the second translation is named as what it is: the answer to
+   * "I have finished, what now". It is said and never enforced -- the King James
+   * is offered from the first evening to anyone who wants it, because locking it
+   * would make it invisible again, which is the whole problem.
+   */
+  readonly curriculumFinished: boolean;
   readonly history: readonly HistoryEntry[];
 }
 
@@ -206,6 +225,19 @@ export interface Overlay {
   close(): void;
 }
 
+/**
+ * What the menu says about the second text once the curriculum is behind the
+ * player.
+ *
+ * Plain, and an offer rather than a reward: it states a fact he can check and
+ * names the thing to do with it. It is deliberately not congratulation -- see
+ * docs/design/10-first-run.md#tone -- and deliberately not a gate.
+ */
+const SECOND_ACT =
+  'You have reached the last stage this curriculum has. The King James is the '
+  + 'second pass: the same keys, in prose that asks more of them. Nothing is '
+  + 'lost by switching, and nothing is lost by staying.';
+
 const PERCENT = 100;
 /** Most recent sessions shown in the menu. Enough to see a trend, few enough to scan. */
 const HISTORY_SHOWN = 14;
@@ -251,6 +283,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const cloudSelect = need('menu-cloud', HTMLSelectElement);
   const stageSelect = need('menu-stage-select', HTMLSelectElement);
   const gildingSelect = need('menu-gilding', HTMLSelectElement);
+  const editionNext = need('menu-edition-next', HTMLParagraphElement);
   const errorLine = need('menu-error', HTMLParagraphElement);
   const resumeButton = need('menu-resume', HTMLButtonElement);
   const restartButton = need('menu-restart', HTMLButtonElement);
@@ -414,6 +447,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     where.textContent = view.where;
     stageLine.textContent = view.stageLine;
     editionSelect.value = view.edition;
+    editionNext.textContent = view.curriculumFinished ? SECOND_ACT : '';
     bookSelect.value = view.book;
     chapterInput.value = String(view.chapter);
     layoutSelect.value = view.layout;
@@ -776,7 +810,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
       showError('Chapter must be a whole number, 1 or greater.');
       return;
     }
-    handlers.jump(editionSelect.value, bookSelect.value, chapter);
+    handlers.jump(bookSelect.value, chapter);
   }
 
   openButton.addEventListener('click', () => {
@@ -830,6 +864,9 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   };
   layoutSelect.addEventListener('change', onKeyboardChange);
   thumbSelect.addEventListener('change', onKeyboardChange);
+  editionSelect.addEventListener('change', () => {
+    handlers.setEdition(editionSelect.value);
+  });
   cloudSelect.addEventListener('change', () => {
     handlers.setCloud(cloudSelect.value !== 'off');
   });

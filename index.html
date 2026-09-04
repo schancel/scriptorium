@@ -358,17 +358,41 @@
 
     <h3>Go somewhere else</h3>
     <div class="row">
-      <label>Text
-        <select id="menu-edition">
-          <option value="WEB">World English Bible</option>
-          <option value="KJV">King James Version</option>
-        </select>
-      </label>
       <label>Book <select id="menu-book"></select></label>
       <label>Chapter <input id="menu-chapter" type="number" min="1" step="1" value="1"></label>
       <button id="menu-go" type="button">Go</button>
     </div>
     <p class="err" id="menu-error"></p>
+
+    <!-- The second text is a difficulty step, not a preference about wording,
+         and a dropdown of two proper nouns says the opposite. The figures below
+         are measured over the two texts this game actually ships; see
+         docs/design/04-route.md#two-texts-and-the-second-act and ADR 0002. -->
+    <h3>Which text</h3>
+    <div class="row">
+      <label>Text
+        <select id="menu-edition">
+          <option value="WEB">World English Bible &mdash; modern English</option>
+          <option value="KJV">King James Version &mdash; harder to type</option>
+        </select>
+      </label>
+    </div>
+    <p class="dim">
+      Both are the whole Bible and both are free of copyright. What differs is the
+      typing. In the King James roughly <b>one word in thirty</b> carries an
+      archaic ending or pronoun &mdash; <i>doeth</i>, <i>knowest</i>, <i>thee</i>,
+      <i>thou</i>, <i>thy</i>, <i>ye</i> &mdash; where in the World English Bible
+      it is one in seven hundred. Its sentences also run about half as long again,
+      strung together with colons and semicolons instead of being broken up by full
+      stops, so there is further to type before you get to stop.
+    </p>
+    <p class="dim">
+      It does not touch your stage. The same letters are lit in either text and the
+      same accuracy is asked of them &mdash; you have changed the prose, not the
+      standard. It is the same curriculum in harder words: worth doing once you
+      have been through this one, and available now if you would rather.
+    </p>
+    <p class="dim" id="menu-edition-next"></p>
 
     <h3>Your keyboard</h3>
     <div class="row">

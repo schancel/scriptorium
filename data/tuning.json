@@ -35,6 +35,7 @@
     "ink_ms": 420,
     "monster_drop_chance": 0.2,
     "combo_drop_bonus": 0.2,
+    "ink_pot_points": 25,
     "gild_score_per_char": 2,
     "gild_page_bonus": 50,
     "gild_offer_wpm": 60,
@@ -191,6 +192,10 @@
     "combo_drop_bonus": {
       "unit": "probability",
       "description": "Added to that chance at a full combo, scaling linearly from none. Losing the combo only returns the chance to its base; nothing is ever taken away."
+    },
+    "ink_pot_points": {
+      "unit": "points",
+      "description": "What an ink pot is worth when the player's hearts are already full. Roughly half a fully gilded part (`gild_page_bonus`), because a pot is a small piece of luck and a finished page is work. See [pacing](03-pacing.md#an-ink-pot-at-full-hearts-must-still-be-worth-something)."
     },
     "gild_score_per_char": {
       "unit": "points",

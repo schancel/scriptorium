@@ -24,7 +24,10 @@ starts at 8 seconds and tightens by stage.
   nothing else.
 - The game is playable at 10 WPM and at 80 WPM without a difficulty setting.
 - Tension is preserved without a clock, so the arcade framing survives.
-- The threat is disableable. That switch is deliberate and must not be removed.
+- The threat is disableable, from the menu, and the choice is remembered on the progress
+  record. That switch is deliberate and must not be removed. It was session-only at first,
+  which meant the cloud came back armed at every reload: a switch the game overrules
+  overnight is a switch the player does not have.
 
 ## Alternatives rejected
 

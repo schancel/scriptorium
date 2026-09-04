@@ -11,6 +11,15 @@
  * This drives build/platform/web/main.js under a DOM stub, types what the game
  * itself asks for, and asserts the properties that bug would have broken.
  *
+ * It now also drives the two screens whose whole content is assembled in the
+ * platform, and which a core test can therefore only ever see as a data
+ * structure that nobody proved reached a player: **the map** -- where he is,
+ * what is finished, what is locked and why, what the counter promises, and the
+ * fact that a room he has not found is not listed while a room he has is -- and
+ * **reading mode**, which asks for nothing, so the only way to know it works is
+ * to watch it not ask. Plus the choice between the two translations, which is a
+ * fetch, a reclassification and a rebuilt part, none of it reachable from core.
+ *
  * Usage: node tools/smoke.mjs        (after `make build`)
  */
 import { readFile } from 'node:fs/promises';
@@ -410,6 +419,72 @@ const goButton = johnRow && johnRow.children.find((c) => c.tagName === 'BUTTON')
 ok(Boolean(goButton), 'a passage unlocked by a completed origin can be travelled to',
    johnRow ? textOf(johnRow) : 'John 1 is not on the map');
 
+// The rest of the screen, which is the part a core test cannot see: `core/route.ts`
+// is exhaustively tested as a graph, and none of that says whether the graph
+// reached a player's eyes. Read the panel back instead.
+
+// It says where he stands, and it says it once. A map that cannot answer
+// "where am I" is a diagram; one that answers it twice is a broken diagram.
+// (Standing *off* the route -- a chapter the graph does not name -- it marks the
+// route's own entry rather than nothing. Whether that is right is the owner's
+// call; what is asserted here is that exactly one node is ever marked.)
+const hereRows = rowsOf('map-nodes').filter((li) => textOf(li).includes('you are here'));
+ok(hereRows.length === 1, 'THE MAP SAYS WHICH PASSAGE HE IS STANDING IN, AND ONLY ONE',
+   hereRows.map(textOf).join(' / ') || '(nothing is marked)');
+ok(nodeRows.some((t) => t.startsWith(String(hereRows[0]?.children[0].textContent ?? '\u0000'))),
+   'and the passage it marks is one the route actually names',
+   String(hereRows[0]?.children[0].textContent ?? '(none)'));
+
+// A locked passage says what would unlock it. "Not yet", with no reason, reads
+// as a bug in a graph the player can see -- and it must not offer a way in.
+const locked = rowsOf('map-nodes').filter((li) => textOf(li).includes('finish a passage that leads here'));
+ok(locked.length > 0, 'a passage nothing leads to yet says what would open it',
+   rowsOf('map-nodes').map(textOf).join(' / '));
+ok(locked.every((li) => !li.children.some((c) => c.tagName === 'BUTTON')),
+   'and offers no way to travel to it',
+   locked.map(textOf).join(' / '));
+
+// The counter, and the promise under it. Secrets are deliberately not counted:
+// a player who never finds a doorway still finishes the pilgrimage, and a
+// progress line that counted them would say otherwise every time he read it.
+const mapProgress = String(stubEl('map-progress').textContent);
+ok(/^\d+ of \d+ passages finished\./.test(mapProgress),
+   'the map counts the stops finished against the stops the route requires', mapProgress);
+ok(mapProgress.includes('Secret rooms are not counted'),
+   'AND SAYS SECRETS ARE NOT COUNTED, SO A MISSED ROOM NEVER READS AS AN UNFINISHED ROUTE',
+   mapProgress);
+ok(String(stubEl('map-error').textContent) === '',
+   'and nothing on it claims the route failed to load',
+   String(stubEl('map-error').textContent));
+
+// Every thread names both ends and the phrase they share. The note is checked
+// above; without the phrase the note is an assertion the player cannot check.
+ok(threadRows.every((t) => t.includes('\u2192') || t.includes('\u21a9')),
+   'every thread says which way it runs', threadRows[0] ?? '(none)');
+ok(threadRows.every((t) => /\u201c[^\u201d]+\u201d/.test(t)),
+   'and quotes the phrase the two passages share',
+   threadRows.find((t) => !/\u201c[^\u201d]+\u201d/.test(t)) ?? '');
+// And a secret is not spoiled by the screen that lists everything else. No
+// doorway has been found yet, so none is drawn: `core/route.ts` decides that,
+// and this is the only place it can be seen deciding it.
+ok(!threadRows.some((t) => t.includes('\u21a9')),
+   'A ROOM NOBODY HAS FOUND IS NOT ON THE MAP, SO THE MAP CANNOT SPOIL IT',
+   threadRows.filter((t) => t.includes('\u21a9')).join(' / '));
+ok(!rowsOf('map-nodes').some((li) => textOf(li).includes('a room you found')),
+   'and neither is the passage behind it', '');
+
+// Escape leaves the map the way it leaves everything else, and hands the rail
+// back. A screen with a way in and no way out is the trap the menu button exists
+// to prevent, and this one is reachable mid-part.
+press('Escape');
+tick(4);
+ok(!panel('panel-map'), 'Escape closes the map');
+ok(askedFor() !== null, 'and hands the rail straight back', refText());
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-map').click();
+tick(2);
+
 // The crossing. Drive it frame by frame and watch the phrase.
 if (goButton) {
   const PHRASE = 'In the beginning';
@@ -447,6 +522,25 @@ if (goButton) {
   const focalCrossing = [...columns][0];
   ok(calls.fillText.some((c) => c.v.startsWith('John 1')), 'the crossing arrives at the destination',
      calls.fillText[0] ? calls.fillText.map((c) => c.v).find((v) => /\d+:\d+/.test(v)) ?? '(no ref)' : '(no frame)');
+
+  // Standing on a passage the route names, the map and the game have to agree
+  // about which one. This is the claim the earlier "exactly one is marked" check
+  // could not make, because the player was then in a chapter off the graph.
+  const standingOn = refText();
+  stubEl('menu-open').click();
+  tick(2);
+  stubEl('menu-map').click();
+  tick(2);
+  const arrivedRows = rowsOf('map-nodes').map(textOf);
+  const marked = rowsOf('map-nodes').find((li) => textOf(li).includes('you are here'));
+  ok(Boolean(marked) && standingOn.startsWith(String(marked.children[0].textContent)),
+     'THE MAP AND THE GAME AGREE ABOUT WHICH PASSAGE HE IS ON',
+     `${marked ? String(marked.children[0].textContent) : '(nothing marked)'} vs ${standingOn}`);
+  ok(arrivedRows.some((t) => t.startsWith('Genesis 1') && t.includes('finished')),
+     'and the passage he came from now reads as finished',
+     arrivedRows.find((t) => t.startsWith('Genesis 1')) ?? '(not on the map)');
+  press('Escape');
+  tick(4);
 
   // The harder case. Travelled from the map, the crossing is entered *on* the
   // phrase, so it is held on the focal guide -- and a renderer that had quietly
@@ -492,6 +586,20 @@ if (goButton) {
 }
 
 // Reading mode: no typing, a pace that ramps, and a way out that is named.
+//
+// What the stage is dimming right now, for comparison. Reading classifies the
+// ribbon against the *whole board* rather than the current stage -- the mode
+// asks for no keys, so half a page greyed would be the curriculum answering a
+// question this mode never puts (docs/design/02-rail.md#lectio-mode).
+const DIM_COLOUR = '#4a4238';
+const dimShare = () => {
+  const glyphs = calls.fillText.filter((c) => c.style.includes('17px'));
+  return glyphs.length === 0 ? null : glyphs.filter((c) => c.color === DIM_COLOUR).length / glyphs.length;
+};
+let typingDim = null;
+for (let i = 0; i < 20 && typingDim === null; i++) { tick(); typingDim = dimShare(); }
+const typingRef = refText();
+
 stubEl('menu-open').click();
 tick(2);
 stubEl('menu-read').click();
@@ -528,9 +636,126 @@ ok(readingOffsets.size > 1, 'and it really was sliding under the guide',
 const later = calls.fillText.find((c) => c.v.startsWith('READING'));
 ok(Boolean(later) && later.v !== opening?.v, 'the pace ramps while the reading is sustained',
    `${opening?.v ?? '?'} -> ${later?.v ?? '?'}`);
+
+// It ramps and it *holds*; it never falls back. This is the one mode in the game
+// that exists for a day without pressure, and a pace that dropped would be a
+// punishment for blinking -- which is a failure state by another name.
+const paces = [];
+for (let i = 0; i < 200; i++) {
+  tick();
+  const line = calls.fillText.find((c) => c.v.startsWith('READING'));
+  if (line) paces.push(Number(line.v.replace(/\D+/g, '')));
+}
+const fell = paces.findIndex((wpm, i) => i > 0 && wpm < paces[i - 1]);
+ok(paces.length > 0 && fell === -1,
+   'THE PACE NEVER FALLS: THERE IS NO WAY TO DO BADLY IN THIS MODE',
+   fell < 0 ? '' : `${paces[fell - 1]} -> ${paces[fell]} wpm at sample ${fell}`);
+
+// The whole chapter, not the part he is in. The reference carries no part
+// counter, because there is nothing here that is cut into parts.
+const readingRef = calls.fillText.map((c) => c.v).find((v) => /^\w.*\d/.test(v)) ?? '';
+ok(!readingRef.includes('part'), 'reading is the chapter, not the part he was typing',
+   `${readingRef} (was ${typingRef})`);
+
+// Lit against the whole board. A page half greyed here would be the curriculum
+// answering a question this mode never puts.
+const readingDim = dimShare();
+ok(typingDim !== null && readingDim !== null && readingDim < typingDim,
+   'READING LIGHTS THE PAGE THE STAGE WOULD HAVE GREYED',
+   `${Math.round((readingDim ?? 1) * 100)}% dim reading, ${Math.round((typingDim ?? 0) * 100)}% typing`);
+
+// And it asks for nothing. Keys pressed into it are not typing: nothing is
+// owed, nothing is scored, and the record does not move -- the ribbon carries on
+// at its own pace regardless.
+const beforeReadingKeys = store.get('scriptorium.progress');
+// Where the ribbon has slid to. It is a clock this mode runs on, not a cursor a
+// keystroke moves, so the way to show a key did nothing is to show the page went
+// on doing exactly what it was doing anyway.
+const ribbonX = () => {
+  const xs = calls.fillText.filter((c) => c.style.includes('17px')).map((c) => c.x);
+  return xs.length === 0 ? null : Math.round(Math.min(...xs) * 100) / 100;
+};
+const flowedTo = ribbonX();
+for (const k of ['a', 's', 'd', 'f', 'x']) { press(k); tick(); }
+tick(4);
+ok(!calls.fillText.some((c) => c.v.startsWith('next:')),
+   'keys pressed while reading are not owed back', '');
+ok(store.get('scriptorium.progress') === beforeReadingKeys,
+   'AND NOTHING TYPED INTO A READING SITTING REACHES THE RECORD', '');
+ok(flowedTo !== null && ribbonX() !== null && ribbonX() !== flowedTo,
+   'and the page kept flowing at its own pace while they were pressed',
+   `${String(flowedTo)} -> ${String(ribbonX())}`);
+
 press('Escape');
 tick(4);
 ok(calls.fillText.some((c) => c.v.startsWith('next:')), 'Escape hands the rail back');
+
+// A sitting, not a setting. Opening the menu ends it, rather than leaving it
+// running silently behind the panel to come back at a pace nobody chose.
+stubEl('menu-read').click();
+tick(4);
+ok(calls.fillText.some((c) => c.v.startsWith('READING')), 'reading starts again from the menu');
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-resume').click();
+tick(4);
+ok(!calls.fillText.some((c) => c.v.startsWith('READING')),
+   'OPENING THE MENU ENDS THE SITTING RATHER THAN HIDING IT BEHIND A PANEL',
+   calls.fillText.map((c) => c.v).find((v) => v.startsWith('READING')) ?? '');
+ok(calls.fillText.some((c) => c.v.startsWith('next:')), 'and Resume means the rail, not the reading');
+
+// --- the second text ---------------------------------------------------------
+//
+// The King James is a difficulty step, not a preference about wording, and it is
+// its own control now rather than a second field in the go-somewhere-else row --
+// docs/design/04-route.md#two-texts-and-the-second-act. Three things have to be
+// true of it and none of them is reachable from a core test: it applies on
+// change, it keeps the player's place, and it does not touch his stage.
+const stageLabel = () => calls.fillText.map((c) => c.v).find((v) => v.startsWith('STAGE ')) ?? '';
+const railText = () => calls.fillText.filter((c) => c.style.includes('17px')).map((c) => c.v).join('');
+
+// From the top of Genesis 1, where the two texts diverge inside the first line
+// -- John 1 opens with the same seven words in both, so the rail there would
+// prove nothing about which one is loaded.
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-book').value = 'Genesis';
+stubEl('menu-chapter').value = '1';
+stubEl('menu-go').click();
+await waitFor(() => refText().startsWith('Genesis 1'));
+tick(40);
+const beforeText = { ref: refText(), stage: stageLabel(), rail: railText(), stage_: record().stage };
+
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-edition').value = 'KJV';
+stubEl('menu-edition').dispatchEvent({ type: 'change' });
+await waitFor(() => record().translation === 'KJV');
+stubEl('menu-resume').click();
+await waitFor(() => askedFor() !== null);
+tick(40);
+
+ok(record().translation === 'KJV', 'choosing the other text switches to it there and then',
+   String(record().translation));
+ok(refText().split(':')[0] === beforeText.ref.split(':')[0],
+   'and leaves the player in the chapter he was in',
+   `${refText()} vs ${beforeText.ref}`);
+ok(record().stage === beforeText.stage_ && stageLabel() === beforeText.stage,
+   'A TRANSLATION IS NOT A STAGE: THE CURRICULUM DOES NOT MOVE WITH THE PROSE',
+   `${stageLabel()} vs ${beforeText.stage}`);
+ok(railText().length > 0 && railText() !== beforeText.rail,
+   'and the words on the rail really are the other translation',
+   `${railText().slice(0, 40)} | ${beforeText.rail.slice(0, 40)}`);
+
+// Back again, because a difficulty step nobody can step back down from is a trap.
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-edition').value = 'WEB';
+stubEl('menu-edition').dispatchEvent({ type: 'change' });
+await waitFor(() => record().translation === 'WEB');
+stubEl('menu-resume').click();
+await waitFor(() => askedFor() !== null);
+ok(record().translation === 'WEB', 'and it goes back the same way it came');
 
 // --- a secret room -----------------------------------------------------------
 //
@@ -590,6 +815,25 @@ if (doorway !== undefined) {
      `${refText()} vs ${before.ref}`);
   ok(railAt() === before.rail, 'and to the exact cursor, so the rail is the rail he left',
      railAt() === before.rail ? '' : 'the ribbon came back on a different column');
+
+  // The room is on the map now, and only now. `discovered` is written on the way
+  // in, and the map reads it -- so a secret the player has found stops being a
+  // secret the screen is hiding from him.
+  stubEl('menu-open').click();
+  tick(2);
+  stubEl('menu-map').click();
+  tick(2);
+  const foundNodes = rowsOf('map-nodes').map(textOf);
+  const foundThreads = rowsOf('map-threads').map(textOf);
+  ok(foundNodes.some((t) => t.startsWith('Genesis 22') && t.includes('a room you found')),
+     'A ROOM HE STEPPED INTO IS ON THE MAP AFTERWARDS, AND SAYS SO',
+     foundNodes.find((t) => t.startsWith('Genesis 22')) ?? '(Genesis 22 is not on the map)');
+  ok(foundThreads.some((t) => t.includes('\u21a9') && t.includes('Genesis 22')),
+     'and the doorway he used is drawn as a thread of its own',
+     foundThreads.filter((t) => t.includes('\u21a9')).join(' / ') || '(no doorway threads)');
+  press('Escape');
+  tick(4);
+  ok(askedFor() !== null, 'and the rail comes back from the map mid-passage', refText());
 
   // And declining it: type straight past the doorway and finish the chapter.
   let past = 0;

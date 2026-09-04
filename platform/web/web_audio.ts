@@ -24,7 +24,7 @@
  * the machine they are written for.
  */
 
-import { masterGain } from '../../core/sound.js';
+import { masterGain, type Cue } from '../../core/sound.js';
 import {
   envelopeFor,
   expandArp,
@@ -62,7 +62,7 @@ interface Voice {
  * A cue's realisation, in the same spirit as the renderer's font table: core
  * says an error happened, and this file decides what an error sounds like.
  */
-interface Cue {
+interface CueVoice {
   readonly ch: Channel;
   readonly midi: number;
   readonly ms: number;
@@ -71,17 +71,42 @@ interface Cue {
   readonly arpHz?: number;
 }
 
-const CUES: Readonly<Record<string, Cue>> = {
+/**
+ * One voice per cue, and the compiler holds it to that.
+ *
+ * `Record<Cue, ...>` over core's own union rather than `Record<string, ...>`:
+ * `playCue` ignores an id it has no entry for, so a cue added to core and not to
+ * this table would fire silently for ever and nobody would learn it was missing
+ * -- the same failure shape as a silent data fallback
+ * (docs/decisions/0009-fallbacks-must-announce-themselves.md). Typed this way,
+ * half the change does not compile.
+ */
+const CUES: Readonly<Record<Cue, CueVoice>> = {
   error: { ch: 'noise', midi: 38, ms: 90 },
   smudge_full: { ch: 'noise', midi: 49, ms: 500 },
   heart_lost: { ch: 'pulse2', midi: 55, ms: 380, duty: 0.5, arp: [0, -5, -12], arpHz: 12 },
   cloud: { ch: 'noise', midi: 42, ms: 140 },
   candle: { ch: 'pulse1', midi: 76, ms: 260, duty: 0.125, arp: [0, 5, 9], arpHz: 14 },
-  // A monster felled: short, bright, rising, and over before the next word. It
-  // shares the candle's channel and is a fifth below it, so a defeat and a
-  // checkpoint are plainly the same family of good news at different weights --
-  // and the core scales its velocity by the combo, so a long run hits harder.
-  defeat: { ch: 'pulse1', midi: 64, ms: 190, duty: 0.25, arp: [0, 7, 12, 16], arpHz: 22 },
+  // The two strikes. Both are arpeggiated pulse voices, like the candle above
+  // them and like the single `defeat` cue they replace, so felling a monster
+  // still belongs to the same family of good news -- but they are no longer the
+  // same noise, because they are no longer the same thing to watch.
+  //
+  // A stomp is weight landing. Low, on the candle's own channel and two octaves
+  // and a fourth below it, at 50% duty -- the full, hollow square, which is the
+  // heaviest timbre the chip has. Its arp *descends*, and at 15 Hz over 200 ms
+  // it makes exactly one pass: E4 to A3 to A2, then sits on the root for the
+  // last third of the note. That final held root is the landing; a faster cycle
+  // would buzz as a chord and the boot would never come down.
+  stomp: { ch: 'pulse1', midi: 45, ms: 200, duty: 0.5, arp: [19, 12, 0], arpHz: 15 },
+  // An ink nib is thrown and bursts. High and thin -- 12.5% duty, the nasal
+  // square, which is what a small hard object sounds like on this hardware --
+  // and on `pulse2`, so a stomp and a throw landing on the same keystroke are
+  // both heard instead of one cutting the other off the single melody voice.
+  // Six steps at 33 Hz fill its 180 ms exactly once: a fourth-stacked climb
+  // through +27 is the arc, and the drop back to +21 on the last step is the
+  // burst, spreading rather than continuing to rise.
+  ink: { ch: 'pulse2', midi: 67, ms: 180, duty: 0.125, arp: [0, 7, 14, 21, 27, 21], arpHz: 33 },
   promotion: { ch: 'pulse1', midi: 72, ms: 620, duty: 0.25, arp: [0, 4, 7, 12], arpHz: 11 },
   warp: { ch: 'pulse2', midi: 60, ms: 700, duty: 0.5, arp: [0, 6, 12, 18], arpHz: 18 },
 };
@@ -224,7 +249,9 @@ export function createWebAudio(tuning: Tuning): WebAudio {
   }
 
   function playCue(id: string, vel: number | undefined): void {
-    const cue = CUES[id];
+    // The id arrives off a `SoundEvent`, which is a string by contract, so the
+    // lookup is widened here rather than the table being widened above.
+    const cue: CueVoice | undefined = (CUES as Partial<Record<string, CueVoice>>)[id];
     if (cue === undefined) return;
     playNote(cue.ch, cue.midi, vel ?? 100, cue.ms, cue.duty, cue.arp, cue.arpHz);
   }

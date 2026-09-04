@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
+  STRIKE_CUES as STRIKES,
   createAudio,
   masterGain,
   setAudioOn,
@@ -19,6 +20,7 @@ import {
   type Cue,
   type Songbook,
 } from './sound.js';
+import type { StrikeVerb } from './entities.js';
 import { createLibrary, loadThemeTunes, loadTune } from './tunes.js';
 import { comboForFullTempo } from './sequencer.js';
 import { loadTuning, tuningValue } from './tuning.js';
@@ -166,24 +168,26 @@ test('master_volume is the one loudness knob', () => {
 
 test('felling a monster has a voice, and the combo decides how hard it is struck', () => {
   const on = setAudioOn(createAudio(tuning), true);
-  const velocityAt = (combo: number): number => {
-    const step = stepSound(on, songbook, frame('abbey', combo, ['defeat']), FRAME_MS, tuning);
-    const cue = step.events.find((e) => e.type === 'sfx' && e.id === 'defeat');
-    assert.ok(cue !== undefined && cue.type === 'sfx');
-    return cue.vel ?? 0;
+  const velocityAt = (cue: Cue, combo: number): number => {
+    const step = stepSound(on, songbook, frame('abbey', combo, [cue]), FRAME_MS, tuning);
+    const sfx = step.events.find((e) => e.type === 'sfx' && e.id === cue);
+    assert.ok(sfx !== undefined && sfx.type === 'sfx');
+    return sfx.vel ?? 0;
   };
 
-  const quiet = velocityAt(0);
   const full = comboForFullTempo(tuning);
-  const loud = velocityAt(full);
-  assert.ok(quiet > 0);
-  assert.ok(loud > quiet, 'a long clean run struck no harder than a cold start');
-  // Bounded, like the tempo: a runaway combo does not run the mix off the top.
-  assert.equal(velocityAt(full * 10), loud); // tuning-exempt: test fixture, well past a full combo
-  // And it never falls below the base, so losing a combo quietens nothing.
-  for (let combo = 0; combo <= full; combo += 1) assert.ok(velocityAt(combo) >= quiet);
+  for (const verb of STRIKES) {
+    const quiet = velocityAt(verb, 0);
+    const loud = velocityAt(verb, full);
+    assert.ok(quiet > 0);
+    assert.ok(loud > quiet, `${verb}: a long clean run struck no harder than a cold start`);
+    // Bounded, like the tempo: a runaway combo does not run the mix off the top.
+    assert.equal(velocityAt(verb, full * 10), loud); // tuning-exempt: test fixture, well past a full combo
+    // And it never falls below the base, so losing a combo quietens nothing.
+    for (let combo = 0; combo <= full; combo += 1) assert.ok(velocityAt(verb, combo) >= quiet);
+  }
 
-  // Only the defeat cue moves. Everything else is a fixed weight in the mix.
+  // Only the strike cues move. Everything else is a fixed weight in the mix.
   const other = (combo: number): number => {
     const step = stepSound(on, songbook, frame('abbey', combo, ['candle']), FRAME_MS, tuning);
     const cue = step.events.find((e) => e.type === 'sfx');
@@ -191,4 +195,27 @@ test('felling a monster has a voice, and the combo decides how hard it is struck
     return cue.vel ?? 0;
   };
   assert.equal(other(0), other(full * 10)); // tuning-exempt: test fixture, well past a full combo
+});
+
+test('the two verbs are two cues, so the ear is told what the eye is shown', () => {
+  // docs/design/03-pacing.md gives a skeleton and a bat different verbs
+  // precisely so they read as different things. Both rang one `defeat` cue,
+  // which said the opposite. The ids are `StrikeVerb`'s own two words, so the
+  // platform passes the verb through rather than looking it up.
+  const on = setAudioOn(createAudio(tuning), true);
+  const verbs: readonly StrikeVerb[] = ['stomp', 'ink'];
+  assert.deepEqual([...verbs], [...STRIKES], 'a verb exists that rings no cue of its own');
+
+  const step = stepSound(on, songbook, frame('abbey', 0, [...STRIKES]), FRAME_MS, tuning);
+  const ids = step.events.filter((e) => e.type === 'sfx').map((e) => e.id);
+  assert.deepEqual(ids, [...STRIKES]);
+
+  // Different weights at rest, or they would still be one sound with two names.
+  const at = (cue: Cue): number => {
+    const one = stepSound(on, songbook, frame('abbey', 0, [cue]), FRAME_MS, tuning);
+    const sfx = one.events.find((e) => e.type === 'sfx');
+    assert.ok(sfx !== undefined && sfx.type === 'sfx');
+    return sfx.vel ?? 0;
+  };
+  assert.notEqual(at('stomp'), at('ink'));
 });

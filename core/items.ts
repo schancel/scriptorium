@@ -124,6 +124,7 @@ export function createPlayer(damage: DamageState, rngState = 0): PlayerState {
     damage,
     upgrades: NO_UPGRADES,
     scoreMultiplier: 1,
+    score: 0,
     seals: [],
     checkpoint: null,
     rngState,
@@ -154,6 +155,17 @@ export interface PickupResult {
  * triple score, not quadruple, so a lucky level cannot make every other level's
  * score meaningless.
  *
+ * An ink pot restores a heart, and is worth `ink_pot_points` when there is no
+ * heart to restore. `restoreHeart` caps at the maximum, so a pot taken on full
+ * hearts used to do nothing at all -- which is most of the early game, because a
+ * beginner typing cleanly enough to earn a drop is by construction a beginner
+ * who has not lost a heart. The game showed him a reward and gave him nothing.
+ * Score is the right currency for the remainder because it is the only thing
+ * here that can absorb a reward without moving the difficulty: hearts, the
+ * smudge meter and the cloud all change what the game asks of him, and a lucky
+ * drop must never do that. See
+ * docs/design/03-pacing.md#an-ink-pot-at-full-hearts-must-still-be-worth-something.
+ *
  * The quill nib's upgrade is drawn from the injected PRNG, so which one a
  * flashback room yields is fixed by the seed and replayable -- a nib that rolled
  * differently on a replay would make a recorded run unreproducible for the sake
@@ -167,10 +179,14 @@ export function applyItem(
   random: Random = splitmix32,
 ): PickupResult {
   if (id === 'ink_pot') {
-    return {
-      player: { ...player, damage: restoreHeart(player.damage, tuning, player.upgrades.heart) },
-      upgrade: null,
-    };
+    const damage = restoreHeart(player.damage, tuning, player.upgrades.heart);
+    if (damage.hearts > player.damage.hearts) {
+      return { player: { ...player, damage }, upgrade: null };
+    }
+    // Nothing to restore. Multiplied at the moment of pickup, so gold leaf taken
+    // later does not retroactively enrich the pots collected before it.
+    const points = tuningValue(tuning, 'ink_pot_points') * player.scoreMultiplier;
+    return { player: { ...player, score: player.score + points }, upgrade: null };
   }
 
   if (id === 'candle') {
