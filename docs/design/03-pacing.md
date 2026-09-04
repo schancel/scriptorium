@@ -83,6 +83,39 @@ continuing — standard in typing tutors, and non-negotiable for habit formation
 | `quill_nib` | Quill nib | Permanent upgrade: extra heart, slower cloud, or wider smudge tolerance | Behind flashback rooms |
 | `wax_seal` | Wax seal | Unlocks routes and cosmetics | Awarded for a perfect chapter |
 
+### Defeating a monster must read as an action
+
+The owner, on the first combat build: *"a little weak as you just stand on top of them
+for a bit. It'd be cool if you fireballed them or jumped on their head or something."*
+
+Two separate faults.
+
+**No gap.** A monster's position is derived from the word it is anchored to plus the
+scribe's screen x, which puts it exactly where he arrives — so he ends up standing *in*
+it and the blow has no distance to cross. Monsters are placed `strike_reach` further on,
+so there is space for something to happen in.
+
+**A pose is not an action.** The scribe held a strike frame; nothing travelled, nothing
+was struck. Each enemy now has its own verb, which is what a platformer does:
+
+| Enemy | Verb | Reads as |
+|---|---|---|
+| Skeleton (ground) | **Stomp** | The scribe hops, lands on the skull, bounces off. Mario. |
+| Bat (flying) | **Ink** | He flings a nib that arcs up and bursts on it. A Castlevania sub-weapon, and the right thing for a scribe to throw. |
+
+Different verbs per enemy are worth the extra art: they make the enemies read as different
+things rather than as two sprites that both evaporate.
+
+**It stays feedback, never a skill check.** Both verbs resolve on word completion. There
+is no aim, no timing window, and no way to miss — ADR 0004 rules out anything that
+punishes a slow player, and an attack that can miss is exactly that in disguise.
+
+**Strikes must overlap.** A fluent typist finishes a word roughly every 430 ms; a hop plus
+a burst runs longer than that. So strikes are a list, not a single slot — a second one
+begins while the first is still playing, and the scribe's own pose takes the most recent.
+Getting this wrong shows up only at speed, which is precisely where it would look broken
+to the person most able to notice.
+
 ### The ramp must not outrun the gate
 
 Error cost rises with stage so tolerance narrows as skill grows. But the *gate* also
