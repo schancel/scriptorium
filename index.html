@@ -117,9 +117,15 @@
     color: var(--dim); font-size: .85rem;
   }
   .panel-hint b { color: var(--bright); font-weight: 600; }
-  .row-pinned {
+  /* The dialog's actions: last in the panel, pinned to its foot, and ranged
+     right with the primary outermost -- where the eye goes to leave. Pinning a
+     row in the MIDDLE of the sections, as this once did, is worse than not
+     pinning it: content scrolls past underneath and it reads as part of the
+     document rather than as the way out. */
+  .panel-actions {
     position: sticky; bottom: -1.5rem; z-index: 2;
-    margin: 0 -1.5rem; padding: .75rem 1.5rem 1.5rem;
+    display: flex; justify-content: flex-end; gap: .6rem; flex-wrap: wrap;
+    margin: 1.4rem -1.5rem 0; padding: .85rem 1.5rem 1.5rem;
     background: var(--band); border-top: 1px solid rgba(122, 107, 80, .35);
   }
   .panel h2 { margin: 0 0 .25rem; font-size: 1.35rem; color: var(--gold); letter-spacing: .03em; }
@@ -285,12 +291,6 @@
       the game is fully playable without it.
     </p>
 
-    <h3>This passage</h3>
-    <div class="row row-pinned">
-      <button id="menu-resume" class="primary" type="button">Resume</button>
-      <button id="menu-restart" type="button">Type this passage again</button>
-    </div>
-
     <h3>Progress</h3>
     <div class="row">
       <button id="menu-export" type="button">Export to a file</button>
@@ -305,6 +305,11 @@
     <h3>History</h3>
     <p class="dim" id="history-note"></p>
     <ol id="menu-history"></ol>
+
+    <div class="panel-actions">
+      <button id="menu-restart" type="button">Back to the start of this part</button>
+      <button id="menu-resume" class="primary" type="button">Resume</button>
+    </div>
   </div>
 
 </div>
