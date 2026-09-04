@@ -12,72 +12,21 @@
  * hunting for it, which is the exact habit the game is built to remove.
  */
 
-import type { Finger, Glyph, Key, KeyboardLayout } from './types.js';
+import type { Finger, Glyph, Key, KeyboardLayout, Thumb } from './types.js';
+import { DEFAULT_SPACE_THUMB, fingerForKey, isBoardKey, needsShift, normaliseKey } from './keyboard.js';
 
-/** The space bar, live from stage 0: a thumb key and ~18% of all keystrokes. */
+/**
+ * The space bar, live from stage 0: a thumb key and ~18% of all keystrokes.
+ *
+ * It classifies live like anything else, but it prints nothing, so `draw.ts`
+ * has to mark it or a beginner cannot see that a keystroke is owed at all --
+ * `docs/design/02-rail.md#the-space-affordance`. Which thumb it is credited to
+ * is the player's preference, not a fact about the key.
+ */
 const SPACE: Key = '<space>';
 
 /** Either shift. Capitals need it, which is why they stay greyed until stage 8. */
 const SHIFT: Key = '<shift>';
-
-/**
- * Both thumbs rest on the space bar and either may strike it, so no mapping
- * from `(key, layout)` alone can name the right one. The report card needs a
- * single column, so space is attributed to the right thumb by convention.
- */
-const SPACE_FINGER: Finger = 'rt';
-
-/**
- * Likewise for shift: correct two-handed shifting uses the pinky *opposite* the
- * letter's hand, which depends on the letter and not on the key. Reported as a
- * pinky; `docs/design/06-curriculum.md#stages` covers the skill itself.
- */
-const SHIFT_FINGER: Finger = 'lp';
-
-/**
- * Standard touch-typing assignment for the unshifted US ANSI main block. This
- * is anatomy, not a tunable, so it lives in code rather than the tuning table.
- */
-const BASE_KEY_FINGER: Readonly<Record<string, Finger>> = {
-  '`': 'lp', '1': 'lp', 'q': 'lp', 'a': 'lp', 'z': 'lp',
-  '2': 'lr', 'w': 'lr', 's': 'lr', 'x': 'lr',
-  '3': 'lm', 'e': 'lm', 'd': 'lm', 'c': 'lm',
-  '4': 'li', 'r': 'li', 'f': 'li', 'v': 'li',
-  '5': 'li', 't': 'li', 'g': 'li', 'b': 'li',
-  '6': 'ri', 'y': 'ri', 'h': 'ri', 'n': 'ri',
-  '7': 'ri', 'u': 'ri', 'j': 'ri', 'm': 'ri',
-  '8': 'rm', 'i': 'rm', 'k': 'rm', ',': 'rm',
-  '9': 'rr', 'o': 'rr', 'l': 'rr', '.': 'rr',
-  '0': 'rp', 'p': 'rp', ';': 'rp', '/': 'rp',
-  '-': 'rp', '=': 'rp', '[': 'rp', ']': 'rp', '\\': 'rp', "'": 'rp',
-};
-
-/**
- * Which unshifted key produces each shifted character. Deliberately the US ANSI
- * table for *every* layout: the curriculum doc is explicit that layout affects
- * the overlay and finger mapping only, never the illumination sets. A UK player
- * must not unlock a different set of characters at stage 8 than a US one.
- */
-const SHIFTED_BASE: Readonly<Record<string, string>> = {
-  '~': '`', '!': '1', '@': '2', '#': '3', '$': '4', '%': '5',
-  '^': '6', '&': '7', '*': '8', '(': '9', ')': '0', '_': '-',
-  '+': '=', '{': '[', '}': ']', '|': '\\', ':': ';', '"': "'",
-  '<': ',', '>': '.', '?': '/',
-};
-
-/**
- * Where ISO differs from ANSI for the report card's per-finger columns. ISO
- * moves the backslash key beside the left shift, gives `#` its own key by the
- * apostrophe, and swaps which keys carry `@` and `"`.
- */
-const ISO_FINGER_OVERRIDES: Readonly<Record<string, Finger>> = {
-  '\\': 'lp',
-  '|': 'lp',
-  '#': 'rp',
-  '~': 'rp',
-  '@': 'rp',
-  '"': 'lr',
-};
 
 /**
  * Every key a character needs, primary key last.
@@ -86,47 +35,42 @@ const ISO_FINGER_OVERRIDES: Readonly<Record<string, Finger>> = {
  * a capital or other shifted character needs shift plus its base key. `null`
  * means the character has no keyboard production we know of -- a curly quote,
  * an em dash -- and it can only ever be greyed.
+ *
+ * The physical board is `keyboard.ts`'s business, so the questions "which key
+ * makes this character" and "does it take a shift" are asked of it rather than
+ * answered again here. There used to be a second copy of both tables in this
+ * file; they agreed by luck and one edit would have parted them.
  */
 function requiredKeys(ch: string, keySet: ReadonlySet<Key>): readonly Key[] | null {
   if (ch === ' ') return [SPACE];
   if (keySet.has(ch)) return [ch];
-  if (BASE_KEY_FINGER[ch] !== undefined) return [ch];
-  const lower = ch.toLowerCase();
-  if (lower !== ch && BASE_KEY_FINGER[lower] !== undefined) return [SHIFT, lower];
-  const base = SHIFTED_BASE[ch];
-  if (base !== undefined) return [SHIFT, base];
-  return null;
+  const base = normaliseKey(ch);
+  if (!isBoardKey(base)) return null;
+  return needsShift(ch) ? [SHIFT, base] : [base];
 }
 
 /**
  * The finger that should strike a key.
  *
- * @param key   a curriculum key, or any character it can produce
+ * A throwing wrapper over `keyboard.fingerForKey`, which holds the one finger
+ * table in the codebase. Live glyphs are guaranteed to have a mapping, so a
+ * missing one here is a programming error rather than anything a player can
+ * cause -- hence a throw rather than a null the caller would have to carry.
+ *
+ * @param key    a curriculum key, or any character it can produce
  * @param layout the player's physical keyboard; affects nothing but the answer
  *               to this question
- * @throws if the key has no mapping, which is a programming error rather than
- *         something a player can cause
+ * @param spaceThumb which thumb the player uses on the space bar
+ * @throws if the key has no mapping
  */
-export function fingerFor(key: Key, layout: KeyboardLayout): Finger {
-  if (key === SPACE) return SPACE_FINGER;
-  if (key === SHIFT) return SHIFT_FINGER;
-  if (layout === 'iso') {
-    const override = ISO_FINGER_OVERRIDES[key];
-    if (override !== undefined) return override;
-  }
-  const direct = BASE_KEY_FINGER[key];
-  if (direct !== undefined) return direct;
-  const lower = key.toLowerCase();
-  if (lower !== key) {
-    const asLetter = BASE_KEY_FINGER[lower];
-    if (asLetter !== undefined) return asLetter;
-  }
-  const base = SHIFTED_BASE[key];
-  if (base !== undefined) {
-    const viaShift = BASE_KEY_FINGER[base];
-    if (viaShift !== undefined) return viaShift;
-  }
-  throw new Error(`illumination: no finger mapping for key "${key}"`);
+export function fingerFor(
+  key: Key,
+  layout: KeyboardLayout,
+  spaceThumb: Thumb = DEFAULT_SPACE_THUMB,
+): Finger {
+  const finger = fingerForKey(key, layout, spaceThumb);
+  if (finger === null) throw new Error(`illumination: no finger mapping for key "${key}"`);
+  return finger;
 }
 
 /**
@@ -139,8 +83,15 @@ export function fingerFor(key: Key, layout: KeyboardLayout): Finger {
  * @param text   the passage exactly as printed
  * @param keySet everything typable at the current stage, from `keySetFor`
  * @param layout used only to name the finger on live glyphs
+ * @param spaceThumb which thumb the player uses on the space bar; likewise only
+ *                   ever changes the finger, never the classification
  */
-export function classify(text: string, keySet: ReadonlySet<Key>, layout: KeyboardLayout): Glyph[] {
+export function classify(
+  text: string,
+  keySet: ReadonlySet<Key>,
+  layout: KeyboardLayout,
+  spaceThumb: Thumb = DEFAULT_SPACE_THUMB,
+): Glyph[] {
   const glyphs: Glyph[] = [];
   for (const ch of text) {
     const required = requiredKeys(ch, keySet);
@@ -149,7 +100,7 @@ export function classify(text: string, keySet: ReadonlySet<Key>, layout: Keyboar
     if (!live || key === undefined) {
       glyphs.push({ ch, live: false, key: null, finger: null });
     } else {
-      glyphs.push({ ch, live: true, key, finger: fingerFor(key, layout) });
+      glyphs.push({ ch, live: true, key, finger: fingerFor(key, layout, spaceThumb) });
     }
   }
   return glyphs;

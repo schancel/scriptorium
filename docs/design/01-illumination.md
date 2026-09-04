@@ -45,6 +45,30 @@ Space is live from stage 0. It is a thumb key, both thumbs rest on it, and it is
 18% of all keystrokes; withholding it would gut the density numbers below for no
 pedagogical gain.
 
+Because it prints nothing, a live space still has to be *shown* — the rail marks one that
+is owed rather than leaving a gap. See [the space affordance](02-rail.md#the-space-affordance).
+Which thumb it is credited to is the player's preference, not a property of the key; see
+[stats](08-stats.md#nine-rows-not-ten).
+
+## Which finger, and which keys
+
+Classification asks two questions of the physical keyboard: *which keys does this
+character cost*, and *which finger strikes them*. Neither is illumination's business, and
+both are answered by `core/keyboard.ts`, which has to know the board anyway to draw the
+overlay. There is one finger table in the codebase and one shifted-character table, and
+`illumination.fingerFor` is a throwing wrapper over the first of them.
+
+This used to be two independent tables. They agreed on the day they were written, which
+is the only day that can be checked by eye; the first edit to either would have parted
+them, and the symptom — the overlay teaching one finger while the report card scores
+another — is not the kind of bug that announces itself. `core/keyboard.test.ts` now
+asserts the mapping covers every key of every stage in `data/curriculum.json`, on both
+layouts.
+
+**The finger mapping never affects classification.** Layout and thumb preference change
+only the *answer to which finger*, never which characters a stage lights — a UK player
+and a left-thumb player unlock exactly the same text at exactly the same stage.
+
 ## Density
 
 Illumination only works if enough of the page is live to feel like typing rather than

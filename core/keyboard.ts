@@ -17,9 +17,16 @@
  *
  * The rows are a data table, deliberately: a nested structure of literals would
  * be a page of numbers to misread, and the widths are keyboard facts, not tuning.
+ *
+ * This module is also the *single* authority on which finger strikes which key.
+ * `illumination.ts` used to carry a second, independent table; the two agreed by
+ * luck and would have drifted the first time either was edited, and a wrong
+ * finger taught for a year is not a bug that shows up as a failing test. There is
+ * one table, here, beside the geometry that has to know the physical board
+ * anyway, and `illumination.fingerFor` is a thin throwing wrapper over it.
  */
 
-import type { Finger, Key, KeyboardLayout } from './types.js';
+import type { Finger, Key, KeyboardLayout, Thumb } from './types.js';
 
 /** One drawn key. Coordinates and sizes are in key units. */
 export interface OverlayKey {
@@ -31,24 +38,44 @@ export interface OverlayKey {
   readonly finger: Finger;
 }
 
-/**
- * Report-card column order: left hand outside-in, then right hand inside-out, so
- * the table reads the way the hands sit on the board.
- */
-export const FINGERS: readonly Finger[] = ['lp', 'lr', 'lm', 'li', 'lt', 'rt', 'ri', 'rm', 'rr', 'rp'];
-
 export const FINGER_LABELS: Readonly<Record<Finger, string>> = {
   lp: 'L pinky', lr: 'L ring', lm: 'L mid', li: 'L index', lt: 'L thumb',
   rt: 'R thumb', ri: 'R index', rm: 'R mid', rr: 'R ring', rp: 'R pinky',
 };
 
 /**
- * Touch-typing finger assignment. Standard home-row discipline: index fingers
- * take the two columns they stretch to, the pinkies take everything outboard.
+ * Which thumb strikes the space bar, when the player has not said.
  *
- * Space is the right thumb. Both thumbs rest on it and either will do, but the
- * report card groups by finger and splitting 18% of all keystrokes across two
- * columns on a whim would make both columns lie.
+ * Right, because a right-handed typist's right thumb is the one already resting
+ * over the bar's centre, and because that is what the majority of touch-typing
+ * courses teach. It is a default and not a fact: `Thumb` in `types.js` explains
+ * why it has to be a preference at all.
+ */
+export const DEFAULT_SPACE_THUMB: Thumb = 'rt';
+
+/**
+ * Report-card column order: left hand outside-in, the thumb in the middle where
+ * it physically sits, then right hand inside-out -- so the table reads the way
+ * the hands sit on the board.
+ *
+ * Nine columns, not ten. Only one thumb is on the space bar, and rendering the
+ * other would print a row of zeroes about a finger this game never asks for.
+ * See docs/design/08-stats.md#the-report-card.
+ */
+export function reportFingers(spaceThumb: Thumb): readonly Finger[] {
+  return ['lp', 'lr', 'lm', 'li', spaceThumb, 'ri', 'rm', 'rr', 'rp'];
+}
+
+/** The space bar. Its finger is the player's preference, not a table entry. */
+const SPACE: Key = '<space>';
+
+/**
+ * Touch-typing finger assignment for the unshifted US ANSI main block, plus the
+ * modifier tokens the curriculum and the overlay name. Standard home-row
+ * discipline: index fingers take the two columns they stretch to, the pinkies
+ * take everything outboard. This is anatomy, not tuning, so it lives in code.
+ *
+ * `<space>` is deliberately absent: see `DEFAULT_SPACE_THUMB`.
  */
 const FINGER_BY_KEY: Readonly<Record<string, Finger>> = {
   '`': 'lp', '1': 'lp', 'q': 'lp', 'a': 'lp', 'z': 'lp',
@@ -56,7 +83,6 @@ const FINGER_BY_KEY: Readonly<Record<string, Finger>> = {
   '2': 'lr', 'w': 'lr', 's': 'lr', 'x': 'lr',
   '3': 'lm', 'e': 'lm', 'd': 'lm', 'c': 'lm',
   '4': 'li', '5': 'li', 'r': 'li', 't': 'li', 'f': 'li', 'g': 'li', 'v': 'li', 'b': 'li',
-  '<space>': 'rt',
   '6': 'ri', '7': 'ri', 'y': 'ri', 'u': 'ri', 'h': 'ri', 'j': 'ri', 'n': 'ri', 'm': 'ri',
   '8': 'rm', 'i': 'rm', 'k': 'rm', ',': 'rm',
   '9': 'rr', 'o': 'rr', 'l': 'rr', '.': 'rr',
@@ -66,14 +92,33 @@ const FINGER_BY_KEY: Readonly<Record<string, Finger>> = {
 };
 
 /**
+ * Which unshifted key produces each shifted character, on US ANSI.
+ *
+ * Deliberately the ANSI table for *every* layout, because
+ * `docs/design/06-curriculum.md#keyboard-layout` is explicit that layout affects
+ * the overlay and the finger mapping only, never which characters a stage
+ * unlocks. A UK player must not reach stage 8 with a different set of live
+ * characters than a US one. Where ISO genuinely moves a character to another
+ * hand, `FINGER_OVERRIDES` corrects the finger without touching the key set.
+ */
+const SHIFTED_BASE: Readonly<Record<string, string>> = {
+  '~': '`', '!': '1', '@': '2', '#': '3', '$': '4', '%': '5',
+  '^': '6', '&': '7', '*': '8', '(': '9', ')': '0', '_': '-',
+  '+': '=', '{': '[', '}': ']', '|': '\\', ':': ';', '"': "'",
+  '<': ',', '>': '.', '?': '/',
+};
+
+/**
  * Where the layouts disagree about fingers. On ANSI `\` sits above Enter and is
  * a right-pinky reach; on ISO it moves to the left of `z` and becomes a left-pinky
- * key. Same character, different hand -- which is exactly the kind of thing an
- * overlay that ignored layout would teach wrongly and permanently.
+ * key. ISO also gives `#` its own key beside the apostrophe and swaps which keys
+ * carry `@` and `"`. Same characters, different hands -- which is exactly the
+ * kind of thing an overlay that ignored layout would teach wrongly and
+ * permanently.
  */
 const FINGER_OVERRIDES: Readonly<Record<KeyboardLayout, Readonly<Record<string, Finger>>>> = {
   ansi: {},
-  iso: { '\\': 'lp' },
+  iso: { '\\': 'lp', '|': 'lp', '#': 'rp', '~': 'rp', '@': 'rp', '"': 'lr' },
 };
 
 /**
@@ -119,19 +164,59 @@ export function keyLabel(key: Key): string {
 }
 
 /**
- * The overlay key a character is struck on. Capitals live on the letter key (the
- * shift is a separate keystroke and a separate stage), and the space bar has no
- * printable form, so both need translating before anything can be highlighted.
+ * The physical key a character is struck on.
+ *
+ * Space has no printable form; a capital lives on its letter key; and a shifted
+ * character lives on the unshifted key beneath it, so `:` is struck on `;`. The
+ * shift itself is a separate keystroke on a separate key, so it is not part of
+ * the answer -- this names the key the overlay should light, and nothing else.
+ *
+ * An angle-bracketed curriculum token (`<space>`, `<shift>`) is already a key
+ * name and is returned unchanged.
  */
 export function normaliseKey(ch: string): Key {
-  if (ch === ' ') return '<space>';
-  return ch.toLowerCase();
+  if (ch === ' ') return SPACE;
+  if (ch.length > 1) return ch;
+  const lower = ch.toLowerCase();
+  if (lower !== ch) return lower;
+  return SHIFTED_BASE[ch] ?? ch;
 }
 
-/** The finger that should strike a key, or null if it is not on this board. */
-export function fingerForKey(key: Key, layout: KeyboardLayout): Finger | null {
-  const k = normaliseKey(key);
-  return FINGER_OVERRIDES[layout][k] ?? FINGER_BY_KEY[k] ?? null;
+/** True when producing this character also requires holding a shift. */
+export function needsShift(ch: string): boolean {
+  if (ch.length > 1) return false;
+  return ch.toLowerCase() !== ch || SHIFTED_BASE[ch] !== undefined;
+}
+
+/**
+ * True when a key exists on the physical board at all.
+ *
+ * Layout-independent on purpose: it answers "can this character be typed?",
+ * which the curriculum forbids varying by layout. A curly quote or an em dash
+ * answers false and can therefore only ever be greyed.
+ */
+export function isBoardKey(key: Key): boolean {
+  return key === SPACE || FINGER_BY_KEY[key] !== undefined;
+}
+
+/**
+ * The finger that should strike a key, or null if it is not on this board.
+ *
+ * The one authoritative answer in the codebase; everything else that needs a
+ * finger calls through here. Accepts either a curriculum key or any character
+ * that key produces, so `':'`, `'A'` and `'<shift>'` all resolve.
+ *
+ * @param spaceThumb which thumb the player uses on the space bar
+ */
+export function fingerForKey(
+  key: Key,
+  layout: KeyboardLayout,
+  spaceThumb: Thumb = DEFAULT_SPACE_THUMB,
+): Finger | null {
+  if (key === ' ' || key === SPACE) return spaceThumb;
+  const override = FINGER_OVERRIDES[layout][key];
+  if (override !== undefined) return override;
+  return FINGER_BY_KEY[key] ?? FINGER_BY_KEY[normaliseKey(key)] ?? null;
 }
 
 function rowsFor(layout: KeyboardLayout): readonly string[] {
@@ -144,7 +229,10 @@ function rowsFor(layout: KeyboardLayout): readonly string[] {
  * Keys with no finger assignment are dropped rather than defaulted: a key drawn
  * in some arbitrary finger's colour is a lie the player would learn.
  */
-export function overlayLayout(layout: KeyboardLayout): OverlayKey[] {
+export function overlayLayout(
+  layout: KeyboardLayout,
+  spaceThumb: Thumb = DEFAULT_SPACE_THUMB,
+): OverlayKey[] {
   const out: OverlayKey[] = [];
   const rows = rowsFor(layout);
   for (let y = 0; y < rows.length; y++) {
@@ -154,7 +242,7 @@ export function overlayLayout(layout: KeyboardLayout): OverlayKey[] {
       const w = wRaw === undefined ? 1 : Number.parseFloat(wRaw);
       const h = hRaw === undefined ? 1 : Number.parseFloat(hRaw);
       const key = name ?? SPACER;
-      const finger = key === SPACER ? null : fingerForKey(key, layout);
+      const finger = key === SPACER ? null : fingerForKey(key, layout, spaceThumb);
       if (finger !== null) out.push({ key, x, y, w, h, finger });
       x += w;
     }

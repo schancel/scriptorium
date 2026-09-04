@@ -17,13 +17,16 @@
 
 import { CELL_W, focalX, visibleRange } from './rail.js';
 import {
-  FINGERS,
+  DEFAULT_SPACE_THUMB,
   FINGER_LABELS,
   fingerForKey,
   keyLabel,
+  normaliseKey,
   overlayExtent,
   overlayLayout,
+  reportFingers,
 } from './keyboard.js';
+import { tuningValue } from './tuning.js';
 import type {
   DrawCmd,
   Finger,
@@ -34,6 +37,7 @@ import type {
   Mode,
   RailState,
   Score,
+  Thumb,
   Tuning,
 } from './types.js';
 
@@ -92,6 +96,9 @@ const M = {
   kbUnit: 26,        // tuning-exempt: band composition
   kbTop: 202,        // tuning-exempt: band composition
   keyPad: 2,
+  spaceMarkY: 157,   // tuning-exempt: band composition -- one px under the rail baseline
+  spaceMarkH: 2,
+  spaceMarkInset: 3, // tuning-exempt: band composition -- keeps the bar off its neighbours
   reportX: 44,       // tuning-exempt: report card composition
   reportRightX: 372, // tuning-exempt: report card composition
   reportTitleY: 46,  // tuning-exempt: report card composition
@@ -115,16 +122,6 @@ const PANEL_ALPHA = 0.94;    // tuning-exempt: report card veils the level behin
  */
 const WORST_KEYS = 5;        // tuning-exempt: fixed by docs/design/08-stats.md
 
-/**
- * Strikes on a key before its overlay highlight is allowed to fade out.
- *
- * The accuracy threshold itself is `gate_accuracy`, correctly. This is only the
- * sample floor that stops one lucky keystroke retiring the crutch. It arguably
- * belongs in the tuning table and cannot go there without editing a doc this
- * change is not allowed to touch -- see the handover note.
- */
-const MIN_MASTERY_HITS = 20; // tuning-exempt: sample floor, should become a tuning row
-
 // --- the frame's input ------------------------------------------------------
 
 /**
@@ -146,6 +143,13 @@ export interface FrameState {
   readonly layout: KeyboardLayout;
   /** Everything typable at the current stage; the rest of the board is dimmed. */
   readonly keySet: readonly Key[];
+  /**
+   * Which thumb the player strikes space with. Optional, because it is a
+   * preference the platform may not have asked for yet; absent means the right
+   * thumb. It reaches the display list because the report card must not print a
+   * column for the thumb this player never uses.
+   */
+  readonly spaceThumb?: Thumb;
 }
 
 // --- the report card --------------------------------------------------------
@@ -177,19 +181,26 @@ export interface ReportCard {
 /**
  * Aggregate per-key statistics into the card.
  *
- * All ten fingers are always present, including the ones with no data. That is
- * the entire point of the table: a two-finger typist's card is two columns of
- * numbers and eight rows of zeroes, and omitting the empty rows would hide
- * exactly the thing it exists to show.
+ * Every finger the game asks for is always present, including the ones with no
+ * data. That is the entire point of the table: a two-finger typist's card is two
+ * rows of numbers and seven rows of zeroes, and omitting the empty rows would
+ * hide exactly the thing it exists to show.
+ *
+ * Nine rows, not ten. Only one thumb is on the space bar -- see
+ * `keyboard.reportFingers` -- and a permanently empty tenth row would be an
+ * artefact of the model rather than a diagnosis of the player, which is the one
+ * thing this table must never be.
  */
 export function reportCard(
   keyStats: Readonly<Record<Key, KeyStat>>,
   layout: KeyboardLayout,
+  spaceThumb: Thumb = DEFAULT_SPACE_THUMB,
 ): ReportCard {
+  const columns = reportFingers(spaceThumb);
   const hits = new Map<Finger, number>();
   const errors = new Map<Finger, number>();
   const totalMs = new Map<Finger, number>();
-  for (const f of FINGERS) {
+  for (const f of columns) {
     hits.set(f, 0);
     errors.set(f, 0);
     totalMs.set(f, 0);
@@ -197,7 +208,7 @@ export function reportCard(
 
   const worst: WorstKey[] = [];
   for (const [key, stat] of Object.entries(keyStats)) {
-    const finger = fingerForKey(key, layout);
+    const finger = fingerForKey(key, layout, spaceThumb);
     if (finger !== null) {
       hits.set(finger, (hits.get(finger) ?? 0) + stat.hits);
       errors.set(finger, (errors.get(finger) ?? 0) + stat.errors);
@@ -215,7 +226,7 @@ export function reportCard(
     }
   }
 
-  const fingers: FingerRow[] = FINGERS.map((finger) => {
+  const fingers: FingerRow[] = columns.map((finger) => {
     const h = hits.get(finger) ?? 0;
     const e = errors.get(finger) ?? 0;
     const attempts = h + e;
@@ -290,6 +301,44 @@ function nextLiveGlyph(state: FrameState): Glyph | null {
   return null;
 }
 
+/**
+ * The space affordance.
+ *
+ * A space prints nothing, and a beginner cannot press a key he cannot see -- the
+ * owner's report was that it is "difficult to tell the user is supposed to press
+ * space", on the key that is a fifth of every keystroke in the game and is live
+ * from stage 0. So a space that is still owed gets a mark: a low bar in its cell,
+ * where an underscore would sit.
+ *
+ * Geometry rather than a glyph, deliberately. An interpunct or an underscore
+ * character is one or two pixels of ink in a 12px cell at the virtual design
+ * resolution, and how many depends on whichever monospace font the platform
+ * resolved -- an affordance that survives in one font and vanishes in the next is
+ * no affordance. A rect is exactly the size core asks for on every platform.
+ *
+ * A pending space is drawn inset and in the focal guide's own muted `rule`
+ * colour: quieter than a live letter, so the eye still reads words rather than
+ * bars, but unmistakably a thing rather than a gap. The space *under the cursor*
+ * is drawn full-cell-width in the caret's colour, which is what makes the caret
+ * unambiguous when it lands on one: the vertical caret and the bar it sits on
+ * agree, and read together as the cell the player owes.
+ *
+ * A space already typed goes back to blank -- there is nothing left to ask for,
+ * and a ribbon of bars behind the cursor would be noise.
+ */
+function pushSpaceMark(cmds: DrawCmd[], i: number, state: FrameState, offset: number): void {
+  const current = i === state.cursor;
+  const inset = current ? 0 : M.spaceMarkInset;
+  cmds.push({
+    op: 'rect',
+    x: i * CELL_W + offset + inset,
+    y: M.spaceMarkY,
+    w: CELL_W - inset * 2,
+    h: M.spaceMarkH,
+    color: pal(current ? (state.blocked ? 'error' : 'gold') : 'rule'),
+  });
+}
+
 function pushRail(cmds: DrawCmd[], state: FrameState, rail: RailState, tuning: Tuning): void {
   cmds.push({ op: 'rect', x: 0, y: M.bandTop, w: M.vw, h: M.bandH, color: pal('band') });
 
@@ -297,7 +346,12 @@ function pushRail(cmds: DrawCmd[], state: FrameState, rail: RailState, tuning: T
   const { first, last } = visibleRange(state.glyphs.length, rail.offset, M.vw);
   for (let i = first; i < last; i++) {
     const g = state.glyphs[i];
-    if (g === undefined || g.ch === ' ' || g.ch === '\n') continue;
+    if (g === undefined || g.ch === '\n') continue;
+    if (g.ch === ' ') {
+      // Owed, not yet paid: current or still ahead, and actually asked for.
+      if (g.live && i >= state.cursor) pushSpaceMark(cmds, i, state, rail.offset);
+      continue;
+    }
     const style = glyphStyle(i, state);
     cmds.push({
       op: 'text', value: g.ch, x: i * CELL_W + rail.offset, y: M.railBaseY,
@@ -353,24 +407,31 @@ function isMastered(key: Key, state: FrameState, tuning: Tuning): boolean {
   const stat = state.keyStats[key];
   if (stat === undefined) return false;
   const attempts = stat.hits + stat.errors;
-  if (stat.hits < MIN_MASTERY_HITS) return false;
-  return attempts > 0 && stat.hits / attempts >= (tuning['gate_accuracy'] ?? 1);
+  if (stat.hits < tuningValue(tuning, 'mastery_min_samples')) return false;
+  return attempts > 0 && stat.hits / attempts >= tuningValue(tuning, 'gate_accuracy');
 }
 
 function pushKeyboard(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
-  const keys = overlayLayout(state.layout);
+  const spaceThumb = state.spaceThumb ?? DEFAULT_SPACE_THUMB;
+  const keys = overlayLayout(state.layout, spaceThumb);
   const extent = overlayExtent(state.layout);
   const originX = (M.vw - extent.w * M.kbUnit) / 2;
   const taught = new Set(state.keySet);
   const next = nextLiveGlyph(state);
   const nextKey = next === null ? null : next.key;
+  // The glyph names the *character* owed; the overlay draws physical keys. `:`
+  // is struck on `;`, so the two only line up once the key has been normalised.
+  // Without it nothing lights at all for a colon -- the stage-8 player is left
+  // hunting for the key the overlay exists to point at.
+  const nextBoardKey = nextKey === null ? null : normaliseKey(nextKey);
 
   for (const k of keys) {
     const x = originX + k.x * M.kbUnit + M.keyPad;
     const y = M.kbTop + k.y * M.kbUnit + M.keyPad;
     const w = k.w * M.kbUnit - M.keyPad * 2;
     const h = k.h * M.kbUnit - M.keyPad * 2;
-    const isNext = nextKey !== null && k.key === nextKey && !isMastered(k.key, state, tuning);
+    const isNext =
+      nextKey !== null && k.key === nextBoardKey && !isMastered(nextKey, state, tuning);
     const known = taught.has(k.key);
     cmds.push({
       op: 'rect', x, y, w, h,
@@ -385,7 +446,7 @@ function pushKeyboard(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void 
   }
 
   if (next !== null && next.key !== null) {
-    const finger = fingerForKey(next.key, state.layout);
+    const finger = fingerForKey(next.key, state.layout, spaceThumb);
     const named = finger === null ? '' : FINGER_LABELS[finger];
     cmds.push({
       op: 'text', value: `next: ${keyLabel(next.key)}    ${named}`,
@@ -395,7 +456,7 @@ function pushKeyboard(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void 
 }
 
 function pushReport(cmds: DrawCmd[], state: FrameState): void {
-  const card = reportCard(state.keyStats, state.layout);
+  const card = reportCard(state.keyStats, state.layout, state.spaceThumb ?? DEFAULT_SPACE_THUMB);
   cmds.push({
     op: 'rect', x: 0, y: 0, w: M.vw, h: M.vh, color: pal('panel'), alpha: PANEL_ALPHA,
   });

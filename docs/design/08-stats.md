@@ -1,6 +1,6 @@
 # Stats and progress
 
-**Implemented by:** `core/typing.ts`, `core/progress.ts`
+**Implemented by:** `core/typing.ts`, `core/progress.ts`, `core/draw.ts`
 
 Someone starting at 10 WPM needs to see that number move. The progress curve is most of
 the motivation in the first month, and it is the part a beginner cannot feel from the
@@ -34,13 +34,37 @@ Shown at the end of every level. This is the primary teaching surface, not a sco
 screen:
 
 - WPM and accuracy for the level, against the running average
-- **Per-finger breakdown** — accuracy and mean latency for all ten fingers
+- **Per-finger breakdown** — accuracy and mean latency for every finger the game asks for
 - **Worst five keys** by error rate, with what was struck instead
 - New keys' progress toward the mastery gate, and what is still missing
 
-The per-finger table is the point. A two-finger typist's card shows two columns of data
-and eight empty ones, which makes the problem visible in a way no amount of instruction
-does. As the curriculum advances, filling in those columns becomes the visible goal.
+The per-finger table is the point. A two-finger typist's card shows two rows of data and
+the rest empty, which makes the problem visible in a way no amount of instruction does.
+As the curriculum advances, filling in those rows becomes the visible goal.
+
+### Nine rows, not ten
+
+The table has **nine** rows: eight fingers, plus the one thumb that strikes the space
+bar.
+
+Both thumbs rest on space and either will do, so no table keyed on the *key* can name the
+finger — it is a fact about the player, not about the keyboard. Attributing space to the
+right thumb regardless had two costs, and both of them attacked the one thing this table
+is for. The right-thumb row was inflated by a fifth of every keystroke in the game, so it
+looked like a well-drilled finger when it was really just the space bar. And the
+left-thumb row was permanently empty — a row of zeroes that says *you never use this
+finger*, printed about a finger the game never asks for.
+
+An empty row here is supposed to mean "you are not using this finger and you should be".
+A row that can never fill teaches the player to distrust the empty rows that matter,
+which is precisely the diagnosis the card exists to deliver.
+
+So it is a **preference**, `spaceThumb`, defaulting to the right, and the card renders the
+eight fingers plus the thumb actually in use. Right is the default because that is the
+thumb already resting over the centre of the bar for most right-handed typists, and what
+most touch-typing courses teach; a left-thumb typist changes the preference and their card
+is correct rather than half empty. The preference changes the finger for `<space>` and
+nothing else — not the key set, not the classification, not any other key.
 
 ## History
 

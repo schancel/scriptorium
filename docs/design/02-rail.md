@@ -1,6 +1,6 @@
 # The reading rail
 
-**Implemented by:** `core/rail.ts`, `core/lectio.ts`
+**Implemented by:** `core/rail.ts`, `core/lectio.ts`, `core/draw.ts`
 
 ## Fixed eyes, moving world
 
@@ -43,6 +43,42 @@ accident of layout; with it, it reads as a place to look.
 including through long greyed runs and at every line boundary. Any drift defeats the
 whole purpose, and drift is easy to introduce accidentally when handling wrapping, so it
 is checked rather than eyeballed.
+
+## The space affordance
+
+Space is live from stage 0, both thumbs rest on it, and it is the most-pressed key in
+the game by a wide margin. It also prints nothing. The first report from the player was
+that it is *"difficult to tell the user is supposed to press space"* — which is the
+illumination mechanic failing at its own premise: the rail is supposed to show, at every
+moment, exactly what is being asked for, and on a fifth of all keystrokes it was showing
+a blank.
+
+So a space that is still owed carries a mark, and a space already typed does not:
+
+```
+   b e g i n n i n g ▁ G o d ▁ c r e a t e d
+   ─────typed──────  │        ▁
+                     └ cursor  └ still owed
+```
+
+- **Pending** — a low bar inset in the cell, in the focal guide's muted colour. Quieter
+  than a letter, so the eye still reads words rather than a picket fence, but plainly a
+  thing rather than a gap.
+- **Current** — the same bar at full cell width, in the caret's colour. The vertical
+  caret and the bar beneath it agree and read as one mark: *this cell, this keystroke*.
+  This is what makes the caret unambiguous when it lands on a space, which it does more
+  often than on any letter.
+- **Typed** — nothing. There is nothing left to ask for, and a trail of bars behind the
+  cursor is noise.
+
+**It is drawn as geometry, not as a character.** An interpunct or an underscore glyph is
+one or two pixels of ink inside a 12px cell at the virtual design resolution, and *how
+many* depends on whichever monospace font the platform happened to resolve. An
+affordance that is legible in one font and invisible in the next is not an affordance.
+A rect is exactly the size core asks for, on every platform and in every port.
+
+The keyboard overlay does the other half: the space bar is the widest key on the board
+and lights like any other next key, and the hint line names it in words — `next: space`.
 
 ## Lectio mode
 

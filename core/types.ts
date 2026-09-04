@@ -23,6 +23,22 @@ export type Finger =
   | 'lp' | 'lr' | 'lm' | 'li' | 'lt'
   | 'rt' | 'ri' | 'rm' | 'rr' | 'rp';
 
+/**
+ * Which thumb strikes the space bar.
+ *
+ * Both thumbs rest on it and either will do, so no table keyed on `(key,
+ * layout)` can answer the question -- it is a fact about the player, not about
+ * the keyboard. Attributing space to one thumb regardless left the other's
+ * report-card column permanently empty, and an always-empty column is exactly
+ * the misreading the card exists to prevent: it says "you never use this
+ * finger" about a finger the player uses on 18% of keystrokes.
+ *
+ * So it is a preference, defaulting to the right, and the card renders the
+ * eight fingers plus the thumb actually in use. See
+ * docs/design/08-stats.md#the-report-card.
+ */
+export type Thumb = Extract<Finger, 'lt' | 'rt'>;
+
 export type KeyboardLayout = 'ansi' | 'iso';
 
 // --- text and illumination --------------------------------------------------

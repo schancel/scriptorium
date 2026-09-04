@@ -14,12 +14,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { CELL_W, createRail, focalX, layoutRail, stepRail, visibleRange } from './rail.js';
-import { VIRTUAL_W, drawFrame, reportCard, type FrameState } from './draw.js';
-import { fingerForKey, overlayExtent, overlayLayout } from './keyboard.js';
-import type { DrawCmd, Glyph, Key, Score, Tuning } from './types.js';
+import { PALETTE_ORDER, VIRTUAL_W, drawFrame, reportCard, type FrameState } from './draw.js';
+import {
+  DEFAULT_SPACE_THUMB,
+  fingerForKey,
+  overlayExtent,
+  overlayLayout,
+  reportFingers,
+} from './keyboard.js';
+import type { DrawCmd, Glyph, Key, KeyStat, Score, Tuning } from './types.js';
 
 /** The rows data/tuning.json actually carries, as a fixture. */
-const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95 }; // tuning-exempt: test fixture mirroring data/tuning.json
+const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20 }; // tuning-exempt: test fixture mirroring data/tuning.json
 
 /** Genesis 1, World English Bible. A whole chapter, because that is the claim. */
 const GENESIS_1: readonly string[] = [
@@ -246,6 +252,116 @@ test(`the ribbon eases toward its target, never past it, and settles exactly`, (
   assert.equal(rail.targetOffset, target);
 });
 
+// --- the space affordance ---------------------------------------------------
+
+/**
+ * A space that is still owed is marked with a low bar in its own cell, so the
+ * marks are the only rects narrow enough to fit one. Every key face on the
+ * overlay is wider than a glyph cell, and every band is the width of the screen.
+ */
+function spaceMarksOf(cmds: readonly DrawCmd[]): Extract<DrawCmd, { op: `rect` }>[] {
+  return cmds.filter(
+    (c): c is Extract<DrawCmd, { op: `rect` }> => c.op === `rect` && c.w <= CELL_W,
+  );
+}
+
+const GOLD = PALETTE_ORDER.indexOf(`gold`);
+
+/** Width of the widest highlighted key face, which is the key being asked for. */
+function highlightedKeyWidth(cmds: readonly DrawCmd[]): number {
+  let widest = 0;
+  for (const c of cmds) {
+    if (c.op !== `rect` || c.color !== GOLD || c.w <= CELL_W || c.w >= VIRTUAL_W) continue;
+    widest = Math.max(widest, c.w);
+  }
+  return widest;
+}
+
+const FIRST_SPACE = SPACED.findIndex((g) => g.ch === ` `);
+const FIRST_LETTER = SPACED.findIndex((g) => g.live && g.ch !== ` `);
+
+test(`the fixture has both a space and a letter to sit the cursor on`, () => {
+  assert.ok(FIRST_SPACE > 0);
+  assert.ok(FIRST_LETTER >= 0);
+  assert.equal(SPACED[FIRST_SPACE]?.live, true);
+});
+
+test(`a space still owed is drawn; one already typed is not`, () => {
+  const { offset } = layoutRail(SPACED, FIRST_SPACE, VIRTUAL_W, TUNING);
+  const cmds = drawFrame(frame(SPACED, FIRST_SPACE), createRail(offset), TUNING);
+  const focal = focalX(VIRTUAL_W, TUNING);
+  const marks = spaceMarksOf(cmds);
+
+  assert.ok(marks.length > 0, `a pending space must leave something to press`);
+  // Nothing behind the cursor: a typed space goes back to being a gap.
+  for (const m of marks) assert.ok(m.x >= focal, `a space behind the cursor was marked`);
+
+  const { first, last } = visibleRange(SPACED.length, offset, VIRTUAL_W);
+  let owed = 0;
+  for (let i = Math.max(first, FIRST_SPACE); i < last; i++) {
+    if (SPACED[i]?.ch === ` ` && SPACED[i]?.live === true) owed += 1;
+  }
+  assert.equal(marks.length, owed, `one mark per space still owed, no more and no fewer`);
+});
+
+test(`the caret is unambiguous when it lands on a space`, () => {
+  const focal = focalX(VIRTUAL_W, TUNING);
+  for (const blocked of [false, true]) {
+    const { offset } = layoutRail(SPACED, FIRST_SPACE, VIRTUAL_W, TUNING);
+    const cmds = drawFrame(
+      { ...frame(SPACED, FIRST_SPACE), blocked },
+      createRail(offset),
+      TUNING,
+    );
+    const caret = caretsOf(cmds)[0];
+    const under = spaceMarksOf(cmds).find((m) => m.x === focal);
+    assert.ok(under !== undefined, `the space under the cursor is unmarked`);
+    // Full cell width and the caret's own colour, so the two read as one thing.
+    assert.equal(under.w, CELL_W);
+    assert.equal(under.color, caret?.color);
+    // And louder than the spaces merely pending behind it.
+    for (const m of spaceMarksOf(cmds)) {
+      if (m.x !== focal) assert.ok(m.w < under.w && m.color !== under.color);
+    }
+  }
+});
+
+test(`the marks never disturb the caret or the focal guide`, () => {
+  const { offset } = layoutRail(SPACED, FIRST_SPACE, VIRTUAL_W, TUNING);
+  const cmds = drawFrame(frame(SPACED, FIRST_SPACE), createRail(offset), TUNING);
+  assert.equal(caretsOf(cmds).length, 1);
+  assert.equal(rulesOf(cmds).length, 2);
+});
+
+test(`a passage with every space typed draws no marks at all`, () => {
+  const { offset } = layoutRail(SPACED, SPACED.length, VIRTUAL_W, TUNING);
+  const cmds = drawFrame(frame(SPACED, SPACED.length), createRail(offset), TUNING);
+  assert.equal(spaceMarksOf(cmds).length, 0);
+});
+
+test(`the space bar is the key the overlay lights when a space is next`, () => {
+  const spaceFrame = drawFrame(
+    frame(SPACED, FIRST_SPACE),
+    createRail(layoutRail(SPACED, FIRST_SPACE, VIRTUAL_W, TUNING).offset),
+    TUNING,
+  );
+  const letterFrame = drawFrame(
+    frame(SPACED, FIRST_LETTER),
+    createRail(layoutRail(SPACED, FIRST_LETTER, VIRTUAL_W, TUNING).offset),
+    TUNING,
+  );
+  const onSpace = highlightedKeyWidth(spaceFrame);
+  const onLetter = highlightedKeyWidth(letterFrame);
+  assert.ok(onLetter > 0, `some key is highlighted for a letter`);
+  // The space bar is the widest key on the board; nothing else could be this.
+  assert.ok(onSpace > onLetter, `the space bar is not the highlighted key`);
+
+  const hint = spaceFrame.find(
+    (c): c is Extract<DrawCmd, { op: `text` }> => c.op === `text` && c.style === `hint-center`,
+  );
+  assert.ok(hint?.value.includes(`space`), `the hint should name the space bar: ${hint?.value}`);
+});
+
 // --- the overlay ------------------------------------------------------------
 
 test(`both keyboard layouts are the same size and nothing overlaps`, () => {
@@ -286,18 +402,38 @@ test(`every stage-1 key is on the board, and the space bar is a thumb`, () => {
 
 // --- the report card --------------------------------------------------------
 
-test(`the report card always shows all ten fingers, empty ones included`, () => {
-  const card = reportCard(
-    {
-      f: { hits: 9, errors: 1, totalMs: 900, latencies: [], confusions: { d: 1 } }, // tuning-exempt: test fixture
-      j: { hits: 4, errors: 4, totalMs: 800, latencies: [], confusions: { k: 3, h: 1 } }, // tuning-exempt: test fixture
-    },
-    `ansi`,
-  );
-  assert.equal(card.fingers.length, card.fingers.length);
+const TWO_FINGER_STATS: Readonly<Record<Key, KeyStat>> = {
+  f: { hits: 9, errors: 1, totalMs: 900, latencies: [], confusions: { d: 1 } }, // tuning-exempt: test fixture
+  j: { hits: 4, errors: 4, totalMs: 800, latencies: [], confusions: { k: 3, h: 1 } }, // tuning-exempt: test fixture
+};
+
+test(`the report card shows every finger the game asks for, empty ones included`, () => {
+  const card = reportCard(TWO_FINGER_STATS, `ansi`);
+  assert.deepEqual(card.fingers.map((r) => r.finger), reportFingers(DEFAULT_SPACE_THUMB));
   assert.equal(new Set(card.fingers.map((r) => r.finger)).size, card.fingers.length);
   const idle = card.fingers.filter((r) => r.hits === 0);
   assert.ok(idle.length > 0, `an unused finger must still get a row`);
   assert.equal(card.worst[0]?.key, `j`);
   assert.equal(card.worst[0]?.confusedWith, `k`);
+});
+
+test(`the card never prints a column for the thumb the player does not use`, () => {
+  // A permanently empty column is an artefact of the model, not a diagnosis of
+  // the player -- and this table exists to diagnose the player.
+  for (const thumb of [`lt`, `rt`] as const) {
+    const card = reportCard(TWO_FINGER_STATS, `ansi`, thumb);
+    const shown = card.fingers.map((r) => r.finger);
+    assert.ok(shown.includes(thumb));
+    assert.ok(!shown.includes(thumb === `lt` ? `rt` : `lt`), `both thumbs on the card`);
+  }
+});
+
+test(`space is credited to the thumb the player actually uses`, () => {
+  const stats: Readonly<Record<Key, KeyStat>> = {
+    '<space>': { hits: 8, errors: 0, totalMs: 800, latencies: [], confusions: {} }, // tuning-exempt: test fixture
+  };
+  for (const thumb of [`lt`, `rt`] as const) {
+    const row = reportCard(stats, `ansi`, thumb).fingers.find((r) => r.finger === thumb);
+    assert.equal(row?.hits, 8); // tuning-exempt: matches the fixture above
+  }
 });
