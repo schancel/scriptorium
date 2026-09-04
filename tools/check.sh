@@ -30,21 +30,27 @@ run "no magic numbers"  python3 tools/check_no_magic.py
 run "data invariants"   python3 tools/validate_data.py
 run "zero install"      tools/check_zero_install.sh
 
-if ls core/*.test.js core/**/*.test.js >/dev/null 2>&1; then
-  run "unit tests"      node --test core/
+if [ "${SKIP_TSC:-0}" = "1" ]; then
+  printf '  %-24s\033[33mskip\033[0m (SKIP_TSC=1)\n' "type check"
+  printf '  %-24s\033[33mskip\033[0m (SKIP_TSC=1)\n' "unit tests"
+elif [ ! -d node_modules ]; then
+  printf '  %-24s\033[33mskip\033[0m (run `npm install` first)\n' "type check"
+  printf '  %-24s\033[33mskip\033[0m (run `npm install` first)\n' "unit tests"
+elif ! compgen -G "core/*.ts" >/dev/null; then
+  printf '  %-24s\033[33mskip\033[0m (no sources yet)\n' "type check"
+  printf '  %-24s\033[33mskip\033[0m (no sources yet)\n' "unit tests"
 else
-  printf '  %-24s\033[33mskip\033[0m (no tests yet)\n' "unit tests"
-fi
-
-if [ "${SKIP_TSC:-0}" != "1" ] && command -v npx >/dev/null 2>&1 && ls core/*.js >/dev/null 2>&1; then
-  run "type check"      npx -y -p typescript@5.6 tsc --noEmit -p jsconfig.json
-else
-  printf '  %-24s\033[33mskip\033[0m (SKIP_TSC or no sources)\n' "type check"
+  run "type check"      npx tsc --noEmit -p tsconfig.json
+  if compgen -G "core/*.test.ts" >/dev/null; then
+    run "unit tests"    tools/run_tests.sh
+  else
+    printf '  %-24s\033[33mskip\033[0m (no tests yet)\n' "unit tests"
+  fi
 fi
 
 echo
 if [ "$fail" -ne 0 ]; then
-  echo -e "\033[31mFAILED\033[0m — see above. Do not commit."
+  echo -e "\033[31mFAILED\033[0m -- see above. Do not commit."
   exit 1
 fi
 echo -e "\033[32mall invariants hold\033[0m"

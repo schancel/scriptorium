@@ -1,6 +1,6 @@
 # Tuning
 
-**Implemented by:** `core/sim.js`, `core/damage.js`, `core/curriculum.js`, `core/rail.js`
+**Implemented by:** `core/sim.ts`, `core/damage.ts`, `core/curriculum.ts`, `core/rail.ts`
 
 Every tunable number in the game lives in this table and nowhere else. Numeric literals
 in `core/` outside a tiny allowlist (`0`, `1`, `-1`) are a `make check` failure.

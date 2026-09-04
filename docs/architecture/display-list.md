@@ -1,7 +1,7 @@
 # The display list
 
-`core/draw.js` does not draw. It returns a flat array of draw commands describing what a
-frame should look like; `platform/web/canvas_renderer.js` executes them against a Canvas
+`core/draw.ts` does not draw. It returns a flat array of draw commands describing what a
+frame should look like; `platform/web/canvas_renderer.ts` executes them against a Canvas
 2D context.
 
 This is the single biggest portability lever in the codebase. The same array is executed

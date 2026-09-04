@@ -1,6 +1,6 @@
 # Stats and progress
 
-**Implemented by:** `core/typing.js`, `core/progress.js`
+**Implemented by:** `core/typing.ts`, `core/progress.ts`
 
 Someone starting at 10 WPM needs to see that number move. The progress curve is most of
 the motivation in the first month, and it is the part a beginner cannot feel from the

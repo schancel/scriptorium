@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DOC_HEADER = re.compile(r"@doc\s+(\S+?\.md)(?:#(\S+))?")
 IMPL_BY = re.compile(r"\*\*Implemented by:\*\*(.+)", re.I)
-MODULE_REF = re.compile(r"`([\w/]+\.js)`")
+MODULE_REF = re.compile(r"`([\w/]+\.ts)`")
 
 
 def anchors(path: Path) -> set[str]:
@@ -28,7 +28,7 @@ def anchors(path: Path) -> set[str]:
 
 def main() -> int:
     errors: list[str] = []
-    modules = sorted((ROOT / "core").rglob("*.js"))
+    modules = sorted((ROOT / "core").rglob("*.ts"))
 
     # code -> docs
     for f in modules:
@@ -56,7 +56,7 @@ def main() -> int:
             continue
         refs = MODULE_REF.findall(m.group(1))
         if not refs:
-            errors.append(f"{rel}: 'Implemented by' names no `module.js`")
+            errors.append(f"{rel}: 'Implemented by' names no `module.ts`")
         for r in refs:
             declared.add(r)
             if not (ROOT / r).exists():

@@ -1,6 +1,6 @@
 # Illumination
 
-**Implemented by:** `core/illumination.js`, `core/corpus.js`
+**Implemented by:** `core/illumination.ts`, `core/corpus.ts`
 
 The central mechanic, and the reason the Bible works as a beginner corpus at all.
 

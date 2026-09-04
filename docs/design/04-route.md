@@ -1,6 +1,6 @@
 # The route
 
-**Implemented by:** `core/route.js`, `core/warp.js`
+**Implemented by:** `core/route.ts`, `core/warp.ts`
 
 ## A graph, not a reading plan
 

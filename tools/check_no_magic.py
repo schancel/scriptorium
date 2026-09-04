@@ -21,7 +21,7 @@ NUM = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])")
 
 def main() -> int:
     bad = []
-    files = sorted((ROOT / "core").rglob("*.js"))
+    files = sorted((ROOT / "core").rglob("*.ts"))
     for f in files:
         raw = f.read_text(encoding="utf-8").splitlines()
         for lineno, line in enumerate(blank(f.read_text(encoding="utf-8")).splitlines(), 1):

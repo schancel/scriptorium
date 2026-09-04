@@ -13,9 +13,11 @@ wants to touch type. Every design decision falls out of that. See
 
 <https://schancel.github.io/scriptorium>
 
-Or locally — there is no build step and nothing to install:
+Or locally. One build step, one dev dependency:
 
 ```sh
+npm install     # typescript, and nothing else
+make build      # compile docs tables into data/, TypeScript into build/
 make serve      # python3 -m http.server 8000
 open http://localhost:8000
 ```
@@ -41,7 +43,7 @@ open http://localhost:8000
 | Path | What it is |
 |---|---|
 | `docs/` | **The design. Canonical.** Code is a projection of this. |
-| `core/` | Pure game logic. No browser APIs, ever. |
+| `core/` | Pure game logic, TypeScript. No browser APIs, ever. |
 | `platform/web/` | The only code that touches the DOM, canvas, audio or storage. |
 | `data/` | Texts, routes, scenery. Several files are **generated** from `docs/`. |
 | `tools/` | Text importers and the docs→data compiler. |

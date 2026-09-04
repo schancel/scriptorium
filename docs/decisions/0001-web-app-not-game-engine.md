@@ -1,6 +1,7 @@
 # 0001 — A zero-build web app, not a game engine
 
-**Status:** accepted, 2026-09-03
+**Status:** accepted, 2026-09-03. Partly amended by [ADR 0007](0007-typescript-with-one-build-step.md), which introduces a
+single `tsc` compile step. Everything else here stands.
 
 ## Context
 
@@ -11,8 +12,11 @@ without a rewrite.
 
 ## Decision
 
-A plain web app: ES modules, Canvas 2D, WebAudio. No framework, no bundler, no npm
-dependencies, no build step. Served from GitHub Pages.
+A plain web app: ES modules, Canvas 2D, WebAudio. No framework, no bundler, no runtime
+dependencies. Served from GitHub Pages.
+
+*(Amended by ADR 0007: the source is TypeScript, compiled by `tsc`. One build step, still
+no bundler and no runtime dependencies.)*
 
 Portability is bought instead through [core purity](../architecture/core-purity.md) — a
 pure logic core behind a four-file platform layer.
@@ -20,7 +24,8 @@ pure logic core behind a four-file platform layer.
 ## Consequences
 
 - He gets a link. Nothing to install, works on any desktop OS, progress saves locally.
-- `index.html` works opened directly off the filesystem, which makes debugging trivial.
+- `index.html` works opened directly off the filesystem after a build, which keeps
+  debugging simple.
 - The repository is entirely readable text — diffable, reviewable, agent-workable.
 - We write our own sprite and audio handling rather than getting them from an engine.
   Accepted: the game's requirements are modest and its distinctive parts (illumination,

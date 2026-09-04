@@ -16,7 +16,7 @@ that translates later, and everything in [core purity](core-purity.md) exists to
 | `main.js` | a `Ticker` driving `sim.step` |
 
 **Mechanically translated — `core/`.** Pure functions over plain data. The JSDoc typedefs
-in `core/types.js` become Dart classes almost line for line, which is the main reason
+in `core/types.ts` become Dart classes almost line for line, which is the main reason
 `checkJs` is on with `strict` in an otherwise dependency-free repository: the types exist
 to make this translation obvious rather than to catch bugs.
 

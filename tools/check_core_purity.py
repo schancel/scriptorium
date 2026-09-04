@@ -18,7 +18,7 @@ COMMENT = re.compile(r"//.*$|/\*.*?\*/", re.S | re.M)
 
 
 def main() -> int:
-    files = sorted((ROOT / "core").rglob("*.js"))
+    files = sorted((ROOT / "core").rglob("*.ts"))
     bad = []
     for f in files:
         src = COMMENT.sub("", f.read_text(encoding="utf-8"))

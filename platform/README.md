@@ -8,8 +8,8 @@ rewritten by a port; nothing here contains game logic.
 | File | Responsibility |
 |---|---|
 | `main.js` | the rAF loop, wiring, scene switching |
-| `canvas_renderer.js` | executes the display list from `core/draw.js` on Canvas 2D |
-| `web_audio.js` | executes sound events from `core/sound.js` on WebAudio |
+| `canvas_renderer.js` | executes the display list from `core/draw.ts` on Canvas 2D |
+| `web_audio.js` | executes sound events from `core/sound.ts` on WebAudio |
 | `keyboard_input.js` | `keydown` → normalised core input events |
 | `local_storage.js` | progress persistence, file export/import |
 

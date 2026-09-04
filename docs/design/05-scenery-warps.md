@@ -1,6 +1,6 @@
 # Scenery, set pieces and warps
 
-**Implemented by:** `core/scenes.js`, `core/setpieces.js`, `core/worlds.js`
+**Implemented by:** `core/scenes.ts`, `core/setpieces.ts`, `core/worlds.ts`
 
 ## Scenery is authored, not inferred
 

@@ -1,0 +1,15 @@
+{
+  "name": "scriptorium",
+  "private": true,
+  "type": "module",
+  "description": "Learn to type by copying the Bible.",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test": "tsc && node --test \"build/core/**/*.test.js\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

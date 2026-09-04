@@ -1,6 +1,6 @@
 # Pacing, damage and items
 
-**Implemented by:** `core/entities.js`, `core/damage.js`, `core/items.js`
+**Implemented by:** `core/entities.ts`, `core/damage.ts`, `core/items.ts`
 
 ## Player-paced
 

@@ -1,6 +1,6 @@
 # The reading rail
 
-**Implemented by:** `core/rail.js`, `core/lectio.js`
+**Implemented by:** `core/rail.ts`, `core/lectio.ts`
 
 ## Fixed eyes, moving world
 

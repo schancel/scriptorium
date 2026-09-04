@@ -1,6 +1,6 @@
 # Music
 
-**Implemented by:** `core/tunes.js`, `core/sound.js`, `platform/web/web_audio.js`
+**Implemented by:** `core/tunes.ts`, `core/sound.ts`, `platform/web/web_audio.ts`
 
 Each theme gets a chiptune arrangement of a public-domain melody. The synthesis model
 deliberately mirrors the NES 2A03, because the constraints are what produce the sound.

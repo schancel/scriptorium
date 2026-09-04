@@ -1,6 +1,6 @@
 # The curriculum
 
-**Implemented by:** `core/curriculum.js`
+**Implemented by:** `core/curriculum.ts`
 
 ## Ordering
 

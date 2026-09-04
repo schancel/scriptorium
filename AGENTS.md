@@ -13,6 +13,7 @@ Do not infer the design from the code. The reasoning behind every mechanic lives
 without changing the doc that specifies it, `make check` fails — by design.
 
 ```sh
+make build     # compile docs tables into data/, and TypeScript into build/
 make check     # run before every commit. all invariants, no exceptions.
 ```
 
@@ -49,8 +50,9 @@ This is the mechanism that keeps docs honest; do not route around it.
    failure. Tunables come from `data/tuning.json`, generated from the tuning doc.
 6. **Determinism.** `sim.js` is a pure function of `(state, inputs, dtMs, rng)`. Same
    seed and input trace must produce identical state.
-7. **Zero install.** No runtime dependencies, no bundler, no build step. `index.html`
-   must work opened straight off the filesystem.
+7. **One build step, no runtime dependencies.** `tsc` only -- no bundler, no framework,
+   no runtime deps, and neither `build/` nor `node_modules/` committed.
+   -> `docs/decisions/0007-typescript-with-one-build-step.md`
 
 ## Standing prohibitions
 

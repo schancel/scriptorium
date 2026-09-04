@@ -1,6 +1,6 @@
 # Overview: what this is and who it is for
 
-**Implemented by:** `core/sim.js`
+**Implemented by:** `core/sim.ts`
 
 ## The player
 
