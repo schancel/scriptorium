@@ -233,7 +233,7 @@ function frameFor(level: Level, tuning: Tuning): FrameState {
   const candle = `${String(level.chunkIndex + 1)}/${String(level.chunks.length)}`;
   return {
     mode: level.reporting ? 'report' : 'level',
-    ref: `${level.bookTitle} ${String(level.chapter)}:${String(verseUnder(level))}  candle ${candle}`,
+    ref: `${level.bookTitle} ${String(level.chapter)}:${String(verseUnder(level))}  part ${candle}`,
     stage: level.stage,
     glyphs: level.glyphs,
     cursor: level.typing.cursor,
@@ -469,7 +469,7 @@ async function boot(): Promise<void> {
     return {
       where:
         `${level.bookTitle} ${String(level.chapter)}:${String(level.chunk.first)}-` +
-        `${String(level.chunk.last)} · ${progress.translation} · candle ` +
+        `${String(level.chunk.last)} · ${progress.translation} · part ` +
         `${String(level.chunkIndex + 1)} of ${String(level.chunks.length)}`,
       stageLine:
         stage === null
@@ -566,8 +566,8 @@ async function boot(): Promise<void> {
           /* the chunk we just typed is definitionally reachable */
         });
       } else if (event.value === 'escape') {
-        // "on to the next candle", exactly as the report card's footer says:
-        // forward from the candle just lit, not back to the one just typed.
+        // "next part", exactly as the report card's footer says: forward from
+        // the checkpoint just reached, not back to the passage just typed.
         goTo(progress.position, () => {
           /* likewise */
         });

@@ -551,7 +551,7 @@ function pushReport(cmds: DrawCmd[], state: FrameState): void {
   }
 
   cmds.push({
-    op: 'text', value: 'enter: type it again      esc: on to the next candle',
+    op: 'text', value: 'enter: type it again      esc: next part',
     x: M.reportX, y: M.reportFootY, style: 'report', color: pal('dim'),
   });
 }

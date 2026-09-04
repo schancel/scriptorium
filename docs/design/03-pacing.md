@@ -51,6 +51,22 @@ continuing — standard in typing tutors, and non-negotiable for habit formation
 | `quill_nib` | Quill nib | Permanent upgrade: extra heart, slower cloud, or wider smudge tolerance | Behind flashback rooms |
 | `wax_seal` | Wax seal | Unlocks routes and cosmetics | Awarded for a perfect chapter |
 
+### Say "part", not "candle"
+
+**Candle is our word, not the player's.** It is useful internal vocabulary -- it names
+the checkpoint, the chunk boundary and the item at once -- but it appeared in the HUD as
+`candle 1/11` and in the report card as *"on to the next candle"* to a player who had
+never been told what a candle was. The owner's exact reaction on watching someone play:
+*"I don't know what candles are?"*
+
+Player-facing copy says **part** (`part 1/11`, `esc: next part`). The internal names --
+`candle_interval`, chunk, checkpoint -- stay as they are.
+
+The word can return to the interface once a candle is actually drawn on the platform,
+visibly lighting as the player passes it. Then the metaphor explains itself and needs no
+glossary. Introducing thematic vocabulary before the thing it names is on screen is how
+a game ends up with a private language its player does not speak.
+
 Candles matter more than they look: they make death cost a verse rather than a chapter.
 A beginner needs 20+ minutes for a chapter, and losing that would end the session and
 possibly the habit.

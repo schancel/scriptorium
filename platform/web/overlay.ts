@@ -131,7 +131,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   function renderHistory(history: readonly HistoryEntry[]): void {
     historyList.replaceChildren();
     if (history.length === 0) {
-      historyNote.textContent = 'Nothing yet. The first candle you reach lands here.';
+      historyNote.textContent = 'Nothing yet. Finish your first passage and it lands here.';
       return;
     }
     historyNote.textContent =
