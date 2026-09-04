@@ -92,6 +92,29 @@ A room the player has entered is recorded in the progress record as `discovered`
 a player who steps in, turns round and walks straight back out has still found it, and a
 reload must not be a cheaper way to lose a room than walking out of one.
 
+## Standing off the route
+
+A player can be in a chapter the graph does not name. The menu lets them jump anywhere,
+and reading straight on from Genesis 1 reaches Genesis 2, which is not a node.
+
+**The map must not claim they are somewhere they are not.** It previously fell back to the
+route's first entry, so someone in Genesis 2 was told *you are here* at Genesis 1 — a small
+untruth of exactly the kind the rest of this project refuses. The report card establishes
+the rule: never assert what the data does not support.
+
+So when the current passage is not a node:
+
+- **No node is marked.** Nothing says *you are here*, because nothing on the map is where
+  they are.
+- The map says plainly where they actually are, and that it is not on this route:
+  *You are reading Genesis 2, which is not on the Pilgrimage. Nothing is wrong — the
+  route is a set of threads, not a fence.*
+- The last route node they completed stays marked as finished, so they can see where they
+  left the threads and get back to one.
+
+Being off the route is a normal thing to do, not an error, and the wording carries that.
+Someone who wandered should not be told off for it by a screen.
+
 ## Alternate routes
 
 Routes are data, so alternates are cheap:
