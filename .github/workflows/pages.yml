@@ -43,13 +43,32 @@ jobs:
         run: |
           test -f index.html || { echo "no index.html yet -- nothing to deploy"; exit 1; }
           SHA="${GITHUB_SHA:0:12}"
-          mkdir -p "_site/v/$SHA"
-          cp -r build/* "_site/v/$SHA/"
-          cp -r data "_site/v/$SHA/data"
-          sed "s|\./build/|./v/$SHA/|g" index.html > _site/index.html
+          # ONE path segment, not two. main.js resolves data with a fixed
+          # `../../../`, which from build/platform/web/ landed on the site root.
+          # A two-segment v/<sha>/ pushed that one level too shallow, so every
+          # data fetch 404'd into a fallback -- silently, because the loaders
+          # have defaults. Keep the depth identical to `build/`.
+          mkdir -p "_site/v-$SHA"
+          cp -r build/* "_site/v-$SHA/"
+          cp -r data _site/data
+          sed "s|\./build/|./v-$SHA/|g" index.html > _site/index.html
           touch _site/.nojekyll
           grep -o 'src="[^"]*"' _site/index.html
           du -sh _site
+
+      # Resolve the data URL the way main.js does, from the script src in the
+      # served index -- not from a path we happen to believe in. The versioned
+      # deploy broke exactly this and every asset I spot-checked by hand was
+      # fine, because I checked paths I chose rather than paths the app asks for.
+      - name: Check the app's own data path resolves
+        run: |
+          SRC=$(grep -o 'src="[^"]*main\.js"' _site/index.html | sed 's/src="//;s/"//')
+          DIR=$(dirname "${SRC#./}")
+          RESOLVED=$(cd "_site/$DIR" && cd ../../.. && pwd)
+          for f in data/themes.json data/tuning.json data/curriculum.json data/texts/web/genesis.json; do
+            test -f "$RESOLVED/$f" || { echo "main.js would 404 on $f (resolved from $DIR)"; exit 1; }
+          done
+          echo "all data files resolve from $DIR via ../../../" 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with: { path: '_site' }
