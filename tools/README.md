@@ -23,6 +23,7 @@ Python 3, no dependencies beyond the standard library.
 | `check_no_magic.py` | No numeric literals in `core/` outside the allowlist |
 | `check_zero_install.sh` | No dependencies, no bundler, no remote scripts |
 | `validate_data.py` | Route shape, scene coverage, warp echo phrases present in the real text |
+| `smoke.mjs` | Boots the **built** game under a DOM stub and asserts it renders, accepts the keys it asks for, keeps the reading column anchored, and is not silently running on fallbacks |
 
 Adding a new generated file means registering a shaper in `build_from_docs.py` — it
 fails loudly on an unregistered target rather than silently skipping it.

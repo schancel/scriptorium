@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
-    "test": "tsc && node --test \"build/core/**/*.test.js\""
+    "test": "tsc && node --test \"build/core/**/*.test.js\"",
+    "smoke": "tsc && node tools/smoke.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

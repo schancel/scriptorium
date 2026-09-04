@@ -47,6 +47,14 @@ else
   else
     printf '  %-24s\033[33mskip\033[0m (no tests yet)\n' "unit tests"
   fi
+  # The unit tests never touch platform/web/, so core can be perfectly green
+  # while the built game renders nothing or loads no text. run_tests.sh has
+  # just produced build/, so drive it.
+  if [ -f build/platform/web/main.js ]; then
+    run "built game runs"  node tools/smoke.mjs
+  else
+    printf '  %-24s\033[33mskip\033[0m (no build)\n' "built game runs"
+  fi
 fi
 
 echo
