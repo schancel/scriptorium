@@ -41,6 +41,7 @@ elif ! compgen -G "core/*.ts" >/dev/null; then
   printf '  %-24s\033[33mskip\033[0m (no sources yet)\n' "unit tests"
 else
   run "type check"      npx tsc --noEmit -p tsconfig.json
+  run "core is DOM-free" npx tsc -p tsconfig.core.json
   if compgen -G "core/*.test.ts" >/dev/null; then
     run "unit tests"    tools/run_tests.sh
   else

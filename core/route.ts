@@ -183,12 +183,17 @@ export function routeNodes(route: Route): ReadonlyMap<string, RouteNode> {
     if (edge.kind === 'flashback') secret.add(edge.to);
   }
   /*
-   * A passage any progression edge touches, and any passage holding a doorway,
-   * is a stop the pilgrimage passes through -- even when a flashback also lands
-   * on it. Only a node reached exclusively by flashback stays a secret.
+   * A secret is a passage the pilgrimage only ever *drops into*: something
+   * flashes back to it and nothing travels to it. Classification reads inbound
+   * edges alone. A passage holding a doorway is a stop -- John 19 is where the
+   * player already stands when the altar appears -- and a passage a progression
+   * edge arrives at is a stop even if a flashback also lands there.
+   *
+   * Reading outbound edges here would be the mistake: it would quietly promote a
+   * secret that had grown a way onward into a stop, which is precisely the trap
+   * `deadEnds` exists to report.
    */
   for (const edge of route.edges) {
-    secret.delete(edge.from);
     if (edge.kind === 'progression') secret.delete(edge.to);
   }
 
@@ -268,16 +273,30 @@ export function orphans(route: Route): readonly string[] {
 }
 
 /**
- * Nodes a player could enter and not leave.
+ * Nodes a player could enter and not come back from.
  *
- * Only a secret can be one. A progression destination with no outgoing edge is
- * the end of a thread, not a trap: the passage finishes and the map comes back.
- * A secret with no return frame is a trap, and it is the failure this looks for.
+ * Only a secret can be one. A progression destination with no outgoing edge --
+ * John 1, Revelation 22 -- is the end of a thread, not a trap: the passage
+ * finishes and the map comes back, which is what "travel and stay" means.
+ *
+ * Two things make a secret a trap, and both are reachable by editing the table:
+ *
+ *  - **No return.** Nothing records where the round trip started, so the player
+ *    is left in the older passage with the interrupted level abandoned.
+ *  - **A way onward.** A progression edge leaving a secret takes the player
+ *    forward *out of the flashback*, and the level the doorway interrupted is
+ *    never returned to. A room with its own exit is not a room, it is a
+ *    diversion of the route, and the verse the player left is lost.
  */
 export function deadEnds(route: Route): readonly string[] {
   const nodes = routeNodes(route);
   return [...nodes.values()]
-    .filter((node) => node.kind === 'secret' && returnTargetFor(route, node.ref) === null)
+    .filter(
+      (node) =>
+        node.kind === 'secret' &&
+        (returnTargetFor(route, node.ref) === null ||
+          node.outbound.some((id) => edgeById(route, id)?.kind === 'progression')),
+    )
     .map((node) => node.ref);
 }
 
