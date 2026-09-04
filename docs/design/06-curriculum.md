@@ -16,20 +16,26 @@ mechanical discipline of a row-by-row tutor.
 
 | stage | keys | coverage | description |
 |---|---|---|---|
-| 0 | `f j <space>` | 0.21 | anchor drill only, no verses |
+| 0 | `f j <space>` | 0.21 | the two bumps and the space bar, no verses yet |
 | 1 | `a s d f g h j k l ;` | 0.46 | scattered letters lit |
 | 2 | `e i` | 0.61 | short words fully lit |
-| 3 | `r u` | 0.67 | most short words |
+| 3 | `r u` | 0.67 | most short words lit |
 | 4 | `t o` | 0.80 | sentences mostly readable as typed |
-| 5 | `n y` | 0.86 | occasional greyed letter |
-| 6 | `c m w v b p` | 0.94 | all lowercase live |
+| 5 | `n y` | 0.86 | only the odd dim letter left |
+| 6 | `c m w v b p` | 0.94 | every lowercase letter lit |
 | 7 | `q x z , . /` | 0.97 | punctuation joins in |
-| 8 | `<shift> ' : ; -` | 1.00 | fully illuminated verses |
-| 9 | `0 1 2 3 4 5 6 7 8 9` | 1.00 | verse references, chapter navigation |
+| 8 | `<shift> ' : ; -` | 1.00 | capitals and the last punctuation: the whole verse |
+| 9 | `0 1 2 3 4 5 6 7 8 9` | 1.00 | the numbers in verse references |
 
 `/` is in stage 7 because `?` is shift+`/` on US ANSI. Without it, every question mark in
 the corpus -- there are 6,557 -- stays permanently greyed, and stage 8 could never reach
 the "fully illuminated" coverage it claims.
+
+`description` is **player-facing copy**, not a note to ourselves. It is the promotion
+panel's lead sentence and the label beside every entry in the menu's stage picker, so it
+follows [the tone](10-first-run.md#tone) and uses the player's vocabulary rather than
+ours: a character the stage has taught is *lit* and one it has not is *dim*, never `live`
+or `greyed` or `illuminated` -- three words this interface has never defined for him.
 
 `keys` is cumulative in effect — each stage's key set is the union of its own row and
 every row above it. `coverage` is the **measured** fraction of live keystrokes, from `tools/build_wordlists.py`

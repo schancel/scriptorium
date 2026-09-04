@@ -13,7 +13,7 @@
         "<space>"
       ],
       "predictedCoverage": 0.21,
-      "description": "anchor drill only, no verses"
+      "description": "the two bumps and the space bar, no verses yet"
     },
     {
       "stage": 1,
@@ -93,7 +93,7 @@
         "u"
       ],
       "predictedCoverage": 0.67,
-      "description": "most short words"
+      "description": "most short words lit"
     },
     {
       "stage": 4,
@@ -151,7 +151,7 @@
         "y"
       ],
       "predictedCoverage": 0.86,
-      "description": "occasional greyed letter"
+      "description": "only the odd dim letter left"
     },
     {
       "stage": 6,
@@ -191,7 +191,7 @@
         "p"
       ],
       "predictedCoverage": 0.94,
-      "description": "all lowercase live"
+      "description": "every lowercase letter lit"
     },
     {
       "stage": 7,
@@ -286,7 +286,7 @@
         "-"
       ],
       "predictedCoverage": 1.0,
-      "description": "fully illuminated verses"
+      "description": "capitals and the last punctuation: the whole verse"
     },
     {
       "stage": 9,
@@ -350,7 +350,7 @@
         "9"
       ],
       "predictedCoverage": 1.0,
-      "description": "verse references, chapter navigation"
+      "description": "the numbers in verse references"
     }
   ],
   "_generated_from": "docs/design/06-curriculum.md"

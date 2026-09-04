@@ -405,24 +405,58 @@ export function chronicleLevels(route: Route): readonly string[] {
  */
 export interface MapState {
   readonly routeId: string;
+  /**
+   * The passage the player is actually in -- which the route need not name.
+   *
+   * A player can stand off the route: the menu jumps anywhere, and reading
+   * straight on from Genesis 1 reaches Genesis 2, which is not a node. So this
+   * holds the citation itself rather than a node id, and when no node matches
+   * it, no node is marked. Empty means "nowhere yet", which is what a map
+   * nobody has arrived on is.
+   */
   readonly current: string;
   readonly completed: readonly string[];
   readonly discovered: readonly string[];
 }
 
-/** A fresh map, standing at the first entry in canonical order. */
-export function createMap(route: Route, options: RouteOptions = DEFAULT_ROUTE_OPTIONS): MapState {
-  const entries = entryRefs(route).filter((ref) => !(options.skipGenealogies && isGenealogy(ref)));
-  const first = entries[0] ?? nodeRefs(route)[0] ?? '';
-  return { routeId: route.id, current: first, completed: [], discovered: [] };
+/**
+ * A fresh map, standing nowhere.
+ *
+ * It does **not** fall back to the route's first entry. It used to, and the
+ * cost was a small untruth on the one screen whose job is to say where the
+ * player is: someone reading Genesis 2 was shown *you are here* against
+ * Genesis 1. See docs/design/04-route.md#standing-off-the-route -- the report
+ * card's rule holds here too, and the game may not assert what its data does
+ * not support.
+ */
+export function createMap(route: Route): MapState {
+  return { routeId: route.id, current: '', completed: [], discovered: [] };
 }
 
 function withMember(list: readonly string[], ref: string): readonly string[] {
   return list.includes(ref) ? list : [...list, ref];
 }
 
+/**
+ * Stand somewhere. `ref` is any citation, on the route or not; the map marks a
+ * node only when the route names the passage. See `standingOffRoute`.
+ */
 export function arriveAt(state: MapState, ref: string): MapState {
   return { ...state, current: ref };
+}
+
+/**
+ * The passage the player is in, when the route does not name it. Null when it
+ * does, and null when they are nowhere yet.
+ *
+ * This is what the map says instead of marking a node, and being off the route
+ * is a normal thing to do rather than an error -- the menu invites it and
+ * reading onward from a chapter's end causes it. See
+ * docs/design/04-route.md#standing-off-the-route.
+ */
+export function standingOffRoute(route: Route, state: MapState): string | null {
+  if (state.current === '') return null;
+  return routeNodes(route).has(state.current) ? null : state.current;
 }
 
 export function completePassage(state: MapState, ref: string): MapState {

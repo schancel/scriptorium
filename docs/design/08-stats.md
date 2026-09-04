@@ -63,9 +63,17 @@ stage 1 is not progress through it.
 
 ## Live HUD
 
-Always visible during play: hearts, chapter and verse, **WPM**, **accuracy**, combo
-multiplier, and the smudge meter. Deliberately small and in the top bar — the eye belongs
-on the rail, and a WPM counter next to the text would pull attention off it.
+Always visible during play: hearts, chapter, verse and part, **WPM**, **accuracy** and the
+smudge meter, plus the **score** whenever there is one to show — see
+[illumination](01-illumination.md#how-it-reads-on-screen). Deliberately small and in the
+top bar — the eye belongs on the rail, and a WPM counter next to the text would pull
+attention off it.
+
+The combo is **not** on it, and that is deliberate rather than missing. It is
+"acknowledged, modestly" through the drop chance and the strike cue
+([pacing](03-pacing.md#a-monster-is-a-word)); a multiplier in the corner would be a second
+number that moves on every keystroke, competing with the rail for the one thing this
+layout exists to hold still.
 
 ## The report card
 

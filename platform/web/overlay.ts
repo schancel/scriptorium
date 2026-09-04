@@ -193,6 +193,15 @@ export interface RouteView {
   readonly stops: number;
   readonly nodes: readonly RouteNodeView[];
   readonly threads: readonly RouteThreadView[];
+  /**
+   * The passage the player is actually in, when the route does not name it.
+   *
+   * Null while he is standing on a node, in which case that node is marked and
+   * the map has already answered "where am I". Non-null is the honest answer to
+   * the same question when nothing on the screen is where he is; see
+   * docs/design/04-route.md#standing-off-the-route.
+   */
+  readonly standing: string | null;
   /** Non-null when the route file itself could not be read. */
   readonly error: string | null;
 }
@@ -321,6 +330,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const mapThreadList = need('map-threads', HTMLUListElement);
   const mapError = need('map-error', HTMLParagraphElement);
   const mapProgress = need('map-progress', HTMLParagraphElement);
+  const mapStanding = need('map-standing', HTMLParagraphElement);
   const mapMenu = need('map-menu', HTMLButtonElement);
   const mapResume = need('map-resume', HTMLButtonElement);
 
@@ -389,14 +399,14 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   function renderHistory(history: readonly HistoryEntry[]): void {
     historyList.replaceChildren();
     if (history.length === 0) {
-      historyNote.textContent = 'Nothing yet. Finish your first passage and it lands here.';
+      historyNote.textContent = 'Nothing yet. Finish your first part and it lands here.';
       return;
     }
     historyNote.textContent =
-      `Sessions marked ${PROMOTED_MARK} unlocked a stage. Expect the WPM *after* one to be ` +
+      `A part marked ${PROMOTED_MARK} opened a stage. Expect the WPM after one to be ` +
       'lower than the WPM before it: a new stage lights up more of the page, so there ' +
       'are more characters to type per verse. That dip is the curriculum moving, not ' +
-      'you going backwards, and it comes back within a few sessions.';
+      'you going backwards, and it comes back within a few parts.';
 
     for (const entry of [...history].slice(-HISTORY_SHOWN).reverse()) {
       const row = document.createElement('li');
@@ -486,6 +496,21 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
         ? `Every passage on the ${view.routeId} route is finished.`
         : `${String(view.finished)} of ${String(view.stops)} passages finished. ` +
           'Secret rooms are not counted \u2014 you can finish without ever finding one.';
+    // Standing somewhere the route does not name, the map marks nothing and
+    // says so. It used to mark the route's first entry instead, which told a
+    // player reading Genesis 2 that he was in Genesis 1 -- and being off the
+    // route is a normal thing to do rather than a mistake, so the wording is a
+    // statement and not a correction.
+    mapStanding.textContent = view.standing === null
+      ? ''
+      : `You are reading ${view.standing}, which is not on the ${view.routeId} route. `
+        + 'Nothing is wrong \u2014 the route is a set of threads, not a fence.'
+        // Only when there is one. A card that told him where he left off with
+        // nothing finished would be asserting something the record does not say.
+        + (view.finished > 0
+          ? ' What you have finished is still marked below, so you can pick a thread'
+            + ' back up whenever you want one.'
+          : '');
     mapNodes.replaceChildren();
     mapThreadList.replaceChildren();
 
@@ -648,7 +673,8 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
           : []),
         [
           'keystrokes',
-          `${String(gate.samples)} of ${String(Math.round(gate.requiredSamples))}`,
+          `${String(gate.samples)} of ${String(Math.round(gate.requiredSamples))} `
+            + 'on the new keys',
           gate.samples >= gate.requiredSamples,
         ],
       ];
@@ -682,7 +708,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
       ? 'Nothing yet. Finish a part and it lands here.'
       : trend.promotions > 0
         ? `Your last ${countParts(trend.points.length)}, oldest first. A gold bar is a `
-          + 'part that opened a stage: more of the page goes live there, so the same '
+          + 'part that opened a stage: more of the page is lit there, so the same '
           + 'verse costs more keystrokes and the bars after it are shorter. That dip is '
           + 'the curriculum moving, not you going backwards.'
         : `Your last ${countParts(trend.points.length)}, oldest first — `
@@ -729,11 +755,11 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     promotionKeys.textContent = promotion.newKeys.map(keyName).join('   ');
     promotionDip.textContent =
       'Your WPM is about to drop, and that is the promotion working. More of the ' +
-      'page is live now, so there are more characters to type in the same verse — ' +
+      'page is lit now, so there are more characters to type in the same verse — ' +
       'you are being asked for more, not doing worse. It comes back within a few ' +
-      'sessions, and the history in the menu marks this session so the dip has a name.';
+      'parts, and the history in the menu marks this one so the dip has a name.';
     promotionCoverage.textContent =
-      `Live characters: ${pct(promotion.coverageBefore)} of the text before, ` +
+      `Lit characters: ${pct(promotion.coverageBefore)} of the text before, ` +
       `${pct(promotion.coverageAfter)} from here.`;
     menuPanel.hidden = true;
     gildPanel.hidden = true;

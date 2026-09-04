@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 import {
   DEFAULT_ROUTE_OPTIONS,
   GENEALOGIES,
+  arriveAt,
   chronicleLevels,
   completePassage,
   createMap,
@@ -41,6 +42,7 @@ import {
   returnTargetFor,
   routeComplete,
   routeNodes,
+  standingOffRoute,
   unresolvedRefs,
   type Route,
 } from './route.js';
@@ -166,11 +168,31 @@ test('nodes come back in canonical order, not table order', () => {
 
 test('a progression destination unlocks when its origin is completed', () => {
   const fresh = createMap(route);
-  assert.equal(fresh.current, 'Genesis 1');
+  assert.equal(fresh.current, '');
   assert.equal(isUnlocked(route, fresh, 'Genesis 1'), true);
   assert.equal(isUnlocked(route, fresh, 'John 1'), false);
   const done = completePassage(fresh, 'Genesis 1');
   assert.equal(isUnlocked(route, done, 'John 1'), true);
+});
+
+test('THE MAP MARKS NO NODE WHEN THE PLAYER IS NOT ON ONE', () => {
+  // docs/design/04-route.md#standing-off-the-route. Reading straight on from
+  // Genesis 1 reaches Genesis 2, which the graph does not name -- and the map
+  // used to answer that by marking Genesis 1, telling a player he was somewhere
+  // he was not. A fresh map marks nothing either, for the same reason.
+  const fresh = createMap(route);
+  assert.equal(mapView(route, fresh).filter((n) => n.current).length, 0);
+  assert.equal(standingOffRoute(route, fresh), null, 'nowhere yet is not off the route');
+
+  const off = arriveAt(completePassage(fresh, 'Genesis 1'), 'Genesis 2');
+  assert.equal(mapView(route, off).filter((n) => n.current).length, 0);
+  assert.equal(standingOffRoute(route, off), 'Genesis 2', 'and it can say where he is');
+  // The thread he left is still there to get back to.
+  assert.equal(mapView(route, off).find((n) => n.ref === 'Genesis 1')?.completed, true);
+
+  const on = arriveAt(off, 'John 1');
+  assert.deepEqual(mapView(route, on).filter((n) => n.current).map((n) => n.ref), ['John 1']);
+  assert.equal(standingOffRoute(route, on), null);
 });
 
 test('a secret stays off the map until it is found, and stays on it afterwards', () => {

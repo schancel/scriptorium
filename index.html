@@ -253,20 +253,20 @@
   <div class="panel" id="panel-gild" hidden>
     <h2>Type every letter?</h2>
     <p class="lead">
-      You have been typing fast enough that the greyed-out letters are probably
+      You have been typing fast enough that the dim letters are probably
       getting in your way rather than out of it.
     </p>
     <p>
       <b>Gilding</b> turns them back on. Every character in the passage is
       required, nothing skips ahead on its own, and the letters your stage has
       not taught yet turn gold as you type them. Fill a whole part and you earn
-      gold leaf.
+      gold leaf, which multiplies your score for the rest of the chapter.
     </p>
     <p class="dim">
-      It will not move your stage: the mastery gate still measures only the keys
-      your stage teaches, in either mode. If you want to skip ahead, set your
-      stage in the menu — that is the direct way, and it is one control instead
-      of a side effect.
+      It will not move your stage. A stage still opens on the keys it teaches,
+      and the letters you gild are not those keys — in either mode. If you want
+      to skip ahead, set your stage in the menu: that is the direct way, and it
+      is one control instead of a side effect.
     </p>
     <p class="dim">
       Either answer is fine and this is the only time you will be asked. The
@@ -288,11 +288,15 @@
     <p class="lead">
       Not a reading order. Every thread below is a real link between what one
       passage says and what a later one does with it &mdash; and when you travel
-      one, the shared phrase stays lit on the rail while the world changes
+      one, the shared phrase stays lit in place while the world changes
       around it.
     </p>
     <p class="err" id="map-error"></p>
     <p class="dim" id="map-progress"></p>
+    <!-- Where he actually is, when the route does not name it. The map marks
+         nothing in that case rather than marking its own first entry and being
+         wrong about him. docs/design/04-route.md#standing-off-the-route. -->
+    <p class="dim" id="map-standing"></p>
 
     <h3>Passages</h3>
     <ul id="map-nodes"></ul>
@@ -329,6 +333,10 @@
       hand. So the column that says most about technique is <b>mean</b>: a finger
       resting on its own keys answers quickly, and a finger you travel to cannot.
     </p>
+    <p class="dim">
+      WPM is the usual measure: every five characters you type correctly counts
+      as one word, so it can be compared with any other typing tool.
+    </p>
 
     <h3>What to work on next</h3>
     <p id="hands-advice"></p>
@@ -336,7 +344,7 @@
     <h3>Worst keys</h3>
     <ul id="hands-worst"></ul>
 
-    <h3>This stage</h3>
+    <h3>This stage &mdash; what is still missing</h3>
     <ul id="hands-gate"></ul>
 
     <h3>Part by part</h3>
@@ -410,8 +418,8 @@
       </label>
     </div>
     <p class="dim">
-      The overlay must match the board under your hands, and the report card has
-      a row for the thumb you actually use.
+      The keyboard drawn on screen must match the board under your hands, and the
+      report card has a row for the thumb you actually use.
     </p>
 
     <h3>Your stage</h3>
@@ -433,8 +441,8 @@
       <b>Gilding</b> is for people who already type. With it on, every character
       is required and nothing skips ahead on its own; the letters your stage has
       not taught turn gold as you type them, and filling a whole part earns gold
-      leaf. It does not move your stage — the mastery gate measures only the
-      keys your stage teaches, in either mode.
+      leaf, which multiplies your score for the rest of the chapter. It does not
+      move your stage — a stage opens on the keys it teaches, in either mode.
     </p>
 
     <!-- The one pressure in the game, and the switch that turns it off.
@@ -477,7 +485,7 @@
     <p class="dim">
       The route is a small graph of passages joined by phrases they share, not a
       run through the Bible front to back. <b>Read without typing</b> is the same
-      page on the same rail with nothing asked of you &mdash; it speeds up
+      page, flowing past on its own with nothing asked of you &mdash; it speeds up
       gently the longer you stay with it, and <b>Esc</b> brings you back.
     </p>
 
@@ -524,7 +532,7 @@
   </p>
   <p class="dim">
     Opened from a file:// URL, the browser will not load ES modules or fetch the
-    corpus. Run <code>make serve</code> and open <code>http://localhost:8000</code>.
+    text. Run <code>make serve</code> and open <code>http://localhost:8000</code>.
   </p>
 </div>
 

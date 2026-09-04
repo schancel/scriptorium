@@ -72,6 +72,28 @@ educational software feel like it is for children, and he will notice immediatel
 It also never mentions speed. He is slow, he knows he is slow, and the game's whole
 argument is that slow is fine right now.
 
+### The tone is the game's, not this screen's
+
+Everything above governs every surface: the HUD, the report card and its one sentence, the
+menu, the map, the promotion, the gilding offer, the doorway prompt and every error
+message. [Stats](08-stats.md#tone-and-leaving) says as much of the card in its own words.
+
+Two tests hold the whole of it to the rule rather than leaving it to a reading.
+
+- `core/copy.test.ts` gathers the copy that can be gathered -- the opening screen and the
+  three notes, every sentence `reportNote` and `reportAdvice` can produce, the stage
+  descriptions from [the curriculum](06-curriculum.md#stages), and `index.html` stripped
+  to its visible prose -- and asserts no exclamation marks, no praise for trivia, no
+  verdict where a fact would do, and no word that names a thing in the source tree and
+  nothing on his screen. `candle` in the HUD is the precedent for that last rule; see
+  [pacing](03-pacing.md#say-part-not-candle).
+- `tools/smoke.mjs` sweeps the same rule over what a *running* game draws and renders,
+  because the panels' copy is assembled in `platform/web/overlay.ts` at the moment of
+  showing and exists nowhere a static reader can find it.
+
+Neither test pins a sentence. A word count or a fixed vocabulary would make every future
+edit a test edit, and the point is to keep the voice, not to freeze the wording.
+
 ## Once only, and gone
 
 A `firstRun` field on the progress record, set false the moment the opening screen is

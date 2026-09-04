@@ -81,9 +81,12 @@ thread that unlocks it, which runs the [warp](05-scenery-warps.md#warps).
 
 A **doorway** stands open on the echoed phrase itself and stays open to the end of that
 verse — the only place in the passage where stepping backwards means anything, and long
-enough to be noticed in. It is named in one sentence in the strip under the rail, and
-**Tab** steps through it. Tab again, or finishing the short stretch inside, phases forward
-to the exact verse left. Typing on is how you decline one, and declining costs nothing:
+enough to be noticed in. It is named in one sentence in the strip under the rail -- the
+key, the passage it opens onto, and the route's own note about the echo, in that order --
+and **Tab** steps through it. Naming the destination is what makes that sentence an
+invitation rather than a control: *tab: a doorway* says only that something is there.
+Tab again, or finishing the short stretch inside, phases forward to the exact verse
+left. Typing on is how you decline one, and declining costs nothing:
 `requiredRefs` is built from the stops, a flashback destination is a secret by
 construction, and the platform filters its doorways through that guarantee rather than
 restating it.

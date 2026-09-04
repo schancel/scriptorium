@@ -904,7 +904,7 @@ export function nameKeys(keys: readonly Key[]): string {
  */
 export function reportNote(card: ReportCard, trend: Trend): string {
   if (trend.justPromoted) {
-    return 'A gold mark is a stage opening. More of the page goes live there, so the '
+    return 'A gold mark is a stage opening. More of the page is lit there, so the '
       + 'dip after one is the curriculum, not you.';
   }
   const slow = card.slowest;
@@ -1596,7 +1596,7 @@ function pushHud(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
   cmds.push({
     op: 'text',
     value: state.mode === 'lectio'
-      ? `READING    ${Math.round(state.score.wpm)} wpm`
+      ? `READING    pace ${Math.round(state.score.wpm)} wpm`
       : `WPM ${Math.round(state.score.wpm)}    ACC ${pct(state.score.accuracy)}%${score}`,
     x: M.vw / 2, y: M.hudTextY, style: 'hud-center', color: pal('gold'),
   });
@@ -2086,7 +2086,7 @@ function pushReport(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
   });
   if (card.worst.length === 0) {
     cmds.push({
-      op: 'text', value: 'none - clean sheet', x: R.rightX,
+      op: 'text', value: 'none above the noise yet', x: R.rightX,
       y: R.colY, style: 'report', color: pal('live'),
     });
   }
@@ -2121,19 +2121,20 @@ function pushReport(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
       ...(measured
         ? ([
           [
-            `accuracy   ${String(pct(gate.accuracy))}%   needs `
+            `accuracy   ${String(pct(gate.accuracy))}%   opens at `
             + `${String(pct(gate.requiredAccuracy))}%`,
             gate.accuracyMet,
           ],
           [
-            `speed      ${String(Math.round(gate.medianMs))} ms   needs `
+            `speed      ${String(Math.round(gate.medianMs))} ms   opens at `
             + `${String(Math.round(gate.allowedLatencyMs))} ms`,
             gate.latencyMet,
           ],
         ] as const)
         : []),
       [
-        `keystrokes ${String(gate.samples)} of ${String(Math.round(gate.requiredSamples))}`,
+        `keystrokes ${String(gate.samples)} of `
+        + `${String(Math.round(gate.requiredSamples))} on them`,
         gate.samples >= gate.requiredSamples,
       ],
     ];

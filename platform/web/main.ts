@@ -51,7 +51,7 @@ import { loadScenes, sceneFor as sceneAt, type Scene, type SceneMap } from '../.
 import { setpieceState, type SetpieceState } from '../../core/setpieces.js';
 import {
   arriveAt, completePassage, createMap, discoverSecret, flashbacksFrom,
-  loadRoute, mapThreads, mapView, nodeRefs, requiredRefs, routeComplete,
+  loadRoute, mapThreads, mapView, nodeRefs, requiredRefs, routeComplete, standingOffRoute,
   type MapState, type Route, type RouteEdge,
 } from '../../core/route.js';
 import {
@@ -245,6 +245,24 @@ const DATA_NAMES = {
 const ROUTE_MISSING =
   'The route did not load. Run `make build` and serve over http (`make serve`).';
 
+/**
+ * The player's name for a translation.
+ *
+ * `WEB` and `KJV` are what the files are called. The menu's own control spells
+ * both out -- it has to, because the choice is a difficulty step and a pair of
+ * bare proper nouns presents it as a preference about wording -- and every
+ * other surface that names one agrees with that control rather than printing
+ * the abbreviation the loader happens to use.
+ */
+const EDITION_NAMES: Readonly<Record<string, string>> = {
+  WEB: 'World English Bible',
+  KJV: 'King James Version',
+};
+
+function editionName(edition: string): string {
+  return EDITION_NAMES[edition] ?? edition;
+}
+
 // --- loading ----------------------------------------------------------------
 
 /** Resolve a repo-relative path from this module's own URL, not the page's. */
@@ -304,7 +322,10 @@ async function fetchBook(translation: string, book: string): Promise<Book> {
     usingFallback(DATA_NAMES.text);
     return FALLBACK_BOOK;
   }
-  throw new Error(`no text for ${book} (${translation}) -- run \`make fetch\``);
+  throw new Error(
+    `The ${editionName(translation)} text for ${book} did not load. `
+    + 'Run `make fetch` and serve over http (`make serve`).',
+  );
 }
 
 // --- the world --------------------------------------------------------------
@@ -972,9 +993,9 @@ async function boot(): Promise<void> {
     const trend = reportTrend(memory.history, tuning);
     return {
       scope: progress.gilding
-        ? 'Read over every part you have typed — the keys your stage teaches, which '
-          + 'with gilding on is not everything you typed.'
-        : 'Read over every part you have typed, not just the last one.',
+        ? 'Over every part you have typed, not just the last one — counting the keys '
+          + 'your stage teaches, which with gilding on is not everything you typed.'
+        : 'Over every part you have typed, not just the last one.',
       fingers: card.fingers,
       worst: card.worst,
       quickest: card.quickest?.finger ?? null,
@@ -1335,21 +1356,31 @@ async function boot(): Promise<void> {
       if (done.has(canonRef(ref))) state = completePassage(state, ref);
       if (found.has(canonRef(ref))) state = discoverSecret(state, ref);
     }
-    const here = routeRefFor(level.ref);
-    return here === null ? state : arriveAt(state, here);
+    // The route's own spelling when it names this passage, and the passage
+    // itself when it does not. Standing off the route is a normal thing to do
+    // -- the menu jumps anywhere and reading on from Genesis 1 reaches Genesis
+    // 2 -- and the map answers it by marking nothing and saying where he is,
+    // rather than by marking the route's first entry and being wrong. See
+    // docs/design/04-route.md#standing-off-the-route.
+    const here = routeRefFor(level.ref)
+      ?? formatReference(level.bookTitle, level.chapter);
+    return arriveAt(state, here);
   }
 
   function routeView(): RouteView {
     if (route === null) {
       return {
         routeId: '', complete: false, finished: 0, stops: 0,
-        nodes: [], threads: [], error: ROUTE_MISSING,
+        nodes: [], threads: [], standing: null, error: ROUTE_MISSING,
       };
     }
     const state = mapState();
     return {
       routeId: route.id,
       complete: routeComplete(route, state),
+      // Null while he is on a node; the chapter itself while he is not, which
+      // is what the map says in place of marking anything.
+      standing: standingOffRoute(route, state),
       finished: mapView(route, state).filter((n) => n.kind === 'stop' && n.completed).length,
       stops: requiredRefs(route).length,
       nodes: mapView(route, state)
@@ -1623,10 +1654,12 @@ async function boot(): Promise<void> {
     if (level.flashback !== null) return 'tab: back to where you were';
     const open = openDoorway();
     if (open === null) return null;
-    // The key first, so the two prompts read as the same control, and the
-    // route's own note after it -- verbatim, because the note is the reason the
-    // room is worth stepping into and lower-casing it mangles a citation.
-    return `tab: a doorway \u00b7 ${open.edge.note}`;
+    // The key first, so the two prompts read as the same control; then the
+    // passage it opens onto, because "a doorway" alone says only that something
+    // is there; then the route's own note -- verbatim, because the note is the
+    // reason the room is worth stepping into and lower-casing it mangles a
+    // citation. docs/design/04-route.md#how-it-is-played.
+    return `tab: a doorway into ${open.edge.to} \u00b7 ${open.edge.note}`;
   }
 
   /**
@@ -1842,7 +1875,7 @@ async function boot(): Promise<void> {
       gilding: progress.gilding,
       where:
         `${level.bookTitle} ${String(level.chapter)}:${String(level.chunk.first)}-` +
-        `${String(level.chunk.last)} · ${progress.translation} · part ` +
+        `${String(level.chunk.last)} · ${editionName(progress.translation)} · part ` +
         `${String(level.chunkIndex + 1)} of ${String(level.chunks.length)}`,
       stageLine:
         stage === null

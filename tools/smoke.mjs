@@ -28,6 +28,10 @@ import { dirname, resolve } from 'node:path';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const calls = { fillText: [], lines: [], fillRect: 0, stroke: 0, ready: null };
+// Every string the game has drawn since it booted, kept across frames. The
+// per-frame lists above are cleared by `tick`, and the tone sweep at the foot
+// of this file needs the whole run rather than the last sixteen milliseconds.
+const everSaid = new Set();
 
 class Ctx2D {
   constructor() {
@@ -49,7 +53,14 @@ class Ctx2D {
   stroke() { calls.stroke += 1; }
   createImageData(w, h) { return { width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }; }
   putImageData() {} drawImage() {}
-  fillText(v, x, y) { calls.fillText.push({ v: String(v), x, y, style: this.font, color: this.fillStyle }); }
+  fillText(v, x, y) {
+    const text = String(v);
+    calls.fillText.push({ v: text, x, y, style: this.font, color: this.fillStyle });
+    // The rail is the Bible, drawn a glyph at a time, and the Bible is not ours
+    // to hold to a house style -- it has exclamation marks in it. Everything
+    // else on the canvas is the game speaking, and is swept below.
+    if (text.length > 1 && !this.font.includes('17px')) everSaid.add(text);
+  }
   measureText(t) { return { width: String(t).length * 6 }; }
 }
 class CanvasShim {
@@ -423,17 +434,24 @@ ok(Boolean(goButton), 'a passage unlocked by a completed origin can be travelled
 // is exhaustively tested as a graph, and none of that says whether the graph
 // reached a player's eyes. Read the panel back instead.
 
-// It says where he stands, and it says it once. A map that cannot answer
-// "where am I" is a diagram; one that answers it twice is a broken diagram.
-// (Standing *off* the route -- a chapter the graph does not name -- it marks the
-// route's own entry rather than nothing. Whether that is right is the owner's
-// call; what is asserted here is that exactly one node is ever marked.)
+// Where he stands. He has read straight on past the end of Genesis 1, so he is
+// in a chapter the graph does not name -- and the map used to answer that by
+// marking its own first entry, telling a player reading Genesis 2 that he was
+// in Genesis 1. docs/design/04-route.md#standing-off-the-route: mark nothing,
+// say plainly where he is, and leave the finished passages marked.
+const chapterNow = refText().split(':')[0].trim();
+const onTheRoute = nodeRows.some((t) => t.startsWith(chapterNow));
 const hereRows = rowsOf('map-nodes').filter((li) => textOf(li).includes('you are here'));
-ok(hereRows.length === 1, 'THE MAP SAYS WHICH PASSAGE HE IS STANDING IN, AND ONLY ONE',
+const standing = String(stubEl('map-standing').textContent);
+ok(!onTheRoute, 'the harness really is standing off the route here', chapterNow);
+ok(hereRows.length === 0, 'STANDING OFF THE ROUTE, THE MAP MARKS NO NODE AT ALL',
    hereRows.map(textOf).join(' / ') || '(nothing is marked)');
-ok(nodeRows.some((t) => t.startsWith(String(hereRows[0]?.children[0].textContent ?? '\u0000'))),
-   'and the passage it marks is one the route actually names',
-   String(hereRows[0]?.children[0].textContent ?? '(none)'));
+ok(standing.includes(chapterNow), 'AND NAMES THE PASSAGE HE IS ACTUALLY READING', standing);
+ok(/not on the .+ route/.test(standing) && /Nothing is wrong/.test(standing),
+   'and says being off it is not an error', standing);
+ok(nodeRows.some((t) => t.startsWith('Genesis 1') && t.includes('finished')),
+   'while the thread he finished stays marked, so he can get back to one',
+   nodeRows.find((t) => t.startsWith('Genesis 1')) ?? '(not on the map)');
 
 // A locked passage says what would unlock it. "Not yet", with no reason, reads
 // as a bug in a graph the player can see -- and it must not offer a way in.
@@ -846,6 +864,43 @@ if (doorway !== undefined) {
      'A SKIPPED FLASHBACK NEVER GATES THE EXIT: the chapter finishes without it',
      `after ${past + 1} more parts`);
 }
+
+// --- the voice ---------------------------------------------------------------
+//
+// docs/design/10-first-run.md#tone is not a rule about the opening screen. It is
+// the game's voice, and it applies to every surface: plain, adult, specific, no
+// exclamation marks, no praise for trivia, and no word that names something in
+// our source and nothing he has been shown.
+//
+// `core/copy.test.ts` holds the canvas card's two generated sentences and the
+// prose in index.html to exactly this rule. What it cannot reach is the copy
+// assembled in `platform/web/overlay.ts` -- the promotion, the history note, the
+// map's rows and counters, the gate table -- which is a string in a function
+// that only a running game calls. So it is swept here, off the panels this run
+// actually rendered and everything the canvas actually drew.
+const panelText = [...elements.values()]
+  .map((el) => String(el.textContent ?? ''))
+  .filter((t) => t.length > 1);
+const spoken = [...everSaid, ...panelText];
+ok(spoken.length > 60, 'the tone sweep has copy to read', `${spoken.length} strings`);
+ok(panelText.some((t) => t.includes('passages finished')), 'including the panels it rendered');
+
+const exclaimed = spoken.find((t) => t.includes('!'));
+ok(exclaimed === undefined, 'NOTHING THE GAME SAYS IS EXCLAIMED', exclaimed ?? '');
+
+const praise = ['great', 'well done', 'nice work', 'awesome', 'perfect', 'excellent',
+                'good job', 'congratulations', 'brilliant', 'amazing', 'fantastic'];
+const flattered = spoken.find((t) => praise.some((w) => t.toLowerCase().includes(w)));
+ok(flattered === undefined, 'and nothing praises him for typing a letter', flattered ?? '');
+
+// Words that name a thing in the source tree and nothing on his screen. `candle`
+// is the precedent: excellent internal vocabulary, and it reached the HUD as
+// `candle 1/11` before a player had ever seen one drawn.
+const ours = [/\bcandles?\b/i, /\blectio\b/i, /\bchunks?\b/i, /\bglyphs?\b/i,
+              /\bribbon\b/i, /\bblot\b/i, /\billuminat(e|ed|ion|ing)\b/i,
+              /\bgreyed\b/i, /\blive\b/i, /\bmastery gate\b/i, /\bkey ?set\b/i];
+const jargon = spoken.find((t) => ours.some((re) => re.test(t)));
+ok(jargon === undefined, 'AND NOTHING SAYS A WORD ONLY THE SOURCE TREE KNOWS', jargon ?? '');
 
 console.log('');
 if (fails.length > 0) {
