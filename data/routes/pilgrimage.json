@@ -1,0 +1,86 @@
+{
+  "id": "pilgrimage",
+  "edges": [
+    {
+      "id": "beginning",
+      "kind": "progression",
+      "from": "Genesis 1",
+      "to": "John 1",
+      "echo": "In the beginning",
+      "note": "John opens by quoting Genesis word for word"
+    },
+    {
+      "id": "i-am",
+      "kind": "progression",
+      "from": "Exodus 3",
+      "to": "John 8",
+      "echo": "I AM",
+      "note": "The name given at the bush, claimed at the temple"
+    },
+    {
+      "id": "shepherd",
+      "kind": "progression",
+      "from": "Psalm 23",
+      "to": "John 10",
+      "echo": "shepherd",
+      "note": "The psalm's image, claimed in the first person"
+    },
+    {
+      "id": "forsaken",
+      "kind": "progression",
+      "from": "Psalm 22",
+      "to": "Matthew 27",
+      "echo": "why have you forsaken me",
+      "note": "Quoted from the cross, verbatim"
+    },
+    {
+      "id": "tree-of-life",
+      "kind": "progression",
+      "from": "Genesis 3",
+      "to": "Revelation 22",
+      "echo": "tree of life",
+      "note": "The tree barred at the start, open at the end"
+    },
+    {
+      "id": "only-son",
+      "kind": "flashback",
+      "from": "John 19",
+      "to": "Genesis 22",
+      "echo": "your son",
+      "note": "A father, an only son, a hill — seen from the cross"
+    },
+    {
+      "id": "serpent",
+      "kind": "flashback",
+      "from": "John 3",
+      "to": "Numbers 21",
+      "echo": "serpent",
+      "note": "John 3:14 cites the bronze serpent outright"
+    },
+    {
+      "id": "three-days",
+      "kind": "flashback",
+      "from": "Matthew 12",
+      "to": "Jonah 1",
+      "echo": "three days and three nights",
+      "note": "Jesus names Jonah as the sign"
+    },
+    {
+      "id": "passover",
+      "kind": "flashback",
+      "from": "John 19",
+      "to": "Exodus 12",
+      "echo": "bone",
+      "note": "John quotes the Passover rule about unbroken bones"
+    },
+    {
+      "id": "manna",
+      "kind": "flashback",
+      "from": "John 6",
+      "to": "Exodus 16",
+      "echo": "bread",
+      "note": "The bread-of-life discourse argues from the manna"
+    }
+  ],
+  "_generated_from": "docs/design/04-route.md"
+}

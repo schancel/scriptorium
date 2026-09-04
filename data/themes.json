@@ -1,0 +1,65 @@
+{
+  "themes": [
+    {
+      "id": "abbey",
+      "palette": "stone greys, candle amber",
+      "mood": "the default; cloister and library",
+      "tune": "veni-creator"
+    },
+    {
+      "id": "garden",
+      "palette": "deep greens, gold light",
+      "mood": "Eden, before the fall",
+      "tune": "wondrous-love"
+    },
+    {
+      "id": "desert",
+      "palette": "ochre, bleached sky",
+      "mood": "wilderness and wandering",
+      "tune": "cwm-rhondda"
+    },
+    {
+      "id": "sea",
+      "palette": "blues, foam white",
+      "mood": "flood, parted waters, deep",
+      "tune": "melita"
+    },
+    {
+      "id": "mountain",
+      "palette": "slate, smoke, fire",
+      "mood": "Sinai, Moriah, high places",
+      "tune": "nicaea"
+    },
+    {
+      "id": "storm",
+      "palette": "bruised purple, lightning",
+      "mood": "Jonah, tempest, dread",
+      "tune": "dies-irae"
+    },
+    {
+      "id": "city",
+      "palette": "sandstone, banners",
+      "mood": "Jerusalem, walls and gates",
+      "tune": "ewing"
+    },
+    {
+      "id": "temple",
+      "palette": "gold, deep red, incense",
+      "mood": "sanctuary and altar",
+      "tune": "nun-danket"
+    },
+    {
+      "id": "tomb",
+      "palette": "near-black, cold blue",
+      "mood": "the grave, catacombs",
+      "tune": "passion-chorale"
+    },
+    {
+      "id": "apocalypse",
+      "palette": "white-gold, void black",
+      "mood": "new creation, the end",
+      "tune": "helmsley"
+    }
+  ],
+  "_generated_from": "docs/design/05-scenery-warps.md"
+}

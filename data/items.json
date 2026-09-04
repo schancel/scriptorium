@@ -1,0 +1,35 @@
+{
+  "items": [
+    {
+      "id": "ink_pot",
+      "name": "Ink pot",
+      "effect": "Restores one heart",
+      "source": "Dropped for a clean verse streak, or hidden on side platforms"
+    },
+    {
+      "id": "candle",
+      "name": "Candle",
+      "effect": "Checkpoint — death returns here",
+      "source": "Placed at verse boundaries through a level"
+    },
+    {
+      "id": "gold_leaf",
+      "name": "Gold leaf",
+      "effect": "Score multiplier for the rest of the level",
+      "source": "Hidden on side platforms"
+    },
+    {
+      "id": "quill_nib",
+      "name": "Quill nib",
+      "effect": "Permanent upgrade: extra heart, slower cloud, or wider smudge tolerance",
+      "source": "Behind flashback rooms"
+    },
+    {
+      "id": "wax_seal",
+      "name": "Wax seal",
+      "effect": "Unlocks routes and cosmetics",
+      "source": "Awarded for a perfect chapter"
+    }
+  ],
+  "_generated_from": "docs/design/03-pacing.md"
+}

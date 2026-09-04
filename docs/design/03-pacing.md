@@ -1,0 +1,59 @@
+# Pacing, damage and items
+
+**Implemented by:** `core/entities.js`, `core/damage.js`, `core/items.js`
+
+## Player-paced
+
+Nothing moves until the player types. Monsters idle in place — bobbing, jiggling,
+telegraphing menace — but they do not advance on a clock.
+
+This is not a difficulty setting, it is the premise. A beginner on home row types 8–15
+WPM; any time limit calibrated for a competent typist fails them constantly during the
+exact fortnight they are most likely to quit. See
+[ADR 0004](../decisions/0004-idle-threat-not-speed-timer.md).
+
+## The threat is idleness, not slowness
+
+Stakes still have to exist or nothing on screen matters. So: a cloud of ink drifts in
+when the player stops typing *entirely*, and drips on the manuscript, smudging work
+already done. Any correct keystroke drives it back.
+
+The distinction is the whole point. Five seconds deliberating over a single keystroke
+costs nothing. Stopping to *hunt the keyboard for a key* brings the cloud. It punishes
+precisely the behaviour the game exists to eliminate, and nothing else.
+
+The idle threshold starts generous and tightens by stage — values in
+[tuning](07-tuning.md). It can be disabled outright if it turns out to stress rather than
+motivate; that switch is deliberate, not a debug leftover.
+
+## Damage is metered
+
+A beginner errs on roughly one keystroke in ten. A heart per typo would kill them four
+times per verse.
+
+Instead, errors **smudge** the page. Each mistake adds to a smudge meter; clean typing
+wipes it back down; only a *full* meter costs a heart. Stakes without a death spiral, and
+the tolerance tightens by stage so it stays meaningful as accuracy improves. See
+[ADR 0005](../decisions/0005-smudge-meter-over-per-typo-damage.md).
+
+Wrong keystrokes never advance the cursor. The player must correct the error before
+continuing — standard in typing tutors, and non-negotiable for habit formation.
+
+## Items
+
+<!-- generates: data/items.json -->
+
+| id | name | effect | source |
+|---|---|---|---|
+| `ink_pot` | Ink pot | Restores one heart | Dropped for a clean verse streak, or hidden on side platforms |
+| `candle` | Candle | Checkpoint — death returns here | Placed at verse boundaries through a level |
+| `gold_leaf` | Gold leaf | Score multiplier for the rest of the level | Hidden on side platforms |
+| `quill_nib` | Quill nib | Permanent upgrade: extra heart, slower cloud, or wider smudge tolerance | Behind flashback rooms |
+| `wax_seal` | Wax seal | Unlocks routes and cosmetics | Awarded for a perfect chapter |
+
+Candles matter more than they look: they make death cost a verse rather than a chapter.
+A beginner needs 20+ minutes for a chapter, and losing that would end the session and
+possibly the habit.
+
+Hidden items are reached by typing an optional bonus word on a side platform, so
+exploration is itself extra practice rather than a detour from it.
