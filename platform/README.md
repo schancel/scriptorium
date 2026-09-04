@@ -11,6 +11,7 @@ rewritten by a port; nothing here contains game logic.
 | `canvas_renderer.js` | executes the display list from `core/draw.ts` on Canvas 2D |
 | `web_audio.js` | executes sound events from `core/sound.ts` on WebAudio |
 | `keyboard_input.js` | `keydown` → normalised core input events |
+| `overlay.js` | the DOM panels: the stage-promotion notice and the menu |
 | `local_storage.js` | progress persistence, file export/import |
 
 If you find yourself wanting a game rule here, it belongs in `core/`. If you find

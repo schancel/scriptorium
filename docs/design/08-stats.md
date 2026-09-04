@@ -71,10 +71,39 @@ nothing else — not the key set, not the classification, not any other key.
 Every session is recorded locally: date, stage, passage, WPM, accuracy, per-key stats.
 Rendered as a curve over weeks with the stage transitions marked.
 
+A "session" is one **candle** — a few verses, not a chapter. See
+[pacing](03-pacing.md#items). Recording at every candle is what makes the curve dense
+enough to read within the first week, and it is also when the record is written to disk,
+so a closed tab costs a verse or two rather than a chapter.
+
 Expect the curve to *dip* when a new stage unlocks — more live characters means slower
 typing — and the history view says so explicitly on the chart. An unexplained drop looks
 like regression and is the single most likely reason a beginner concludes the game is not
 working.
+
+Saying it once, on the chart, is not enough on its own: the dip arrives minutes after the
+promotion and the chart is not where the player is looking. So it is said **twice** —
+once at the promotion itself, before the drop is felt, and again beside the marked
+session in the history. The promotion notice names the coverage change that causes it
+(*live characters: 46% of the text before, 61% from here*) so the number the player is
+about to watch fall has a cause attached to it.
+
+The session that opened the gate is flagged in the record (`promoted`), which is what
+lets the chart mark the transition rather than infer it from a stage number changing.
+
+## Resuming
+
+The record holds a **bookmark**: translation, book, chapter and the verse to resume on.
+Reopening the tab returns the player to that verse, in that passage, at that stage.
+
+This is not a convenience. A tutor that reopens at Genesis 1:1 every time teaches the
+first five verses of Genesis and nothing else, because the first five verses are the only
+ones a beginner reaches in a sitting.
+
+The bookmark comes with an exit — a menu offering another book and chapter, another
+translation, this passage again, and starting over — because a saved position with no way
+out is a trap, and the player who wants to leave Leviticus must not have to clear their
+browser storage to do it.
 
 History is stored in browser local storage, capped at `history_max_sessions`, and can be
 exported to a file and reimported. Local storage is cleared by accident more often than

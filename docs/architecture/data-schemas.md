@@ -63,15 +63,47 @@ which is the expected outcome for user-imported books.
 
 ## Progress
 
-Browser local storage, exportable to a file:
+Browser local storage, exportable to a file. Written by
+`platform/web/local_storage.ts`; its shape and every decision taken from it live in
+`core/progress.ts`.
 
 ```json
-{ "version": 1, "stage": 3, "translation": "WEB", "route": "pilgrimage",
-  "completed": ["Genesis 1"], "hearts": 3, "items": ["quill_nib"],
-  "keyStats": { "a": { "hits": 812, "errors": 19, "medianMs": 340 } },
-  "history": [ { "date": "2026-09-03", "stage": 3, "wpm": 14.2, "accuracy": 0.97 } ] }
+{ "version": 2, "stage": 3, "translation": "WEB", "route": "pilgrimage",
+  "layout": "ansi", "spaceThumb": "rt",
+  "position": { "book": "Genesis", "chapter": 1, "unit": 7 },
+  "completed": ["Genesis 1"],
+  "keyStats": { "a": { "hits": 812, "errors": 19, "totalMs": 276080,
+                       "latencies": [340], "confusions": { "s": 4 } } },
+  "recent": { "a": [ { "ok": true, "ms": 312 }, { "ok": false, "ms": null } ] },
+  "history": [ { "date": "2026-09-03", "stage": 3, "ref": "Genesis 1:1-3",
+                 "wpm": 14.2, "accuracy": 0.97, "promoted": false } ] }
 ```
+
+`position` is the bookmark: the translation is `translation`, and `unit` is the
+1-based verse the player resumes *on*, not the last one they finished. Without it the
+game reopens at Genesis 1:1 every time, which is what a reload used to do.
+
+`keyStats` are lifetime totals, behind the report card. `recent` is the trailing window
+the mastery gate is measured over — the last `gate_window` attempts on each of the
+current stage's **new** keys, and nothing else. The two are separate because a
+`KeyStat` is a running total, and a gate read from running totals averages a beginner's
+first bad hour into their accuracy for ever, so the gate they have actually earned never
+opens. `recent` is pruned to the new keys on every save and emptied on promotion, which
+is also what keeps it a few kilobytes rather than a few hundred.
+
+`promoted` marks the session that opened the gate. The history view needs it: the
+sessions *after* a promotion are slower, because a new stage lights up more of the page,
+and an unexplained dip in the curve is the single most likely reason a beginner concludes
+the game is broken. See [stats](../design/08-stats.md#history).
 
 `version` exists so a schema change can migrate rather than discard. Losing months of
 history to a format change would be unrecoverable for the player; migrations are required,
 not optional.
+
+| version | change | migration |
+|---|---|---|
+| 1 | initial: stage, translation, route, completed, keyStats, history | — |
+| 2 | added `position`, `recent`, `spaceThumb`, and `promoted` on a history entry | every version 1 field is carried across unchanged; the new ones default (position to Genesis 1:1, `recent` to empty, `spaceThumb` to `rt`, `promoted` to false). Nothing is dropped. |
+
+`core/progress.ts` defaults every field individually rather than trusting the stored
+blob, so a partially corrupt record loses the corrupt field and keeps the history.

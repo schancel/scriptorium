@@ -1,6 +1,6 @@
 # Pacing, damage and items
 
-**Implemented by:** `core/entities.ts`, `core/damage.ts`, `core/items.ts`
+**Implemented by:** `core/entities.ts`, `core/damage.ts`, `core/items.ts`, `core/corpus.ts`
 
 ## Player-paced
 
@@ -54,6 +54,10 @@ continuing — standard in typing tutors, and non-negotiable for habit formation
 Candles matter more than they look: they make death cost a verse rather than a chapter.
 A beginner needs 20+ minutes for a chapter, and losing that would end the session and
 possibly the habit.
+
+So a chapter is not a sitting. `core/corpus.ts` cuts one into `candle_interval` chunks,
+and the progress record is written at every chunk boundary — a candle is a save point as
+well as a respawn point, and closing the tab costs the same verse or two that dying does.
 
 Hidden items are reached by typing an optional bonus word on a side platform, so
 exploration is itself extra practice rather than a detour from it.
