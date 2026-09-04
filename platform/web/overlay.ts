@@ -12,9 +12,11 @@
  */
 
 import { CANON } from '../../core/corpus.js';
+import { countParts } from '../../core/draw.js';
+import type { FingerRow, GateView, Trend, WorstKey } from '../../core/draw.js';
 import { OPENING } from '../../core/onboarding.js';
 import type { HistoryEntry, Promotion } from '../../core/progress.js';
-import type { KeyboardLayout, Thumb } from '../../core/types.js';
+import type { Finger, KeyboardLayout, Thumb } from '../../core/types.js';
 
 /** What the caller must be able to do when a button is pressed. */
 export interface OverlayHandlers {
@@ -62,6 +64,15 @@ export interface OverlayHandlers {
   startOver(): void;
   exportFile(): void;
   importFile(file: File): void;
+  /**
+   * The player asked to see the report card outside the end of a part.
+   *
+   * docs/design/08-stats.md#the-report-card. The card is a history of his hands,
+   * and a history reachable only by finishing something is one he cannot consult
+   * on the evening he wants to look at it. Same data, same judgements, different
+   * moment.
+   */
+  requestHands(): void;
   /**
    * The player asked to see the route.
    *
@@ -111,6 +122,29 @@ export interface MenuView {
   readonly history: readonly HistoryEntry[];
 }
 
+/**
+ * The report card as the menu shows it.
+ *
+ * Every field is computed by `core/draw.ts` from the record -- the same
+ * functions the end-of-part card draws with -- so the two readings of the same
+ * hands cannot disagree. Nothing is judged in this file; it is said out loud
+ * here and decided there.
+ */
+export interface HandsView {
+  /** What the table is a reading of, in one sentence. */
+  readonly scope: string;
+  readonly fingers: readonly FingerRow[];
+  readonly worst: readonly WorstKey[];
+  /** The quickest finger, which the latency column is read against. */
+  readonly quickest: Finger | null;
+  /** The finding: what the shape of the table means. One sentence. */
+  readonly note: string;
+  /** The one thing to work on next. One sentence. */
+  readonly advice: string;
+  readonly gate: GateView | null;
+  readonly trend: Trend;
+}
+
 /** One passage on the map. Every judgement in it is made by `core/route.ts`. */
 export interface RouteNodeView {
   readonly ref: string;
@@ -157,6 +191,8 @@ export interface Overlay {
   openMenu(view: MenuView): void;
   /** The map: the passage graph, and the way back out of it. */
   showMap(view: RouteView): void;
+  /** The report card, opened from the menu rather than reached by finishing. */
+  showHands(view: HandsView): void;
   showPromotion(promotion: Promotion, onDismiss: () => void): void;
   /**
    * Ask whether the player wants gilding. `onAnswer` is called with their
@@ -223,6 +259,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const resetButton = need('menu-reset', HTMLButtonElement);
   const firstRunButton = need('menu-first-run', HTMLButtonElement);
   const mapButton = need('menu-map', HTMLButtonElement);
+  const handsButton = need('menu-hands', HTMLButtonElement);
   const readButton = need('menu-read', HTMLButtonElement);
   const historyList = need('menu-history', HTMLOListElement);
   const historyNote = need('history-note', HTMLParagraphElement);
@@ -233,6 +270,18 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const promotionDip = need('promotion-dip', HTMLParagraphElement);
   const promotionCoverage = need('promotion-coverage', HTMLParagraphElement);
   const promotionOk = need('promotion-ok', HTMLButtonElement);
+
+  const handsPanel = need('panel-hands', HTMLDivElement);
+  const handsScope = need('hands-scope', HTMLParagraphElement);
+  const handsTable = need('hands-table', HTMLUListElement);
+  const handsNote = need('hands-note', HTMLParagraphElement);
+  const handsAdvice = need('hands-advice', HTMLParagraphElement);
+  const handsWorst = need('hands-worst', HTMLUListElement);
+  const handsGate = need('hands-gate', HTMLUListElement);
+  const handsCurve = need('hands-curve', HTMLDivElement);
+  const handsCurveNote = need('hands-curve-note', HTMLParagraphElement);
+  const handsMenu = need('hands-menu', HTMLButtonElement);
+  const handsResume = need('hands-resume', HTMLButtonElement);
 
   const mapPanel = need('panel-map', HTMLDivElement);
   const mapNodes = need('map-nodes', HTMLUListElement);
@@ -282,6 +331,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     gildPanel.hidden = true;
     openingPanel.hidden = true;
     mapPanel.hidden = true;
+    handsPanel.hidden = true;
     dismissPromotion = null;
     answerGild = null;
     finishOpening = null;
@@ -377,6 +427,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     gildPanel.hidden = true;
     openingPanel.hidden = true;
     mapPanel.hidden = true;
+    handsPanel.hidden = true;
     menuPanel.hidden = false;
     overlay.hidden = false;
     resumeButton.focus();
@@ -460,12 +511,170 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     }
   }
 
+  /**
+   * The report card, on demand.
+   *
+   * The same nine rows and the same one sentence the end-of-part card carries,
+   * with the room a window has and the canvas does not. It is a diagnosis and
+   * never an accusation, and the whole of that difference is in the wording: an
+   * empty row says which kind of empty it is, and the latency column -- the one
+   * signal the game can honestly read about technique -- is what marks a finger
+   * being reached for rather than rested on.
+   */
+  function renderHands(view: HandsView): void {
+    handsScope.textContent = view.scope;
+    handsNote.textContent = view.note;
+    handsAdvice.textContent = view.advice;
+
+    handsTable.replaceChildren();
+    for (const row of view.fingers) {
+      const li = document.createElement('li');
+      if (row.untaught) li.classList.add('untaught');
+      if (row.idle) li.classList.add('idle');
+
+      const name = document.createElement('span');
+      name.className = 'finger';
+      name.textContent = row.label;
+
+      const count = document.createElement('span');
+      count.className = 'count';
+      count.textContent = row.untaught ? '—' : String(row.hits + row.errors);
+
+      const share = document.createElement('span');
+      share.className = 'share';
+      const fill = document.createElement('i');
+      fill.style.width = `${String(Math.round(row.share * PERCENT))}%`;
+      share.append(fill);
+
+      const acc = document.createElement('span');
+      acc.className = 'acc';
+      const mean = document.createElement('span');
+      mean.className = 'mean';
+      if (row.hits === 0) {
+        // The two kinds of empty, kept apart. "This stage has not given the
+        // finger a key yet" is a fact about the curriculum and it fills itself
+        // in; "the finger has keys and has struck none of them" is a fact about
+        // the player, and it is the only one of the two he can act on.
+        acc.textContent = '';
+        mean.textContent = row.untaught ? 'no keys at this stage' : 'not used yet';
+      } else {
+        acc.textContent = pct(row.accuracy);
+        mean.textContent = `${String(Math.round(row.meanMs))} ms`;
+        if (row.reaching) mean.classList.add('reaching');
+        else if (row.finger === view.quickest) mean.classList.add('quickest');
+      }
+
+      li.append(name, count, share, acc, mean);
+      handsTable.append(li);
+    }
+
+    handsWorst.replaceChildren();
+    if (view.worst.length === 0) {
+      const li = document.createElement('li');
+      li.textContent = 'Nothing above the noise yet.';
+      handsWorst.append(li);
+    }
+    for (const key of view.worst) {
+      const li = document.createElement('li');
+      const what = document.createElement('span');
+      what.className = 'what';
+      what.textContent = keyName(key.key);
+      const how = document.createElement('span');
+      how.className = 'how';
+      how.textContent = key.confusedWith === ''
+        ? `${pct(key.errorRate)} wrong`
+        : `${pct(key.errorRate)} wrong, ${keyName(key.confusedWith)} instead`;
+      li.append(what, how);
+      handsWorst.append(li);
+    }
+
+    handsGate.replaceChildren();
+    const gate = view.gate;
+    if (gate !== null) {
+      // Nothing measured yet -- where a player stands the moment after a
+      // promotion -- reports no accuracy and no median. "0% against 95%" there
+      // would be a failure invented out of an empty table.
+      const measured = gate.samples > 0;
+      const rows: readonly (readonly [string, string, boolean])[] = [
+        ['new keys', gate.newKeys.map(keyName).join('   '), true],
+        ...(measured
+          ? ([
+            [
+              'accuracy',
+              `${pct(gate.accuracy)} — the stage opens at ${pct(gate.requiredAccuracy)}`,
+              gate.accuracyMet,
+            ],
+            [
+              'speed',
+              `${String(Math.round(gate.medianMs))} ms a key — the stage opens at `
+                + `${String(Math.round(gate.allowedLatencyMs))} ms`,
+              gate.latencyMet,
+            ],
+          ] as const)
+          : []),
+        [
+          'keystrokes',
+          `${String(gate.samples)} of ${String(Math.round(gate.requiredSamples))}`,
+          gate.samples >= gate.requiredSamples,
+        ],
+      ];
+      for (const [label, value, met] of rows) {
+        const li = document.createElement('li');
+        if (!met) li.classList.add('owed');
+        const what = document.createElement('span');
+        what.className = 'what';
+        what.textContent = label;
+        const how = document.createElement('span');
+        how.className = 'how';
+        how.textContent = value;
+        li.append(what, how);
+        handsGate.append(li);
+      }
+    }
+
+    handsCurve.replaceChildren();
+    const { trend } = view;
+    // A part typed at nought words a minute is not a part; the floor keeps the
+    // scale off a division by zero without inventing a number for the chart.
+    const top = Math.max(1, trend.bestWpm);
+    for (const point of trend.points) {
+      const bar = document.createElement('i');
+      if (point.promoted) bar.classList.add('promoted');
+      bar.style.height = `${String(Math.max(2, Math.round((point.wpm / top) * PERCENT)))}%`;
+      bar.title = `${String(Math.round(point.wpm))} wpm`;
+      handsCurve.append(bar);
+    }
+    handsCurveNote.textContent = trend.parts === 0
+      ? 'Nothing yet. Finish a part and it lands here.'
+      : trend.promotions > 0
+        ? `Your last ${countParts(trend.points.length)}, oldest first. A gold bar is a `
+          + 'part that opened a stage: more of the page goes live there, so the same '
+          + 'verse costs more keystrokes and the bars after it are shorter. That dip is '
+          + 'the curriculum moving, not you going backwards.'
+        : `Your last ${countParts(trend.points.length)}, oldest first — `
+          + `${String(Math.round(trend.avgWpm))} wpm on average over `
+          + `${countParts(trend.parts)} in all.`;
+  }
+
+  function showHands(view: HandsView): void {
+    renderHands(view);
+    menuPanel.hidden = true;
+    promotionPanel.hidden = true;
+    gildPanel.hidden = true;
+    openingPanel.hidden = true;
+    mapPanel.hidden = true;
+    handsPanel.hidden = false;
+    overlay.hidden = false;
+    handsResume.focus();
+  }
+
   function showMap(view: RouteView): void {
     renderMap(view);
     menuPanel.hidden = true;
     promotionPanel.hidden = true;
     gildPanel.hidden = true;
     openingPanel.hidden = true;
+    handsPanel.hidden = true;
     mapPanel.hidden = false;
     overlay.hidden = false;
     mapResume.focus();
@@ -496,6 +705,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     gildPanel.hidden = true;
     openingPanel.hidden = true;
     mapPanel.hidden = true;
+    handsPanel.hidden = true;
     promotionPanel.hidden = false;
     overlay.hidden = false;
     promotionOk.focus();
@@ -522,6 +732,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     promotionPanel.hidden = true;
     openingPanel.hidden = true;
     mapPanel.hidden = true;
+    handsPanel.hidden = true;
     gildPanel.hidden = false;
     overlay.hidden = false;
     gildNo.focus();
@@ -547,6 +758,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     promotionPanel.hidden = true;
     gildPanel.hidden = true;
     mapPanel.hidden = true;
+    handsPanel.hidden = true;
     openingPanel.hidden = false;
     overlay.hidden = false;
     openingOk.focus();
@@ -587,6 +799,16 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   });
   mapButton.addEventListener('click', () => {
     handlers.requestMap();
+  });
+  handsButton.addEventListener('click', () => {
+    handlers.requestHands();
+  });
+  handsMenu.addEventListener('click', () => {
+    handlers.requestMenu();
+  });
+  handsResume.addEventListener('click', () => {
+    close();
+    handlers.resume();
   });
   readButton.addEventListener('click', () => {
     handlers.startReading();
@@ -688,7 +910,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   });
 
   return {
-    isOpen, showOpening, openMenu, showMap, showPromotion, showGildOffer, showError,
-    showAudio, close,
+    isOpen, showOpening, openMenu, showMap, showHands, showPromotion, showGildOffer,
+    showError, showAudio, close,
   };
 }

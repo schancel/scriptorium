@@ -69,17 +69,156 @@ on the rail, and a WPM counter next to the text would pull attention off it.
 
 ## The report card
 
-Shown at the end of every level. This is the primary teaching surface, not a score
-screen:
+Shown at the end of every part, and reachable from the menu at any time. This is
+the primary teaching surface in the game, not a score screen, and the per-finger
+table is the part that does the teaching:
 
-- WPM and accuracy for the level, against the running average
-- **Per-finger breakdown** — accuracy and mean latency for every finger the game asks for
+- WPM, accuracy and median latency for the part, **against the running average**
+- **Per-finger breakdown** — keystrokes, share of the work, accuracy and mean latency
+  for every finger the game asks for
 - **Worst five keys** by error rate, with what was struck instead
 - New keys' progress toward the mastery gate, and what is still missing
+- **The curve**: one bar per finished part, with the stage openings marked
+- **One sentence** saying what to work on next
 
-The per-finger table is the point. A two-finger typist's card shows two rows of data and
-the rest empty, which makes the problem visible in a way no amount of instruction does.
-As the curriculum advances, filling in those rows becomes the visible goal.
+It flashed past and vanished for its first few months, which wasted the most
+valuable screen in the program. It has to land.
+
+### What the table can honestly say, and what it cannot
+
+A key is credited to the finger that *should* strike it, because that is the only
+finger the game knows: the browser delivers a character, never a hand. So the
+table is not a record of which fingers moved, and it must never be written as
+though it were. "Your right index is doing your left pinky's work" is almost
+certainly true of this player and is not something this data shows; printing it
+would be an invention dressed as a diagnosis, on the one screen whose whole
+authority is that its numbers are his.
+
+What the data *does* show, and shows sharply, is **mean latency per finger**. A
+finger resting on its home key answers in a fraction of the time a finger being
+travelled to does. A hand that never leaves home row produces nine means inside a
+narrow band; a two-finger typist produces a spread, and the slowest columns are
+the pinkies and ring fingers his hands never rest over. That is the same signal
+the mastery gate's latency condition is built on — see
+[the mastery gate](06-curriculum.md#the-mastery-gate), *slow-but-accurate is the
+hunt-and-peck signature* — read per finger instead of per stage.
+
+So the latency column is the diagnosis. A finger at or above `report_reach_ratio`
+times the quickest finger's mean is marked as one being **reached for**, and it is
+marked there and nowhere else, because that is the number that says so.
+
+Two guards on the measurement, both of which only ever suppress a finding:
+
+- A finger needs `report_finger_min_hits` keystrokes before its mean is believed.
+  One slow reach for a rare key must not be allowed to libel a finger.
+- **The thumb is excluded from the comparison, on both sides.** It strikes one key,
+  that key is the widest target on the board, and no hand travels to it — so it is
+  always the quickest column, and measuring a pinky against it would make every
+  hand in the world look like it was reaching.
+
+One skew is worth naming and is in the safe direction. A hit whose latency was
+discarded for following a pause still counts as a hit, so `meanMs` is pulled
+*down* for exactly the keys a player hesitates over. That can hide a slow finger.
+It cannot invent one.
+
+### An empty row says which kind of empty it is
+
+Eight fingers with no data is the diagnosis, and it has to read as one rather than
+as a table that happens to have gaps. But there are two entirely different reasons
+a row can be empty, and collapsing them into the same dash is what makes a blank
+table read as an accusation instead of a state of play:
+
+- **no keys at this stage** — the curriculum has not given this finger a key yet.
+  A fact about the stage. It fills itself in and nothing is being asked of him.
+- **not used yet** — the stage teaches keys for this finger and not one of them has
+  been struck. A fact about the player, and the only one of the two he can act on.
+
+Those two phrases are printed in the row itself, where the numbers would be. The
+first recedes; the second stays at full brightness, because it is the one row on
+the card that is a finding.
+
+The share column is a bar rather than a number, scaled to the busiest finger. No
+single finger ever approaches a large fraction of all keystrokes, so a bar drawn
+against the whole hand is nine short stubs that say nothing; against the busiest
+one, the row lengths *are* the shape of the hand. The numbers are in the columns
+beside it.
+
+### What to work on next
+
+One sentence, at the foot of the card, derived from the data. **One** — a card
+that says four things says none of them, and he has a part to get back to. The
+order is what a man can act on this evening:
+
+1. a key he misses at or above `report_worst_key_rate`, over at least
+   `report_key_min_attempts` attempts, named with what he strikes instead
+2. a finger the stage has taught and he has not used
+3. a finger he is reaching for, against the quickest one
+4. the gate's accuracy, quoted against the standard it opens at
+5. the gate's speed, likewise
+6. how many more keystrokes on the new keys before the gate can be read at all
+7. nothing outstanding
+
+The key comes first because a single key is the most actionable thing on the
+screen. The spread comes third rather than first because the sentence under the
+table is already saying it, and the two lines should not say the same thing twice.
+
+The gate lines quote the standard: *91%, and the stage opens at 95%*. "Not yet" is
+not something a player can act on, and the card must never be reduced to it. Before
+a single keystroke has landed on a new stage's keys — which is exactly where he
+stands on the card following a promotion — the accuracy and speed rows are omitted
+rather than printed as zeroes. Inventing a failure out of an empty table, on the
+one screen whose job is to stop a promotion looking like a regression, would be
+precisely backwards.
+
+### Tone, and leaving
+
+The reader is an adult who has typed with two fingers for years and is quietly
+embarrassed about it. [The first run](10-first-run.md#tone) sets the voice and it
+applies here in full: plain, adult, specific. No exclamation marks anywhere on the
+card, no praise for trivia, and never a verdict where a fact will do — *you miss it
+34% of the time* is something he can work with, *you are struggling with `;`* is
+not.
+
+**Enter continues, from the first frame.** Nothing on the card animates and nothing
+waits. A fluent typist finishing a part a minute must be able to leave in one
+keystroke; a beginner must be able to sit with it for as long as he likes. Those
+are the same requirement, and a ceremony breaks both.
+
+### Reachable on purpose
+
+The card is also in the menu, as **Your hands**, over everything he has typed
+rather than the last few verses. A history of his hands that can only be seen by
+finishing something is one he cannot consult on the evening he wants to look at
+it — and that is the evening the curve is worth most.
+
+Both readings call the same functions in `core/draw.ts` over the same record, so
+the card at the end of a part and the card in the menu cannot drift into
+disagreeing about the same hands. The canvas one is the display list; the menu one
+is DOM, for the same reason the menu is — it is prose in a window that is not
+640x360.
+
+The per-finger table is read over the **lifetime** key table, not the part just
+typed. A part is a few verses — a hundred and fifty keystrokes spread across nine
+fingers — and nine means built from sixteen samples each is noise presented as a
+diagnosis. The header line still reports the part.
+
+### Gilding names its own blind spot
+
+With [gilding](01-illumination.md#gilding-a-mode-for-people-who-already-type) on the
+player types more than this table can count, because a gilded character records no
+key statistics at all. So the table's heading says so — *the keys your stage
+teaches* — rather than reporting the taught half as though it were the whole.
+
+There is deliberately **no second table** of gilded keystrokes to fill the gap. The
+mastery gate's guarantee today is that the data the gate would need does not
+exist: a gilded character reaches `keyStats` with nothing at all, so there is
+nothing downstream to prune, forget to prune, or prune wrongly. A parallel
+`gildStats` table would move that guarantee from *the numbers were never recorded*
+to *three call sites each remembered to keep them apart* — the session result, the
+merge into the record, and the trailing window — and that is a strictly weaker
+guarantee than the one it replaces. Showing a fluent typist a fuller table is not
+worth trading it for. See
+[ADR 0008](../decisions/0008-gilding-permissive-input.md#why-gilding-must-not-open-the-gate).
 
 ### Nine rows, not ten
 
@@ -110,20 +249,29 @@ nothing else — not the key set, not the classification, not any other key.
 Every session is recorded locally: date, stage, passage, WPM, accuracy, per-key stats.
 Rendered as a curve over weeks with the stage transitions marked.
 
+The report card carries the last `report_trend_parts` of it as a small chart — one
+bar per finished part, promotions in gold — with the running average beside the
+part's own numbers on the line above. That is what makes the card answer the
+question a beginner cannot answer from the inside: *is any of this working?* Day
+to day it all feels equally slow, and twenty bars answer in a glance what no
+single number can.
+
 A "session" is one **candle** — a few verses, not a chapter. See
 [pacing](03-pacing.md#items). Recording at every candle is what makes the curve dense
 enough to read within the first week, and it is also when the record is written to disk,
 so a closed tab costs a verse or two rather than a chapter.
 
 Expect the curve to *dip* when a new stage unlocks — more live characters means slower
-typing — and the history view says so explicitly on the chart. An unexplained drop looks
+typing — and every view of the curve says so explicitly. An unexplained drop looks
 like regression and is the single most likely reason a beginner concludes the game is not
 working.
 
-Saying it once, on the chart, is not enough on its own: the dip arrives minutes after the
-promotion and the chart is not where the player is looking. So it is said **twice** —
-once at the promotion itself, before the drop is felt, and again beside the marked
-session in the history. The promotion notice names the coverage change that causes it
+Saying it once is not enough on its own: the dip arrives minutes after the
+promotion and the chart is not where the player is looking. So it is said **three
+times**, in the three places he will actually be looking — at the promotion itself,
+before the drop is felt; on the report card of the part that opened the stage,
+which is the very next screen he sees; and beside the marked session in the
+history whenever he goes back to it. The promotion notice names the coverage change that causes it
 (*live characters: 46% of the text before, 61% from here*) so the number the player is
 about to watch fall has a cause attached to it.
 

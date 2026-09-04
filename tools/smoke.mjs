@@ -275,14 +275,19 @@ function caretX() {
   return up.length === 0 ? null : up[0].x1;
 }
 
-/** Type this part out, then take whatever screen comes next forward. */
-async function finishPart() {
+/** Type this part out and stop, with the report card up. */
+async function typeOutPart() {
   for (let i = 0; i < 4000; i++) {
     const k = askedFor();
     if (k === null) break;
     press(k);
     tick();
   }
+  tick(2);
+}
+
+/** Take whatever screen is up forward, however many panels are stacked on it. */
+async function takeCardForward() {
   // Enter is the forward action at the report card. A promotion or the gilding
   // offer may be over the top of it; each is one button.
   press('Enter');
@@ -306,6 +311,12 @@ async function finishPart() {
   }
 }
 
+/** Type this part out, then take whatever screen comes next forward. */
+async function finishPart() {
+  await typeOutPart();
+  await takeCardForward();
+}
+
 // Finish Genesis 1, which is what unlocks the thread to John 1. Typed, not
 // forged into storage: the map has to agree with what the candle actually wrote.
 let parts = 0;
@@ -318,6 +329,69 @@ for (; parts < 24; parts++) {
 const record = () => JSON.parse(store.get('scriptorium.progress') ?? '{}');
 ok((record().completed ?? []).includes('Genesis 1'),
    'a chapter typed to the end is recorded as completed', `after ${parts + 1} parts`);
+
+// --- the report card ---------------------------------------------------------
+//
+// docs/design/08-stats.md: "the per-finger table is the point". It is the most
+// valuable teaching surface in the game and the one a unit test can only see as
+// a display list -- so it is read here off the running game, with a real record
+// behind it, at the moment a player actually meets it.
+
+await typeOutPart();
+const card = () => calls.fillText.map((c) => c.v);
+ok(card().some((v) => v.startsWith('your hands')), 'the report card lands',
+   card().slice(0, 4).join(' / '));
+
+// Nine rows, not ten: eight fingers and the one thumb on the space bar.
+const EIGHT = ['L pinky', 'L ring', 'L mid', 'L index', 'R index', 'R mid', 'R ring', 'R pinky'];
+const drawn = EIGHT.filter((f) => card().includes(f));
+const thumbs = ['L thumb', 'R thumb'].filter((f) => card().includes(f));
+ok(drawn.length === EIGHT.length && thumbs.length === 1,
+   'NINE ROWS: EVERY FINGER, AND ONLY THE THUMB THIS PLAYER USES',
+   `${String(drawn.length)} fingers, thumbs: ${thumbs.join(', ') || 'none'}`);
+
+// One instruction, derived from the data, in the game's own voice.
+const next = card().filter((v) => v.startsWith('Next:'));
+ok(next.length === 1, 'the card asks for exactly one thing', next.join(' | ') || '(none)');
+ok(card().every((v) => !v.includes('!')), 'nothing on the card is exclaimed',
+   card().find((v) => v.includes('!')) ?? '');
+
+ok(card().some((v) => v.includes('still missing')), 'the gate says what is left',
+   card().find((v) => v.includes('still missing')) ?? '(none)');
+ok(card().some((v) => /^last \d+ parts? - /.test(v)), 'the curve is drawn and labelled',
+   card().find((v) => v.startsWith('last ')) ?? '(none)');
+ok(card().some((v) => v.startsWith('so far')), 'this part is shown against the running average');
+
+// The same card, on purpose, from the menu. A history reachable only by
+// finishing something is one he cannot look at when he wants to.
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-hands').click();
+tick(2);
+ok(panel('panel-hands'), 'the report card opens from the menu too');
+const handRows = rowsOf('hands-table').map(textOf);
+ok(handRows.length === 9, 'and carries the same nine rows',
+   `${String(handRows.length)} rows: ${handRows[0] ?? '(none)'}`);
+ok(String(stubEl('hands-advice').textContent).startsWith('Next:'),
+   'and the same one thing to work on', String(stubEl('hands-advice').textContent));
+ok(String(stubEl('hands-note').textContent).length > 0, 'and says what the table means',
+   String(stubEl('hands-note').textContent));
+ok(rowsOf('hands-curve').length > 0, 'the curve has a bar per finished part',
+   `${String(rowsOf('hands-curve').length)} bars`);
+ok(/dip|average/.test(String(stubEl('hands-curve-note').textContent)),
+   'THE CURVE EXPLAINS ITS OWN DIPS RATHER THAN LOOKING LIKE A REGRESSION',
+   String(stubEl('hands-curve-note').textContent));
+stubEl('hands-resume').click();
+tick(2);
+ok(card().some((v) => v.startsWith('your hands')), 'and leaving it returns to the card');
+
+// Requirement four: he must be able to leave in one keystroke.
+press('Enter');
+const left = await waitFor(
+  () => askedFor() !== null || panel('panel-promotion') || panel('panel-gild'),
+);
+ok(left, 'ONE KEYSTROKE LEAVES THE CARD: no ceremony to sit through');
+await takeCardForward();
 
 // The map.
 stubEl('menu-open').click();

@@ -31,15 +31,21 @@
 
 import { createRenderer, type Renderer } from './canvas_renderer.js';
 import { attachKeyboard } from './keyboard_input.js';
-import { createOverlay, type MenuView, type Overlay, type RouteView } from './overlay.js';
+import {
+  createOverlay,
+  type HandsView,
+  type MenuView,
+  type Overlay,
+  type RouteView,
+} from './overlay.js';
 import { loadTuning } from '../../core/tuning.js';
 import { keySetFor, loadStages, stageAt } from '../../core/curriculum.js';
 import { classify } from '../../core/illumination.js';
 import { applyKey, atEnd, createTypingState, gildScore, score, tick } from '../../core/typing.js';
 import { CELL_W, createRail, layoutRail, stepRail } from '../../core/rail.js';
 import {
-  VIRTUAL_W, drawFrame, sceneLayout,
-  type FrameState, type SceneCandle, type SceneState, type WarpView,
+  VIRTUAL_W, drawFrame, reportAdvice, reportCard, reportNote, reportTrend, sceneLayout,
+  type FrameState, type ReportMemory, type SceneCandle, type SceneState, type WarpView,
 } from '../../core/draw.js';
 import { loadScenes, sceneFor as sceneAt, type Scene, type SceneMap } from '../../core/scenes.js';
 import { setpieceState, type SetpieceState } from '../../core/setpieces.js';
@@ -94,6 +100,7 @@ import {
   type Position,
   type Progress,
   evaluatePromotion,
+  gateProgress,
   promote,
   recordSession,
   replayFirstRun,
@@ -720,6 +727,7 @@ function frameFor(
   gildPoints: number,
   note: string | null,
   doorway: string | null,
+  report: ReportMemory,
 ): FrameState {
   const candle = `${String(level.chunkIndex + 1)}/${String(level.chunks.length)}`;
   return {
@@ -736,6 +744,11 @@ function frameFor(
     keySet: level.keySet,
     gilding: level.gilding,
     gildPoints,
+    // The record's memory, not the part's. The card reads the hands over every
+    // part the player has typed -- a hundred and fifty keystrokes spread over
+    // nine fingers is noise, and nine means built from it would be a diagnosis
+    // made of noise. See docs/design/08-stats.md#the-report-card.
+    report,
     scene: sceneStateFor(level, damage, cloud, tuning),
     // Drawn over everything, every frame, for as long as a fallback is in use.
     notice: noticeLines(),
@@ -887,6 +900,75 @@ async function boot(): Promise<void> {
 
   function stageKeysAt(stage: number): readonly Key[] {
     return stages.length === 0 ? [] : stageAt(stages, stage).keys;
+  }
+
+  /**
+   * What the report card is a reading of: the record, not the part.
+   *
+   * Three things the display list cannot reach on its own -- the lifetime key
+   * table, every finished part, and how far the stage is from opening -- handed
+   * over as data. `core/draw.ts` decides what to say about them; nothing is
+   * judged here.
+   *
+   * The gate is omitted rather than faked when the curriculum failed to load: a
+   * card with no "what is still missing" block is a smaller lie than one quoting
+   * a standard nothing is measuring.
+   */
+  function reportMemory(): ReportMemory {
+    const memory = { keyStats: progress.keyStats, history: progress.history };
+    if (stages.length === 0) return memory;
+    const standing = gateProgress(progress, stages, tuning);
+    return {
+      ...memory,
+      gate: {
+        stage: standing.stage.stage,
+        newKeys: standing.stage.keys,
+        passed: standing.gate.passed,
+        accuracyMet: standing.gate.accuracyMet,
+        latencyMet: standing.gate.latencyMet,
+        samples: standing.gate.samples,
+        accuracy: standing.accuracy,
+        medianMs: standing.medianMs,
+        requiredAccuracy: standing.requiredAccuracy,
+        allowedLatencyMs: standing.allowedLatencyMs,
+        requiredSamples: standing.requiredSamples,
+      },
+    };
+  }
+
+  /**
+   * The same card, opened from the menu rather than reached by finishing a part.
+   *
+   * docs/design/08-stats.md#the-report-card: it is a history of his hands, and a
+   * history he can only see by finishing something is one he cannot consult when
+   * he wants it. Every judgement on it is the same core function the end-of-part
+   * card calls, so the two cannot drift into disagreeing about the same record.
+   */
+  function handsView(): HandsView {
+    const memory = reportMemory();
+    const card = reportCard(
+      {
+        keyStats: memory.keyStats,
+        layout: progress.layout,
+        spaceThumb: progress.spaceThumb,
+        keySet: [...keySetAt(progress.stage)],
+      },
+      tuning,
+    );
+    const trend = reportTrend(memory.history, tuning);
+    return {
+      scope: progress.gilding
+        ? 'Read over every part you have typed — the keys your stage teaches, which '
+          + 'with gilding on is not everything you typed.'
+        : 'Read over every part you have typed, not just the last one.',
+      fingers: card.fingers,
+      worst: card.worst,
+      quickest: card.quickest?.finger ?? null,
+      note: reportNote(card, trend),
+      advice: reportAdvice(card, memory.gate, tuning),
+      gate: memory.gate ?? null,
+      trend,
+    };
   }
 
   let progress: Progress = loadProgress();
@@ -1805,6 +1887,17 @@ async function boot(): Promise<void> {
 
   const overlay: Overlay = createOverlay({
     requestMenu: openMenu,
+    /**
+     * The card, on an evening he simply wants to look at his hands.
+     *
+     * Same treatment as the map: raised first, then the keyboard taken away,
+     * because dismissing a panel hands it back and this one needs it withheld.
+     */
+    requestHands: () => {
+      bookmark();
+      overlay.showHands(handsView());
+      detachTyping();
+    },
     requestMap: () => {
       bookmark();
       overlay.showMap(routeView());
@@ -2298,6 +2391,7 @@ async function boot(): Promise<void> {
         drawFrame(
           frameFor(
             level, damage, cloud, tuning, gildPoints(), noteText(coach), doorwayPrompt(),
+            reportMemory(),
           ),
           level.rail,
           tuning,

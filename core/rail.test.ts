@@ -14,19 +14,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { CELL_W, createRail, focalX, layoutRail, stepRail, visibleRange } from './rail.js';
-import { PALETTE_ORDER, VIRTUAL_W, drawFrame, reportCard, type FrameState } from './draw.js';
+import { PALETTE_ORDER, VIRTUAL_W, drawFrame, type FrameState } from './draw.js';
 import {
-  DEFAULT_SPACE_THUMB,
   fingerForKey,
   overlayExtent,
   overlayLayout,
-  reportFingers,
 } from './keyboard.js';
 import { classify as illuminate, fingerFor } from './illumination.js';
-import type { DrawCmd, Glyph, Key, KeyStat, Score, Tuning } from './types.js';
+import type { DrawCmd, Glyph, Key, Score, Tuning } from './types.js';
 
 /** The rows data/tuning.json actually carries, as a fixture. */
-const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20 }; // tuning-exempt: test fixture mirroring data/tuning.json
+const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20, report_trend_parts: 20, report_finger_min_hits: 12, report_reach_ratio: 2.0, report_key_min_attempts: 12, report_worst_key_rate: 0.12 }; // tuning-exempt: test fixture mirroring data/tuning.json
 
 /** Genesis 1, World English Bible. A whole chapter, because that is the claim. */
 const GENESIS_1: readonly string[] = [
@@ -488,45 +486,6 @@ test(`every stage-1 key is on the board, and the space bar is a thumb`, () => {
   assert.equal(fingerForKey(`<space>`, `ansi`), `rt`);
   assert.equal(fingerForKey(`A`, `ansi`), fingerForKey(`a`, `ansi`));
 });
-
-// --- the report card --------------------------------------------------------
-
-const TWO_FINGER_STATS: Readonly<Record<Key, KeyStat>> = {
-  f: { hits: 9, errors: 1, totalMs: 900, latencies: [], confusions: { d: 1 } }, // tuning-exempt: test fixture
-  j: { hits: 4, errors: 4, totalMs: 800, latencies: [], confusions: { k: 3, h: 1 } }, // tuning-exempt: test fixture
-};
-
-test(`the report card shows every finger the game asks for, empty ones included`, () => {
-  const card = reportCard(TWO_FINGER_STATS, `ansi`);
-  assert.deepEqual(card.fingers.map((r) => r.finger), reportFingers(DEFAULT_SPACE_THUMB));
-  assert.equal(new Set(card.fingers.map((r) => r.finger)).size, card.fingers.length);
-  const idle = card.fingers.filter((r) => r.hits === 0);
-  assert.ok(idle.length > 0, `an unused finger must still get a row`);
-  assert.equal(card.worst[0]?.key, `j`);
-  assert.equal(card.worst[0]?.confusedWith, `k`);
-});
-
-test(`the card never prints a column for the thumb the player does not use`, () => {
-  // A permanently empty column is an artefact of the model, not a diagnosis of
-  // the player -- and this table exists to diagnose the player.
-  for (const thumb of [`lt`, `rt`] as const) {
-    const card = reportCard(TWO_FINGER_STATS, `ansi`, thumb);
-    const shown = card.fingers.map((r) => r.finger);
-    assert.ok(shown.includes(thumb));
-    assert.ok(!shown.includes(thumb === `lt` ? `rt` : `lt`), `both thumbs on the card`);
-  }
-});
-
-test(`space is credited to the thumb the player actually uses`, () => {
-  const stats: Readonly<Record<Key, KeyStat>> = {
-    '<space>': { hits: 8, errors: 0, totalMs: 800, latencies: [], confusions: {} }, // tuning-exempt: test fixture
-  };
-  for (const thumb of [`lt`, `rt`] as const) {
-    const row = reportCard(stats, `ansi`, thumb).fingers.find((r) => r.finger === thumb);
-    assert.equal(row?.hits, 8); // tuning-exempt: matches the fixture above
-  }
-});
-
 
 // --- gilding on the rail ----------------------------------------------------
 //

@@ -174,6 +174,36 @@
     color: var(--gold); font-size: .85rem;
   }
   #map-threads li.done .ends { color: var(--gold); }
+  /* The report card, opened from the menu. The nine rows are the point of the
+     screen, so they get the width; the share bar is there to make an uneven
+     hand visible without being read. */
+  #hands-table, #hands-worst, #hands-gate { margin: 0; padding: 0; list-style: none; font-size: .9rem; }
+  #hands-table li, #hands-worst li, #hands-gate li {
+    display: flex; gap: .6rem; align-items: center;
+    padding: .22rem 0; border-bottom: 1px solid rgba(122, 107, 80, .18);
+  }
+  #hands-table .finger { min-width: 5rem; color: var(--bright); }
+  #hands-table .count { min-width: 3rem; text-align: right; font-variant-numeric: tabular-nums; }
+  #hands-table .share { flex: 1; min-width: 3rem; height: .45rem; background: rgba(122, 107, 80, .25); border-radius: .25em; overflow: hidden; }
+  #hands-table .share i { display: block; height: 100%; background: var(--paper); }
+  #hands-table .acc { min-width: 3rem; text-align: right; font-variant-numeric: tabular-nums; }
+  #hands-table .mean { min-width: 10rem; text-align: right; font-variant-numeric: tabular-nums; }
+  /* A row the stage has not reached yet recedes; a row it *has* reached and the
+     player has not used stays bright. The difference between the two is the
+     whole reason the empty rows are worth printing. */
+  #hands-table li.untaught { color: var(--dim); }
+  #hands-table li.untaught .finger { color: var(--dim); }
+  #hands-table li.untaught .share { visibility: hidden; }
+  #hands-table li.idle .mean { color: var(--bright); }
+  #hands-table .mean.reaching { color: var(--error); }
+  #hands-table .mean.quickest { color: var(--bright); }
+  #hands-worst .what, #hands-gate .what { min-width: 6rem; color: var(--bright); }
+  #hands-worst .how, #hands-gate .how { flex: 1; color: var(--dim); }
+  #hands-gate li.owed .how { color: var(--gold); }
+  #hands-curve { display: flex; align-items: flex-end; gap: 2px; height: 4rem; margin: .6rem 0 .2rem; }
+  #hands-curve i { flex: 1; min-width: 2px; background: rgba(200, 189, 166, .45); border-radius: 1px 1px 0 0; }
+  #hands-curve i.promoted { background: var(--gold); }
+  #hands-advice { color: var(--gold); }
   .file input { display: none; }
   .file { cursor: pointer; border: 1px solid var(--dim); border-radius: .3em; padding: .3em .7em; color: var(--bright); }
   .file:hover { border-color: var(--gold); color: var(--gold); }
@@ -282,6 +312,43 @@
     </div>
   </div>
 
+  <!-- The report card, reachable on purpose rather than only at the end of a
+       part. Same nine rows, same one sentence, same judgements -- every one of
+       them computed by core/draw.ts. docs/design/08-stats.md. -->
+  <div class="panel" id="panel-hands" hidden>
+    <p class="panel-hint"><b>Esc</b> closes this and picks up where you left off &middot; the same card you get at the end of a part</p>
+    <h2>Your hands</h2>
+    <p class="lead" id="hands-scope"></p>
+
+    <h3>Every finger</h3>
+    <ul id="hands-table"></ul>
+    <p class="dim" id="hands-note"></p>
+    <p class="dim">
+      A key is counted against the finger that should strike it, because that is
+      the finger the game knows &mdash; your browser sends a letter, never a
+      hand. So the column that says most about technique is <b>mean</b>: a finger
+      resting on its own keys answers quickly, and a finger you travel to cannot.
+    </p>
+
+    <h3>What to work on next</h3>
+    <p id="hands-advice"></p>
+
+    <h3>Worst keys</h3>
+    <ul id="hands-worst"></ul>
+
+    <h3>This stage</h3>
+    <ul id="hands-gate"></ul>
+
+    <h3>Part by part</h3>
+    <div id="hands-curve"></div>
+    <p class="dim" id="hands-curve-note"></p>
+
+    <div class="panel-actions">
+      <button id="hands-menu" type="button">Menu</button>
+      <button id="hands-resume" class="primary" type="button">Resume</button>
+    </div>
+  </div>
+
   <!-- The menu: where you are, where else you could be, and the way out. -->
   <div class="panel" id="panel-menu" hidden>
     <p class="panel-hint"><b>Esc</b> closes this and picks up where you left off &middot; changes save as you make them</p>
@@ -364,6 +431,18 @@
       work. Taking a long time over a single key never brings it — only stopping
       does. Turn it off if it nags rather than nudges; nothing else changes, and
       the game is fully playable without it.
+    </p>
+
+    <h3>Your hands</h3>
+    <div class="row">
+      <button id="menu-hands" type="button">Show the report card</button>
+    </div>
+    <p class="dim">
+      The per-finger table you get at the end of a part, over everything you have
+      typed rather than the last few verses &mdash; plus the worst keys, how far
+      this stage is from opening, and the shape of the last few weeks. It is here
+      because a history you can only see by finishing something is one you cannot
+      look at when you want to.
     </p>
 
     <h3>The route</h3>

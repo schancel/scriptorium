@@ -134,13 +134,6 @@ const M = {
   spaceMarkY: 157,   // tuning-exempt: band composition -- one px under the rail baseline
   spaceMarkH: 2,
   spaceMarkInset: 3, // tuning-exempt: band composition -- keeps the bar off its neighbours
-  reportX: 44,       // tuning-exempt: report card composition
-  reportRightX: 372, // tuning-exempt: report card composition
-  reportTitleY: 46,  // tuning-exempt: report card composition
-  reportBodyY: 74,   // tuning-exempt: report card composition
-  reportLineH: 14,   // tuning-exempt: report card composition
-  reportColW: 74,    // tuning-exempt: report card composition
-  reportFootY: 328,  // tuning-exempt: report card composition
 } as const;
 
 /** The design resolution, for the platform's scale-and-letterbox transform. */
@@ -200,6 +193,52 @@ const COACH = {
 } as const;
 
 /**
+ * The report card's composition.
+ *
+ * Two columns and a foot. The left column is the hands -- the nine-row table and
+ * the one sentence that says what its shape means -- and the right column is the
+ * keys and the curve. The one line the player is meant to act on sits across the
+ * bottom on its own, above the controls, because a sentence indented inside a
+ * column reads as a caption of that column.
+ *
+ * Every number here is `tuning-exempt` on the same grounds as `M` and `SCENE`:
+ * it composes a picture, and nothing a player can win or lose by is decided in
+ * it. The two `*Cols` are character budgets rather than pixels, which is sound
+ * because the card is set in the one monospaced face the renderer gives `report`
+ * -- and it is why the wrapping can live in core at all.
+ */
+const R = {
+  x: 44,             // tuning-exempt: report card composition
+  rightX: 340,       // tuning-exempt: report card composition
+  rightW: 252,       // tuning-exempt: report card composition
+  lineH: 14,         // tuning-exempt: report card composition
+  titleY: 30,        // tuning-exempt: report card composition
+  statY: 48,         // tuning-exempt: report card composition
+  statY2: 62,        // tuning-exempt: report card composition
+  statMid: 122,      // tuning-exempt: report card composition
+  statRight: 206,    // tuning-exempt: report card composition
+  headY: 86,         // tuning-exempt: report card composition
+  colY: 102,         // tuning-exempt: report card composition
+  rowY: 118,         // tuning-exempt: report card composition
+  colKeys: 54,       // tuning-exempt: report card composition
+  colBar: 96,        // tuning-exempt: report card composition
+  barW: 44,          // tuning-exempt: report card composition
+  barH: 5,           // tuning-exempt: report card composition
+  colAcc: 194,       // tuning-exempt: report card composition
+  colMean: 238,      // tuning-exempt: report card composition
+  gateHeadY: 180,    // tuning-exempt: report card composition
+  gateY: 196,        // tuning-exempt: report card composition
+  trendHeadY: 258,   // tuning-exempt: report card composition
+  trendY: 266,       // tuning-exempt: report card composition
+  trendH: 28,        // tuning-exempt: report card composition
+  noteY: 248,        // tuning-exempt: report card composition
+  noteCols: 42,      // tuning-exempt: report card composition -- the left column, in characters
+  adviceY: 310,      // tuning-exempt: report card composition
+  adviceCols: 82,    // tuning-exempt: report card composition -- the whole card, in characters
+  footY: 344,        // tuning-exempt: report card composition
+} as const;
+
+/**
  * The data-failure banner.
  *
  * It sits across the top of the scenery band, in the interface palette rather
@@ -251,6 +290,7 @@ const PERCENT = 100;         // tuning-exempt: fraction -> percent, a unit, not 
 const CARET_W = 2;
 const DIM_ALPHA = 0.35;      // tuning-exempt: how far an untaught key recedes
 const PANEL_ALPHA = 0.94;    // tuning-exempt: report card veils the level behind it
+const TREND_ALPHA = 0.7;     // tuning-exempt: art -- an ordinary part on the curve, against a gold one
 
 /**
  * Rows on the "worst keys" table. Five, because docs/design/08-stats.md says five.
@@ -285,6 +325,17 @@ export interface FrameState {
    * column for the thumb this player never uses.
    */
   readonly spaceThumb?: Thumb;
+  /**
+   * What the record remembers, for the report card: the lifetime key table, the
+   * finished parts, and how far the stage is from opening.
+   *
+   * Optional, and its absence is not an error. The tutor draws frames before a
+   * record has been read, and a card that falls back to the session it can see
+   * is a smaller loss than a card that cannot be drawn. With it, the hands are
+   * read over every part the player has typed rather than over the hundred and
+   * fifty keystrokes of this one.
+   */
+  readonly report?: ReportMemory;
   /**
    * Gilding mode, if the platform is running it.
    *
@@ -463,6 +514,33 @@ export interface SceneState {
 }
 
 // --- the report card --------------------------------------------------------
+//
+// docs/design/08-stats.md#the-report-card. This is the primary teaching surface
+// in the game, not a score screen, and the per-finger table is the part that
+// does the teaching. Everything below is a *reading* of the record; nothing here
+// judges the player and nothing here can move a stage.
+//
+// ## What the table can honestly say, and what it cannot
+//
+// A key is credited to the finger that *should* strike it, because that is the
+// only finger the game knows: the browser delivers a character, never a hand. So
+// the table is not a record of which fingers moved. Saying "your right index is
+// doing your left pinky's work" would be an invention -- true of the player,
+// almost certainly, and not something this data shows.
+//
+// What the data does show, and shows sharply, is **mean latency per finger**. A
+// finger resting on its home key answers in a fraction of the time a finger
+// being travelled to does, so a hand that never leaves home row produces means
+// inside a narrow band and a two-finger typist produces a spread. That is the
+// same signal the mastery gate's latency condition is built on --
+// docs/design/06-curriculum.md#the-mastery-gate, "slow-but-accurate is the
+// hunt-and-peck signature" -- read per finger instead of per stage. It is the
+// finding the card leads with, and `reaching` below is the flag for it.
+//
+// One skew is worth naming and is in the safe direction: a hit whose latency was
+// discarded for following a pause still counts as a hit, so `meanMs` is dragged
+// *down* for exactly the keys a player hesitates over. That can hide a slow
+// finger; it cannot invent one.
 
 export interface FingerRow {
   readonly finger: Finger;
@@ -472,6 +550,28 @@ export interface FingerRow {
   /** 0..1; zero when the finger was never used. */
   readonly accuracy: number;
   readonly meanMs: number;
+  /** This finger's share of every keystroke the card counted. 0..1. */
+  readonly share: number;
+  /** The current stage's keys this finger is responsible for. */
+  readonly keys: readonly Key[];
+  /**
+   * True when the stage has given this finger no key at all.
+   *
+   * The distinction between this and `idle` is the whole reason the empty rows
+   * are readable rather than merely blank. "Nothing has been asked of this
+   * finger yet" is a fact about the curriculum; "this finger has keys and has
+   * struck none of them" is a fact about the player. Printing both as a dash
+   * would collapse the two, and the row that matters is the second one.
+   */
+  readonly untaught: boolean;
+  /** True when the stage teaches keys for it and not one of them has been struck. */
+  readonly idle: boolean;
+  /**
+   * True when this finger takes at least `report_reach_ratio` times as long per
+   * key as the quickest finger with enough samples to be believed. A finger you
+   * reach for; not a finger you rest on.
+   */
+  readonly reaching: boolean;
 }
 
 export interface WorstKey {
@@ -486,14 +586,40 @@ export interface WorstKey {
 export interface ReportCard {
   readonly fingers: readonly FingerRow[];
   readonly worst: readonly WorstKey[];
+  /** How many of the nine rows the stage has given keys to. */
+  readonly taught: number;
+  /** The quickest finger with enough samples to be believed, or null. */
+  readonly quickest: FingerRow | null;
+  /** The slowest finger far enough behind that one to be a finding, or null. */
+  readonly slowest: FingerRow | null;
+}
+
+/**
+ * What the card is a reading of.
+ *
+ * `keyStats` is the *lifetime* table in the ordinary case, not the session's.
+ * One part is a few verses -- a hundred and fifty keystrokes spread over nine
+ * fingers -- and nine means built from sixteen samples each is noise presented
+ * as a diagnosis. The header line still reports the part; the hands are read
+ * over everything the player has typed.
+ */
+export interface ReportInput {
+  readonly keyStats: Readonly<Record<Key, KeyStat>>;
+  readonly layout: KeyboardLayout;
+  readonly spaceThumb?: Thumb;
+  /**
+   * Everything typable at the current stage. Absent, no row can be called
+   * untaught -- the card declines to guess rather than printing "no keys yet"
+   * about a finger it has not been told the keys of.
+   */
+  readonly keySet?: readonly Key[];
 }
 
 /**
  * Aggregate per-key statistics into the card.
  *
  * Every finger the game asks for is always present, including the ones with no
- * data. That is the entire point of the table: a two-finger typist's card is two
- * rows of numbers and seven rows of zeroes, and omitting the empty rows would
+ * data. That is the entire point of the table: omitting the empty rows would
  * hide exactly the thing it exists to show.
  *
  * Nine rows, not ten. Only one thumb is on the space bar -- see
@@ -501,28 +627,45 @@ export interface ReportCard {
  * artefact of the model rather than a diagnosis of the player, which is the one
  * thing this table must never be.
  */
-export function reportCard(
-  keyStats: Readonly<Record<Key, KeyStat>>,
-  layout: KeyboardLayout,
-  spaceThumb: Thumb = DEFAULT_SPACE_THUMB,
-): ReportCard {
+export function reportCard(input: ReportInput, tuning: Tuning): ReportCard {
+  const spaceThumb = input.spaceThumb ?? DEFAULT_SPACE_THUMB;
+  const { layout } = input;
   const columns = reportFingers(spaceThumb);
+  const minHits = tuningValue(tuning, 'report_finger_min_hits');
+  const reachRatio = tuningValue(tuning, 'report_reach_ratio');
+
   const hits = new Map<Finger, number>();
   const errors = new Map<Finger, number>();
   const totalMs = new Map<Finger, number>();
+  const taughtKeys = new Map<Finger, Key[]>();
   for (const f of columns) {
     hits.set(f, 0);
     errors.set(f, 0);
     totalMs.set(f, 0);
   }
 
+  // Which fingers the *stage* has given work to. Without a key set the card
+  // cannot tell "not taught" from "not used", so it claims neither.
+  const stageKeys = input.keySet;
+  if (stageKeys !== undefined) {
+    for (const key of stageKeys) {
+      const finger = fingerForKey(key, layout, spaceThumb);
+      if (finger === null) continue;
+      const held = taughtKeys.get(finger);
+      if (held === undefined) taughtKeys.set(finger, [key]);
+      else held.push(key);
+    }
+  }
+
   const worst: WorstKey[] = [];
-  for (const [key, stat] of Object.entries(keyStats)) {
+  let counted = 0;
+  for (const [key, stat] of Object.entries(input.keyStats)) {
     const finger = fingerForKey(key, layout, spaceThumb);
     if (finger !== null) {
       hits.set(finger, (hits.get(finger) ?? 0) + stat.hits);
       errors.set(finger, (errors.get(finger) ?? 0) + stat.errors);
       totalMs.set(finger, (totalMs.get(finger) ?? 0) + stat.totalMs);
+      counted += stat.hits + stat.errors;
     }
     const attempts = stat.hits + stat.errors;
     if (stat.errors > 0 && attempts > 0) {
@@ -536,10 +679,11 @@ export function reportCard(
     }
   }
 
-  const fingers: FingerRow[] = columns.map((finger) => {
+  const rows: FingerRow[] = columns.map((finger) => {
     const h = hits.get(finger) ?? 0;
     const e = errors.get(finger) ?? 0;
     const attempts = h + e;
+    const keys = taughtKeys.get(finger) ?? [];
     return {
       finger,
       label: FINGER_LABELS[finger],
@@ -547,13 +691,64 @@ export function reportCard(
       errors: e,
       accuracy: attempts === 0 ? 0 : h / attempts,
       meanMs: h === 0 ? 0 : (totalMs.get(finger) ?? 0) / h,
+      share: counted === 0 ? 0 : attempts / counted,
+      keys,
+      untaught: stageKeys !== undefined && keys.length === 0,
+      idle: keys.length > 0 && attempts === 0,
+      reaching: false,
     };
   });
+
+  // The spread, measured only over fingers with enough keystrokes behind them.
+  // One slow reach for a rare key must not be allowed to libel a finger.
+  //
+  // The thumb is left out of the comparison entirely, on both sides. It strikes
+  // one key, that key is the widest target on the board, and no hand has to
+  // travel to it -- so it is always the quickest column and comparing a pinky
+  // against it would make every hand in the world look like it was reaching.
+  // The question this measurement asks is about the eight fingers that have to
+  // find their keys.
+  const believable = (r: FingerRow): boolean =>
+    !isThumb(r.finger) && r.hits >= minHits && r.meanMs > 0;
+
+  let floor = 0;
+  for (const row of rows) {
+    if (believable(row) && (floor === 0 || row.meanMs < floor)) floor = row.meanMs;
+  }
+  const fingers: FingerRow[] = rows.map((row) => ({
+    ...row,
+    reaching: floor > 0 && believable(row) && row.meanMs >= floor * reachRatio,
+  }));
+
+  // Found over `fingers` and not over `rows`, so the row handed back is the
+  // identical object the table draws. It was briefly found over `rows`, and the
+  // renderer's `row === card.quickest` was then false on every row of every card
+  // ever drawn -- an entirely invisible failure, since the only symptom is a
+  // highlight that never appears.
+  let quickest: FingerRow | null = null;
+  let slowest: FingerRow | null = null;
+  for (const row of fingers) {
+    if (believable(row) && (quickest === null || row.meanMs < quickest.meanMs)) {
+      quickest = row;
+    }
+    if (row.reaching && (slowest === null || row.meanMs > slowest.meanMs)) slowest = row;
+  }
 
   // Rate first, then volume, so a key missed twice out of three does not outrank
   // one missed forty times out of a hundred purely by arithmetic.
   worst.sort((a, b) => b.errorRate - a.errorRate || b.errors - a.errors);
-  return { fingers, worst: worst.slice(0, WORST_KEYS) };
+  return {
+    fingers,
+    worst: worst.slice(0, WORST_KEYS),
+    taught: fingers.filter((r) => !r.untaught).length,
+    quickest,
+    slowest,
+  };
+}
+
+/** Space is the one thumb key, and no hand travels to it. See `reportCard`. */
+function isThumb(finger: Finger): boolean {
+  return finger === 'lt' || finger === 'rt';
 }
 
 function topConfusion(stat: KeyStat): string {
@@ -566,6 +761,238 @@ function topConfusion(stat: KeyStat): string {
     }
   }
   return best;
+}
+
+// --- the curve --------------------------------------------------------------
+
+/**
+ * One finished part, as the curve reads it.
+ *
+ * Structurally a `HistoryEntry` from `core/progress.ts` with the fields the
+ * chart does not draw left off. Declared here rather than imported so the
+ * display list depends on no record shape: a port that stores its history
+ * differently still draws this chart.
+ */
+export interface TrendPoint {
+  readonly wpm: number;
+  readonly accuracy: number;
+  /** True when this part opened a stage. Drawn gold, and named on the card. */
+  readonly promoted: boolean;
+}
+
+export interface Trend {
+  /** The window the chart draws, oldest first. */
+  readonly points: readonly TrendPoint[];
+  /** Every part in the record, which is what "so far" is averaged over. */
+  readonly parts: number;
+  readonly avgWpm: number;
+  readonly avgAccuracy: number;
+  /** The tallest bar in the window, which is the chart's scale. */
+  readonly bestWpm: number;
+  readonly promotions: number;
+  /** True when the most recently finished part opened a stage. */
+  readonly justPromoted: boolean;
+}
+
+/**
+ * The progress curve.
+ *
+ * The running averages are over the *whole* record and the chart is over the
+ * last `report_trend_parts`, and those are deliberately different windows: the
+ * average is the number the player is beating, and the chart is the shape of
+ * the last fortnight. docs/design/08-stats.md opens on why this matters -- the
+ * curve is most of the motivation in the first month, and it is the part a
+ * beginner cannot feel from the inside.
+ */
+export function reportTrend(history: readonly TrendPoint[], tuning: Tuning): Trend {
+  const window = Math.max(1, Math.trunc(tuningValue(tuning, 'report_trend_parts')));
+  const points = history.slice(-window);
+  let wpm = 0;
+  let accuracy = 0;
+  for (const entry of history) {
+    wpm += entry.wpm;
+    accuracy += entry.accuracy;
+  }
+  let best = 0;
+  let promotions = 0;
+  for (const point of points) {
+    if (point.wpm > best) best = point.wpm;
+    if (point.promoted) promotions += 1;
+  }
+  const last = history[history.length - 1];
+  return {
+    points,
+    parts: history.length,
+    avgWpm: history.length === 0 ? 0 : wpm / history.length,
+    avgAccuracy: history.length === 0 ? 0 : accuracy / history.length,
+    bestWpm: best,
+    promotions,
+    justPromoted: last !== undefined && last.promoted,
+  };
+}
+
+// --- what the card says out loud --------------------------------------------
+
+/**
+ * How far the current stage is from opening, as the card needs to say it.
+ *
+ * Built by the platform from `progress.gateProgress`. Optional on the frame,
+ * because the tutor draws before a record exists and a card with no gate line
+ * is a smaller loss than a card that cannot be drawn.
+ */
+export interface GateView {
+  /**
+   * The stage the gate is being read for.
+   *
+   * Carried rather than taken off the frame, because after a promotion they
+   * differ: the record has moved on and the part still on screen was typed at
+   * the old stage. The heading has to name the stage the numbers under it
+   * belong to.
+   */
+  readonly stage: number;
+  readonly newKeys: readonly Key[];
+  readonly passed: boolean;
+  readonly accuracyMet: boolean;
+  readonly latencyMet: boolean;
+  readonly samples: number;
+  readonly accuracy: number;
+  readonly medianMs: number;
+  readonly requiredAccuracy: number;
+  readonly allowedLatencyMs: number;
+  readonly requiredSamples: number;
+}
+
+/** The record's memory, for the card. Absent, the card reads the session only. */
+export interface ReportMemory {
+  readonly keyStats: Readonly<Record<Key, KeyStat>>;
+  readonly history: readonly TrendPoint[];
+  readonly gate?: GateView;
+}
+
+/** `1 part`, `20 parts`. A card that says "1 parts" has stopped being written for anyone. */
+export function countParts(n: number): string {
+  return n === 1 ? '1 part' : `${String(n)} parts`;
+}
+
+/** `e and i`; `c, m, w, v, b and p`. Keys as a player would read them aloud. */
+export function nameKeys(keys: readonly Key[]): string {
+  const names = keys.map(keyLabel);
+  const last = names[names.length - 1];
+  if (last === undefined) return '';
+  if (names.length === 1) return last;
+  return `${names.slice(0, -1).join(', ')} and ${last}`;
+}
+
+/**
+ * The one sentence under the table: what the empty or uneven rows *mean*.
+ *
+ * The table is the evidence and this is the finding. One finding, never a list:
+ * a card that says four things says none of them, and the player reading it has
+ * a part to get back to.
+ *
+ * The order is the order of what is worth knowing. A promotion that has just
+ * landed comes first because the next few parts will look like a regression and
+ * the player is about to watch it happen -- docs/design/08-stats.md#history
+ * requires that be said rather than left to be inferred, and this is the second
+ * of the two places it is said.
+ */
+export function reportNote(card: ReportCard, trend: Trend): string {
+  if (trend.justPromoted) {
+    return 'A gold mark is a stage opening. More of the page goes live there, so the '
+      + 'dip after one is the curriculum, not you.';
+  }
+  const slow = card.slowest;
+  const quick = card.quickest;
+  if (slow !== null && quick !== null) {
+    return `${slow.label} takes ${String(Math.round(slow.meanMs))} ms a key against `
+      + `${String(Math.round(quick.meanMs))} on your ${quick.label}. That gap is what `
+      + 'reaching for a key costs over resting on it.';
+  }
+  const idle = card.fingers.filter((row) => row.idle);
+  const first = idle[0];
+  if (first !== undefined) {
+    // One idle finger is worth naming; five is a shape, and naming one of them
+    // would understate it. Neither wording accuses: a finger the stage has
+    // reached and the player has not is a thing to aim at, not a failure.
+    return idle.length === 1
+      ? `${first.label} is the finger for ${nameKeys(first.keys)} and has not struck a `
+        + 'key yet.'
+      : `${String(idle.length)} fingers have keys at this stage and have not been used `
+        + 'yet. Those blank rows are the ones to aim at.';
+  }
+  if (card.taught > 0 && card.taught < card.fingers.length) {
+    return 'The blank rows are fingers this stage has no keys for yet. They fill in as '
+      + 'the curriculum moves.';
+  }
+  if (quick === null) {
+    return 'Too few keystrokes so far to say much about one finger against another.';
+  }
+  return 'Your fingers are within reach of each other on speed, which is what touch '
+    + 'typing looks like from the inside.';
+}
+
+/**
+ * One thing to work on next, derived from the data and never from a mood.
+ *
+ * Ordered by what a player can act on this evening. A single key he is missing
+ * is the most actionable thing there is, so it goes first; a finger he is
+ * travelling to is the deeper finding, and `reportNote` above is already saying
+ * that. The gate's remaining condition comes last because it is the least
+ * specific -- "be more accurate" is advice about everything.
+ *
+ * It never praises and never scolds. "You miss it 34% of the time" is a fact he
+ * can do something with; "you are struggling with ;" is a verdict he is not.
+ */
+export function reportAdvice(card: ReportCard, gate: GateView | undefined, tuning: Tuning): string {
+  const minAttempts = tuningValue(tuning, 'report_key_min_attempts');
+  const worstRate = tuningValue(tuning, 'report_worst_key_rate');
+
+  const key = card.worst.find(
+    (row) => row.hits + row.errors >= minAttempts && row.errorRate >= worstRate,
+  );
+  if (key !== undefined) {
+    const instead = key.confusedWith === ''
+      ? ''
+      : `, usually striking ${keyLabel(key.confusedWith)} instead`;
+    return `Next: the ${keyLabel(key.key)} key — you miss it `
+      + `${String(pct(key.errorRate))}% of the time${instead}.`;
+  }
+
+  const idle = card.fingers.find((row) => row.idle);
+  if (idle !== undefined) {
+    return `Next: your ${idle.label} — it is the finger for ${nameKeys(idle.keys)}, and `
+      + 'you have not used it yet.';
+  }
+
+  const slow = card.slowest;
+  const quick = card.quickest;
+  if (slow !== null && quick !== null) {
+    return `Next: your ${slow.label} — ${String(Math.round(slow.meanMs))} ms a key `
+      + `against ${String(Math.round(quick.meanMs))} on your ${quick.label}, which is the `
+      + 'difference between resting on a key and travelling to it.';
+  }
+
+  if (gate !== undefined && gate.newKeys.length > 0) {
+    const keys = nameKeys(gate.newKeys);
+    if (gate.samples > 0 && !gate.accuracyMet) {
+      return `Next: accuracy on ${keys} — ${String(pct(gate.accuracy))}% over the last `
+        + `stretch, and the stage opens at ${String(pct(gate.requiredAccuracy))}%.`;
+    }
+    if (gate.samples > 0 && !gate.latencyMet) {
+      return `Next: speed on ${keys} — ${String(Math.round(gate.medianMs))} ms a key, `
+        + `and the stage opens at ${String(Math.round(gate.allowedLatencyMs))} ms.`;
+    }
+    if (gate.samples < gate.requiredSamples) {
+      const owed = Math.max(0, Math.round(gate.requiredSamples - gate.samples));
+      return `Next: more of ${keys} — ${String(owed)} more keystrokes on them before `
+        + 'the stage can open.';
+    }
+    return `Next: nothing outstanding — ${keys} are at the standard and the stage `
+      + 'opens from here.';
+  }
+
+  return 'Next: keep going — a few more parts and this card will have something '
+    + 'specific to say.';
 }
 
 // --- the scenery band -------------------------------------------------------
@@ -1081,7 +1508,7 @@ export function drawFrame(state: FrameState, rail: RailState, tuning: Tuning): D
   // key the player is not being asked for would be the overlay lying.
   if (state.mode === 'lectio') pushReadingHint(cmds);
   else pushKeyboard(cmds, state, tuning);
-  if (state.mode === 'report') pushReport(cmds, state);
+  if (state.mode === 'report') pushReport(cmds, state, tuning);
   // Last, so the report card cannot bury it. Running on fallback data must be
   // impossible to miss from any screen in the game.
   const notice = state.notice;
@@ -1437,73 +1864,303 @@ function pushKeyboard(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void 
   }
 }
 
-function pushReport(cmds: DrawCmd[], state: FrameState): void {
-  const card = reportCard(state.keyStats, state.layout, state.spaceThumb ?? DEFAULT_SPACE_THUMB);
+/**
+ * Break a sentence into lines of at most `cols` characters.
+ *
+ * Legitimate in core only because the card is set in a monospaced face -- the
+ * renderer gives `report` one, and the styles table is the contract. A
+ * proportional face would make this the platform's arithmetic, not ours.
+ */
+function wrapText(text: string, cols: number): string[] {
+  const out: string[] = [];
+  let line = '';
+  for (const word of text.split(' ')) {
+    if (line === '') line = word;
+    else if (line.length + word.length + 1 <= cols) line = `${line} ${word}`;
+    else {
+      out.push(line);
+      line = word;
+    }
+  }
+  if (line !== '') out.push(line);
+  return out;
+}
+
+/** The progress curve: one bar per finished part, promotions in gold. */
+function pushTrend(cmds: DrawCmd[], trend: Trend): void {
+  const n = trend.points.length;
+  if (n === 0) return;
+  // A part typed at nought words a minute is not a part; the floor keeps the
+  // scale off a division by zero without inventing a number for the chart.
+  const top = Math.max(1, trend.bestWpm);
+  const slot = R.rightW / n;
+  const width = Math.max(1, slot - 1);
+  const base = R.trendY + R.trendH;
+
+  cmds.push({
+    op: 'line', x1: R.rightX, y1: base, x2: R.rightX + R.rightW, y2: base,
+    color: pal('rule'), width: 1,
+  });
+  for (let i = 0; i < n; i++) {
+    const point = trend.points[i];
+    if (point === undefined) continue;
+    const h = Math.max(1, Math.round((point.wpm / top) * R.trendH));
+    cmds.push({
+      op: 'rect',
+      x: R.rightX + i * slot,
+      y: base - h,
+      w: width,
+      h,
+      color: pal(point.promoted ? 'gold' : 'hud'),
+      alpha: point.promoted ? 1 : TREND_ALPHA,
+    });
+  }
+}
+
+/**
+ * The report card.
+ *
+ * Shown at the end of every part, and reachable from the menu, which is the
+ * same picture read at a different moment. It is a teaching surface and not a
+ * ceremony: nothing on it animates, nothing waits, and Enter is live from the
+ * first frame -- docs/design/08-stats.md#the-report-card. A fluent typist
+ * finishing a part a minute must be able to leave it in one keystroke, and a
+ * beginner must be able to sit with it for as long as he likes.
+ */
+function pushReport(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
+  const spaceThumb = state.spaceThumb ?? DEFAULT_SPACE_THUMB;
+  const memory = state.report;
+  const card = reportCard(
+    {
+      keyStats: memory?.keyStats ?? state.keyStats,
+      layout: state.layout,
+      spaceThumb,
+      keySet: state.keySet,
+    },
+    tuning,
+  );
+  const trend = reportTrend(memory?.history ?? [], tuning);
+  const gate = memory?.gate;
+
   cmds.push({
     op: 'rect', x: 0, y: 0, w: M.vw, h: M.vh, color: pal('panel'), alpha: PANEL_ALPHA,
   });
   cmds.push({
-    op: 'text', value: `${state.ref} - report`, x: M.reportX, y: M.reportTitleY,
+    op: 'text', value: `${state.ref} - report`, x: R.x, y: R.titleY,
     style: 'title', color: pal('gold'),
   });
+
+  // The two header rows. "so far" is the running average the level's number is
+  // read against; without it a good part and a bad one look the same.
+  const headerRow = (y: number, label: string, cells: readonly string[], colour: number): void => {
+    cmds.push({ op: 'text', value: label, x: R.x, y, style: 'report', color: pal('dim') });
+    const xs = [R.x + R.colKeys, R.x + R.statMid, R.x + R.statRight];
+    for (let i = 0; i < cells.length; i++) {
+      cmds.push({
+        op: 'text', value: cells[i] ?? '', x: xs[i] ?? R.x, y, style: 'report', color: colour,
+      });
+    }
+  };
+  headerRow(R.statY, 'this part', [
+    `${String(Math.round(state.score.wpm))} wpm`,
+    `${String(pct(state.score.accuracy))}% accurate`,
+    `${String(Math.round(state.score.medianLatencyMs))} ms a key`,
+  ], pal('hud'));
+  if (trend.parts > 0) {
+    headerRow(R.statY2, 'so far', [
+      `${String(Math.round(trend.avgWpm))} wpm`,
+      `${String(pct(trend.avgAccuracy))}% accurate`,
+      countParts(trend.parts),
+    ], pal('done'));
+  }
+
+  // --- the hands ------------------------------------------------------------
+  //
+  // Gilding names its own blind spot in the heading rather than in a footnote.
+  // In that mode the player types more than this table can count -- a gilded
+  // character records no key statistics at all, which is what makes the mastery
+  // gate's guarantee structural rather than careful (ADR 0008) -- and a table
+  // that quietly reported the taught half as the whole would be the card
+  // lying about the one player who can tell.
   cmds.push({
     op: 'text',
-    value: `WPM ${Math.round(state.score.wpm)}   ACCURACY ${pct(state.score.accuracy)}%   MEDIAN ${Math.round(state.score.medianLatencyMs)}ms`,
-    x: M.reportX, y: M.reportTitleY + M.reportLineH, style: 'report', color: pal('hud'),
+    value: state.gilding === true
+      ? 'your hands - the keys your stage teaches'
+      : 'your hands - every part so far',
+    x: R.x, y: R.headY, style: 'report', color: pal('dim'),
   });
-
-  const head = ['finger', 'keys', 'acc', 'mean'];
-  for (let c = 0; c < head.length; c++) {
+  const head: readonly (readonly [string, number])[] = [
+    ['finger', 0], ['struck', R.colKeys], ['share', R.colBar],
+    ['acc', R.colAcc], ['mean', R.colMean],
+  ];
+  for (const [label, dx] of head) {
     cmds.push({
-      op: 'text', value: head[c] ?? '', x: M.reportX + c * M.reportColW, y: M.reportBodyY,
-      style: 'report', color: pal('dim'),
+      op: 'text', value: label, x: R.x + dx, y: R.colY, style: 'report', color: pal('dim'),
     });
   }
+
+  let busiest = 0;
+  for (const row of card.fingers) if (row.share > busiest) busiest = row.share;
+
   for (let r = 0; r < card.fingers.length; r++) {
     const row = card.fingers[r];
     if (row === undefined) continue;
-    const y = M.reportBodyY + (r + 1) * M.reportLineH;
-    // An unused finger is drawn dim rather than omitted: eight dim rows is the
-    // diagnosis the card exists to deliver.
-    const colour = pal(row.hits === 0 ? 'dim' : 'hud');
-    const cells = [
-      row.label,
-      String(row.hits),
-      row.hits === 0 ? '-' : `${pct(row.accuracy)}%`,
-      row.hits === 0 ? '-' : `${Math.round(row.meanMs)}ms`,
-    ];
-    for (let c = 0; c < cells.length; c++) {
+    const y = R.rowY + r * R.lineH;
+    // Three states, three weights. A finger with data is ordinary text; a finger
+    // the stage has taught and the player has not used is *brighter*, because it
+    // is the one row here that is a finding about him; a finger the stage has
+    // not reached yet recedes, because it is not his fault and not yet his job.
+    const colour = row.hits > 0 ? pal('hud') : row.idle ? pal('live') : pal('dim');
+    cmds.push({ op: 'text', value: row.label, x: R.x, y, style: 'report', color: colour });
+    cmds.push({
+      op: 'text', value: String(row.hits + row.errors),
+      x: R.x + R.colKeys, y, style: 'report', color: colour,
+    });
+
+    // The share bar, in the finger's own overlay colour, so the table and the
+    // keyboard below it are read as the same picture of the same hand.
+    // Scaled against the busiest finger rather than against the whole hand: no
+    // single finger ever approaches all of the keystrokes, so a bar drawn as a
+    // fraction of the total is nine short stubs and says nothing. Against the
+    // busiest one, the row lengths *are* the shape of the hand, which is the
+    // only thing this column is for -- the numbers are in the columns beside it.
+    if (row.share > 0 && busiest > 0) {
       cmds.push({
-        op: 'text', value: cells[c] ?? '', x: M.reportX + c * M.reportColW, y,
-        style: 'report', color: colour,
+        op: 'rect', x: R.x + R.colBar, y: y - R.barH / 2,
+        w: Math.max(1, Math.round((row.share / busiest) * R.barW)), h: R.barH,
+        color: pal(row.finger),
       });
     }
+
+    if (row.hits === 0) {
+      // The empty row says which kind of empty it is. This is the sentence the
+      // whole table is for: a blank the curriculum has not filled in yet reads
+      // nothing like a finger the player is not using.
+      cmds.push({
+        op: 'text',
+        value: row.untaught ? 'no keys at this stage' : 'not used yet',
+        // Where the bar would have been, running across the two number columns:
+        // the sentence is what this row has instead of numbers, and starting it
+        // in the accuracy column would push it into the worst-keys list.
+        x: R.x + R.colBar, y, style: 'report', color: colour,
+      });
+      continue;
+    }
+    cmds.push({
+      op: 'text', value: `${String(pct(row.accuracy))}%`,
+      x: R.x + R.colAcc, y, style: 'report', color: colour,
+    });
+    cmds.push({
+      op: 'text', value: `${String(Math.round(row.meanMs))} ms`,
+      x: R.x + R.colMean, y, style: 'report',
+      // The latency column is the diagnosis. A finger being reached for is
+      // marked here and nowhere else, because this is the number that says so.
+      color: row.reaching
+        ? pal('error')
+        : row.finger === card.quickest?.finger ? pal('live') : colour,
+    });
   }
 
+  const note = wrapText(reportNote(card, trend), R.noteCols);
+  for (let i = 0; i < note.length; i++) {
+    cmds.push({
+      op: 'text', value: note[i] ?? '', x: R.x, y: R.noteY + i * R.lineH,
+      style: 'report', color: pal('dim'),
+    });
+  }
+
+  // --- the keys and the curve -----------------------------------------------
+
   cmds.push({
-    op: 'text', value: 'worst keys', x: M.reportRightX, y: M.reportBodyY,
-    style: 'report', color: pal('dim'),
+    op: 'text', value: 'worst keys', x: R.rightX, y: R.headY, style: 'report', color: pal('dim'),
   });
   if (card.worst.length === 0) {
     cmds.push({
-      op: 'text', value: 'none - clean sheet', x: M.reportRightX,
-      y: M.reportBodyY + M.reportLineH, style: 'report', color: pal('live'),
+      op: 'text', value: 'none - clean sheet', x: R.rightX,
+      y: R.colY, style: 'report', color: pal('live'),
     });
   }
   for (let r = 0; r < card.worst.length; r++) {
     const row = card.worst[r];
     if (row === undefined) continue;
-    const struck = row.confusedWith === '' ? '' : ` struck ${keyLabel(row.confusedWith)}`;
+    const struck = row.confusedWith === '' ? '' : `, ${keyLabel(row.confusedWith)} instead`;
     cmds.push({
       op: 'text',
-      value: `${keyLabel(row.key)}   ${pct(row.errorRate)}% wrong${struck}`,
-      x: M.reportRightX, y: M.reportBodyY + (r + 1) * M.reportLineH,
+      value: `${keyLabel(row.key)}   ${String(pct(row.errorRate))}% wrong${struck}`,
+      x: R.rightX, y: R.colY + r * R.lineH,
       style: 'report', color: pal('error'),
+    });
+  }
+
+  if (gate !== undefined && gate.newKeys.length > 0) {
+    cmds.push({
+      op: 'text', value: `stage ${String(gate.stage)} - what is still missing`,
+      x: R.rightX, y: R.gateHeadY, style: 'report', color: pal('dim'),
+    });
+    // Unmet in gold, met in muted text. Gold is the card's accent and it goes to
+    // the thing there is still work in; a red row for a condition simply not yet
+    // reached would read as a failure, and it is not one.
+    // Before a single keystroke has landed on the new keys -- which is exactly
+    // where the player stands on the card that follows a promotion -- there is
+    // no accuracy and no median to report. Printing "0% needs 95%" there would
+    // be the card inventing a failure out of an empty table, on the one screen
+    // whose whole job is to stop a promotion looking like a regression.
+    const measured = gate.samples > 0;
+    const rows: readonly (readonly [string, boolean])[] = [
+      [`new keys   ${nameKeys(gate.newKeys)}`, true],
+      ...(measured
+        ? ([
+          [
+            `accuracy   ${String(pct(gate.accuracy))}%   needs `
+            + `${String(pct(gate.requiredAccuracy))}%`,
+            gate.accuracyMet,
+          ],
+          [
+            `speed      ${String(Math.round(gate.medianMs))} ms   needs `
+            + `${String(Math.round(gate.allowedLatencyMs))} ms`,
+            gate.latencyMet,
+          ],
+        ] as const)
+        : []),
+      [
+        `keystrokes ${String(gate.samples)} of ${String(Math.round(gate.requiredSamples))}`,
+        gate.samples >= gate.requiredSamples,
+      ],
+    ];
+    for (let i = 0; i < rows.length; i++) {
+      const entry = rows[i];
+      if (entry === undefined) continue;
+      cmds.push({
+        op: 'text', value: entry[0], x: R.rightX, y: R.gateY + i * R.lineH,
+        style: 'report', color: entry[1] ? pal('done') : pal('gold'),
+      });
+    }
+  }
+
+  if (trend.points.length > 0) {
+    cmds.push({
+      op: 'text',
+      value: trend.promotions > 0
+        ? `last ${countParts(trend.points.length)} - gold: a stage opened`
+        : `last ${countParts(trend.points.length)} - best `
+          + `${String(Math.round(trend.bestWpm))} wpm`,
+      x: R.rightX, y: R.trendHeadY, style: 'report', color: pal('dim'),
+    });
+    pushTrend(cmds, trend);
+  }
+
+  // --- the one thing to do next ---------------------------------------------
+
+  const advice = wrapText(reportAdvice(card, gate, tuning), R.adviceCols);
+  for (let i = 0; i < advice.length; i++) {
+    cmds.push({
+      op: 'text', value: advice[i] ?? '', x: R.x, y: R.adviceY + i * R.lineH,
+      style: 'report', color: pal('gold'),
     });
   }
 
   cmds.push({
     op: 'text', value: 'enter: next part      r: type it again      esc: menu',
-    x: M.reportX, y: M.reportFootY, style: 'report', color: pal('dim'),
+    x: R.x, y: R.footY, style: 'report', color: pal('dim'),
   });
 }

@@ -24,8 +24,9 @@
  * convenient, because a new stage's keys have no history to judge yet.
  */
 
-import type { Key, KeyStat, KeyboardLayout, Stage, Thumb, Tuning } from './types.js';
+import type { GateResult, Key, KeyStat, KeyboardLayout, Stage, Thumb, Tuning } from './types.js';
 import { evaluateGate, stageAt } from './curriculum.js';
+import { median } from './typing.js';
 import { NOTE_ORDER, type NoteId } from './onboarding.js';
 import { tuningValue } from './tuning.js';
 
@@ -679,14 +680,64 @@ export function evaluatePromotion(
 }
 
 /**
- * How far the current stage is from opening the gate, for the report card's
- * "what is still missing" line -- docs/design/08-stats.md#the-report-card.
+ * How far the current stage is from opening the gate.
+ *
+ * `evaluateGate` answers *whether* the gate is shut, which is all the promotion
+ * needs. The report card has to say *by how much* -- "91% and the stage opens at
+ * 95%" is a thing a player can act on, and "not yet" is not -- so this carries
+ * the measured pair and the pair they are measured against.
+ *
+ * The judgement itself is still `evaluateGate`'s and is not restated here: this
+ * reports the numbers, and `gate.passed` is the only thing anything acts on. The
+ * latency allowance is the one line of arithmetic shared with
+ * `core/curriculum.ts`, and `core/report.test.ts` pins the two together by
+ * asserting that a median exactly at `allowedLatencyMs` passes and one a
+ * millisecond above it does not.
  */
+export interface GateStanding {
+  readonly stage: Stage;
+  readonly gate: GateResult;
+  /** Accuracy over the trailing window, on this stage's new keys. 0 with no samples. */
+  readonly accuracy: number;
+  /** Median latency over the same window. 0 with no samples. */
+  readonly medianMs: number;
+  readonly requiredAccuracy: number;
+  readonly allowedLatencyMs: number;
+  readonly requiredSamples: number;
+}
+
 export function gateProgress(
   progress: Progress,
   stages: readonly Stage[],
   tuning: Tuning,
-): { readonly stage: Stage; readonly gate: ReturnType<typeof evaluateGate> } {
+): GateStanding {
   const stage = stageAt(stages, progress.stage);
-  return { stage, gate: evaluateGate(stage, gateStats(progress, stage.keys), tuning) };
+  const stats = gateStats(progress, stage.keys);
+  const gate = evaluateGate(stage, stats, tuning);
+
+  let hits = 0;
+  let errors = 0;
+  const latencies: number[] = [];
+  for (const key of stage.keys) {
+    const stat = stats[key];
+    if (stat === undefined) continue;
+    hits += stat.hits;
+    errors += stat.errors;
+    for (const ms of stat.latencies) latencies.push(ms);
+  }
+  const samples = hits + errors;
+
+  const base = tuningValue(tuning, 'gate_latency_base_ms');
+  const step = tuningValue(tuning, 'gate_latency_step_ms');
+  const floor = tuningValue(tuning, 'gate_latency_floor_ms');
+
+  return {
+    stage,
+    gate,
+    accuracy: samples === 0 ? 0 : hits / samples,
+    medianMs: median(latencies),
+    requiredAccuracy: tuningValue(tuning, 'gate_accuracy'),
+    allowedLatencyMs: Math.max(floor, base - stage.stage * step),
+    requiredSamples: tuningValue(tuning, 'gate_window'),
+  };
 }

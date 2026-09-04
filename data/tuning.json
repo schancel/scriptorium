@@ -44,6 +44,11 @@
     "audio_default_on": 0,
     "wpm_chars_per_word": 5,
     "history_max_sessions": 500,
+    "report_trend_parts": 20,
+    "report_finger_min_hits": 12,
+    "report_reach_ratio": 2.0,
+    "report_key_min_attempts": 12,
+    "report_worst_key_rate": 0.12,
     "first_run_note_keys": 8
   },
   "meta": {
@@ -222,6 +227,26 @@
     "history_max_sessions": {
       "unit": "sessions",
       "description": "How much practice history is retained locally."
+    },
+    "report_trend_parts": {
+      "unit": "parts",
+      "description": "How many finished parts the report card's curve shows. Enough to see the shape of a fortnight; few enough that one bar is still wide enough to read."
+    },
+    "report_finger_min_hits": {
+      "unit": "keystrokes",
+      "description": "Hits a finger needs before its mean latency is treated as a signal rather than noise. Below this, one slow reach for a rare key would libel a finger."
+    },
+    "report_reach_ratio": {
+      "unit": "ratio",
+      "description": "How many times the quickest finger's mean latency a finger must take before the card calls it a finger being *reached for* rather than rested on. This is the two-finger signature the card exists to make visible, and it is the one thing about technique the game can honestly observe."
+    },
+    "report_key_min_attempts": {
+      "unit": "attempts",
+      "description": "Attempts on a key before its error rate is worth naming as the next thing to work on."
+    },
+    "report_worst_key_rate": {
+      "unit": "fraction",
+      "description": "Error rate at which a key becomes the one thing the card asks the player to work on next. Below it the card looks for a finger instead."
     },
     "first_run_note_keys": {
       "unit": "keystrokes",

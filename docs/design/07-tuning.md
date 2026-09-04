@@ -58,4 +58,9 @@ first evening a real beginner plays it and something feels wrong.
 | `audio_default_on` | 0 | boolean | Audio starts muted. Browsers block autoplay and a beginner does not need a surprise. |
 | `wpm_chars_per_word` | 5 | chars | The standard definition of a "word" for WPM. Do not change; it makes scores incomparable. |
 | `history_max_sessions` | 500 | sessions | How much practice history is retained locally. |
+| `report_trend_parts` | 20 | parts | How many finished parts the report card's curve shows. Enough to see the shape of a fortnight; few enough that one bar is still wide enough to read. |
+| `report_finger_min_hits` | 12 | keystrokes | Hits a finger needs before its mean latency is treated as a signal rather than noise. Below this, one slow reach for a rare key would libel a finger. |
+| `report_reach_ratio` | 2.0 | ratio | How many times the quickest finger's mean latency a finger must take before the card calls it a finger being *reached for* rather than rested on. This is the two-finger signature the card exists to make visible, and it is the one thing about technique the game can honestly observe. |
+| `report_key_min_attempts` | 12 | attempts | Attempts on a key before its error rate is worth naming as the next thing to work on. |
+| `report_worst_key_rate` | 0.12 | fraction | Error rate at which a key becomes the one thing the card asks the player to work on next. Below it the card looks for a finger instead. |
 | `first_run_note_keys` | 8 | keystrokes | Correct keystrokes a [first-run note](10-first-run.md#2-then-straight-into-typing-with-three-notes-that-fire-once-each) stays under the rail before it leaves. It is a count of keystrokes rather than a duration because the note is dismissed by *continuing to type*: a clock would take the sentence away from the one player who stopped to read it, and at a beginner's pace eight keystrokes is roughly ten seconds. |
