@@ -1,6 +1,7 @@
 # Music
 
-**Implemented by:** `core/tunes.ts`, `core/sound.ts`, `platform/web/web_audio.ts`
+**Implemented by:** `core/synth.ts`, `core/sequencer.ts`, `core/tunes.ts`, `core/sound.ts`,
+`platform/web/web_audio.ts`
 
 Each theme gets a chiptune arrangement of a public-domain melody. The synthesis model
 deliberately mirrors the NES 2A03, because the constraints are what produce the sound.
@@ -52,10 +53,23 @@ from **harmonic minor** (the raised seventh) rather than natural minor, driving 
 triangle bass, and duty-cycle switching mid-phrase so one square wave delivers two
 timbres. Fast `[0,3,6]` arpeggios over a pedal bass carry most of the menace.
 
+Mid-phrase switching needs a duty on the *note*, not just the track, because a channel
+may appear only once in a tune and so the part cannot be split across two tracks. A
+note's `duty` overrides its track's; absent, the track's stands.
+
 ## Tune format
 
 MIDI-style note events. `ppq` is pulses per quarter note; `t` and `dur` are in those
 ticks; `midi` is a standard MIDI note number; `vel` is 0–127.
+
+Three fields are normalised at load rather than demanded of the author. A triangle note's
+`vel` is ignored and set full, because the 2A03 triangle has no volume register. A noise
+note may name a `timbre` — `kick`, `snare`, `hat`, `crash` — instead of a `midi`, and it
+becomes the General MIDI percussion key for that drum; the noise channel has no pitch, so
+its note number *is* which drum. And `arpHz` defaults to 60 when `arp` is given without it.
+
+`loop` is authoritative: playback wraps there, not at the last note, and a note starting
+at or after it is a load error rather than a note nobody will ever hear.
 
 ```json
 {
@@ -106,8 +120,20 @@ All melodies below are public domain. Where a date is given it is first publicat
 | `passion-chorale` | Passion Chorale ("O Sacred Head") | Hans Leo Hassler, 1601 | `tomb` |
 | `helmsley` | Helmsley ("Lo, He Comes with Clouds Descending") | Thomas Olivers, 1763 | `apocalypse` |
 
+## Tempo, and the cues
+
 Tempo scales with the player's combo up to `combo_tempo_max` — the music itself rewards
-accuracy, and a rising tempo under a clean run is worth more than any score popup.
+accuracy, and a rising tempo under a clean run is worth more than any score popup. The
+scaling is linear and reaches the ceiling at a combo of `smudge_max / smudge_decay_per_key`
+keystrokes. That number is derived rather than picked: it is exactly the run of clean
+typing that scrubs a full smudge meter back to a clean page, so top tempo means something
+the player can feel, and it moves on its own if either smudge row is ever retuned.
+
+Besides the music there is a short vocabulary of cues — `error`, `smudge_full`,
+`heart_lost`, `cloud`, `candle`, `promotion`, `warp` — emitted as `sfx` events for the
+platform to realise. There is deliberately **no per-keystroke click**. A tutor that
+clatters on every key trains the player to listen for the sound instead of watching the
+rail, and holding the eye still is the one thing the rail exists to do.
 
 Audio starts muted (`audio_default_on`). Browsers block autoplay, and a beginner
 concentrating hard does not need a surprise fanfare.

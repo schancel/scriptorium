@@ -1,0 +1,1015 @@
+{
+  "id": "dies-irae",
+  "name": "Dies Irae",
+  "source": "Gregorian sequence, 13th c., mode I. Melody transcribed from the LilyPond staff rendering of the Vatican neumatic notation in the Wikipedia Dies irae article; the opening interval pattern matches the canonical quotation used by Berlioz and Rachmaninoff. Public domain.",
+  "bpm": 96,
+  "ppq": 24,
+  "loop": 768,
+  "tracks": [
+    {
+      "ch": "pulse1",
+      "duty": 0.25,
+      "notes": [
+        {
+          "t": 0,
+          "dur": 24,
+          "midi": 77,
+          "vel": 108
+        },
+        {
+          "t": 24,
+          "dur": 24,
+          "midi": 76,
+          "vel": 108
+        },
+        {
+          "t": 48,
+          "dur": 24,
+          "midi": 77,
+          "vel": 108
+        },
+        {
+          "t": 72,
+          "dur": 24,
+          "midi": 74,
+          "vel": 108
+        },
+        {
+          "t": 96,
+          "dur": 24,
+          "midi": 76,
+          "vel": 108
+        },
+        {
+          "t": 120,
+          "dur": 24,
+          "midi": 72,
+          "vel": 108,
+          "duty": 0.125
+        },
+        {
+          "t": 144,
+          "dur": 24,
+          "midi": 74,
+          "vel": 108,
+          "duty": 0.125
+        },
+        {
+          "t": 168,
+          "dur": 36,
+          "midi": 74,
+          "vel": 108,
+          "duty": 0.125
+        },
+        {
+          "t": 216,
+          "dur": 24,
+          "midi": 77,
+          "vel": 108
+        },
+        {
+          "t": 240,
+          "dur": 24,
+          "midi": 77,
+          "vel": 108
+        },
+        {
+          "t": 264,
+          "dur": 24,
+          "midi": 79,
+          "vel": 108
+        },
+        {
+          "t": 288,
+          "dur": 24,
+          "midi": 77,
+          "vel": 108
+        },
+        {
+          "t": 312,
+          "dur": 24,
+          "midi": 76,
+          "vel": 108
+        },
+        {
+          "t": 336,
+          "dur": 24,
+          "midi": 74,
+          "vel": 108
+        },
+        {
+          "t": 360,
+          "dur": 24,
+          "midi": 72,
+          "vel": 108
+        },
+        {
+          "t": 384,
+          "dur": 24,
+          "midi": 76,
+          "vel": 108
+        },
+        {
+          "t": 408,
+          "dur": 24,
+          "midi": 77,
+          "vel": 108,
+          "duty": 0.125
+        },
+        {
+          "t": 432,
+          "dur": 24,
+          "midi": 76,
+          "vel": 108,
+          "duty": 0.125
+        },
+        {
+          "t": 456,
+          "dur": 36,
+          "midi": 74,
+          "vel": 108,
+          "duty": 0.125
+        },
+        {
+          "t": 504,
+          "dur": 24,
+          "midi": 69,
+          "vel": 108
+        },
+        {
+          "t": 528,
+          "dur": 24,
+          "midi": 72,
+          "vel": 108
+        },
+        {
+          "t": 552,
+          "dur": 24,
+          "midi": 74,
+          "vel": 108
+        },
+        {
+          "t": 576,
+          "dur": 24,
+          "midi": 74,
+          "vel": 108
+        },
+        {
+          "t": 600,
+          "dur": 24,
+          "midi": 74,
+          "vel": 108
+        },
+        {
+          "t": 624,
+          "dur": 24,
+          "midi": 72,
+          "vel": 108
+        },
+        {
+          "t": 648,
+          "dur": 24,
+          "midi": 76,
+          "vel": 108
+        },
+        {
+          "t": 672,
+          "dur": 24,
+          "midi": 77,
+          "vel": 108,
+          "duty": 0.125
+        },
+        {
+          "t": 696,
+          "dur": 24,
+          "midi": 76,
+          "vel": 108,
+          "duty": 0.125
+        },
+        {
+          "t": 720,
+          "dur": 36,
+          "midi": 74,
+          "vel": 108,
+          "duty": 0.125
+        }
+      ]
+    },
+    {
+      "ch": "pulse2",
+      "duty": 0.125,
+      "notes": [
+        {
+          "t": 0,
+          "dur": 96,
+          "midi": 62,
+          "vel": 68,
+          "arp": [
+            0,
+            3,
+            7
+          ],
+          "arpHz": 60
+        },
+        {
+          "t": 96,
+          "dur": 96,
+          "midi": 69,
+          "vel": 68,
+          "arp": [
+            0,
+            4,
+            7
+          ],
+          "arpHz": 60
+        },
+        {
+          "t": 192,
+          "dur": 96,
+          "midi": 62,
+          "vel": 68,
+          "arp": [
+            0,
+            3,
+            7
+          ],
+          "arpHz": 60
+        },
+        {
+          "t": 288,
+          "dur": 96,
+          "midi": 61,
+          "vel": 68,
+          "arp": [
+            0,
+            3,
+            6
+          ],
+          "arpHz": 60
+        },
+        {
+          "t": 384,
+          "dur": 96,
+          "midi": 62,
+          "vel": 68,
+          "arp": [
+            0,
+            3,
+            7
+          ],
+          "arpHz": 60
+        },
+        {
+          "t": 480,
+          "dur": 96,
+          "midi": 67,
+          "vel": 68,
+          "arp": [
+            0,
+            3,
+            7
+          ],
+          "arpHz": 60
+        },
+        {
+          "t": 576,
+          "dur": 96,
+          "midi": 61,
+          "vel": 68,
+          "arp": [
+            0,
+            3,
+            6
+          ],
+          "arpHz": 60
+        },
+        {
+          "t": 672,
+          "dur": 96,
+          "midi": 62,
+          "vel": 68,
+          "arp": [
+            0,
+            3,
+            7
+          ],
+          "arpHz": 60
+        }
+      ]
+    },
+    {
+      "ch": "triangle",
+      "notes": [
+        {
+          "t": 0,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 12,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 24,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 36,
+          "dur": 12,
+          "midi": 50
+        },
+        {
+          "t": 48,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 60,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 72,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 84,
+          "dur": 12,
+          "midi": 50
+        },
+        {
+          "t": 96,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 108,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 120,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 132,
+          "dur": 12,
+          "midi": 50
+        },
+        {
+          "t": 144,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 156,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 168,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 180,
+          "dur": 12,
+          "midi": 50
+        },
+        {
+          "t": 192,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 204,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 216,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 228,
+          "dur": 12,
+          "midi": 50
+        },
+        {
+          "t": 240,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 252,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 264,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 276,
+          "dur": 12,
+          "midi": 50
+        },
+        {
+          "t": 288,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 300,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 312,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 324,
+          "dur": 12,
+          "midi": 50
+        },
+        {
+          "t": 336,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 348,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 360,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 372,
+          "dur": 12,
+          "midi": 50
+        },
+        {
+          "t": 384,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 396,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 408,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 420,
+          "dur": 12,
+          "midi": 50
+        },
+        {
+          "t": 432,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 444,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 456,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 468,
+          "dur": 12,
+          "midi": 50
+        },
+        {
+          "t": 480,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 492,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 504,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 516,
+          "dur": 12,
+          "midi": 50
+        },
+        {
+          "t": 528,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 540,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 552,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 564,
+          "dur": 12,
+          "midi": 50
+        },
+        {
+          "t": 576,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 588,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 600,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 612,
+          "dur": 12,
+          "midi": 50
+        },
+        {
+          "t": 624,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 636,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 648,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 660,
+          "dur": 12,
+          "midi": 50
+        },
+        {
+          "t": 672,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 684,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 696,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 708,
+          "dur": 12,
+          "midi": 50
+        },
+        {
+          "t": 720,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 732,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 744,
+          "dur": 12,
+          "midi": 38
+        },
+        {
+          "t": 756,
+          "dur": 12,
+          "midi": 50
+        }
+      ]
+    },
+    {
+      "ch": "noise",
+      "notes": [
+        {
+          "t": 0,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 12,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 24,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 36,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 48,
+          "dur": 6,
+          "timbre": "snare",
+          "vel": 62
+        },
+        {
+          "t": 60,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 72,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 84,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 96,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 108,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 120,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 132,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 144,
+          "dur": 6,
+          "timbre": "snare",
+          "vel": 62
+        },
+        {
+          "t": 156,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 168,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 180,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 192,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 204,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 216,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 228,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 240,
+          "dur": 6,
+          "timbre": "snare",
+          "vel": 62
+        },
+        {
+          "t": 252,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 264,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 276,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 288,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 300,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 312,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 324,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 336,
+          "dur": 6,
+          "timbre": "snare",
+          "vel": 62
+        },
+        {
+          "t": 348,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 360,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 372,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 384,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 396,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 408,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 420,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 432,
+          "dur": 6,
+          "timbre": "snare",
+          "vel": 62
+        },
+        {
+          "t": 444,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 456,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 468,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 480,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 492,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 504,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 516,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 528,
+          "dur": 6,
+          "timbre": "snare",
+          "vel": 62
+        },
+        {
+          "t": 540,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 552,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 564,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 576,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 588,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 600,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 612,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 624,
+          "dur": 6,
+          "timbre": "snare",
+          "vel": 62
+        },
+        {
+          "t": 636,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 648,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 660,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 672,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 684,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 696,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 708,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 720,
+          "dur": 6,
+          "timbre": "snare",
+          "vel": 62
+        },
+        {
+          "t": 732,
+          "dur": 6,
+          "timbre": "kick",
+          "vel": 62
+        },
+        {
+          "t": 744,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        },
+        {
+          "t": 756,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 62
+        }
+      ]
+    }
+  ]
+}
