@@ -28,6 +28,22 @@ alone.
 6. **Developer commands in player-facing errors.** The text-load failure and the
    ADR-0009 banner both say `make fetch` / `make serve`, which is useless to
    someone who only has the URL. Right for the banner by ADR; wrong for the player.
+7. **The music does not follow the scenery inside a chapter.** Genesis 1 now changes
+   world six times as you type it, and the hymn does not change with it: a theme owns
+   a tune and a tune restarts when the theme does, so following the picture would cut
+   the hymn off mid-phrase six times in one chapter. So the picture resolves per verse
+   and the music per chapter. Written down in
+   `docs/design/05-scenery-warps.md#verse-ranges`; it is a judgement about what the
+   room should sound like while it changes, and worth hearing before it is settled.
+8. **How fast the world should turn.** `scene_blend_verses` is 2 — the colour eases
+   across a window one verse either side of the boundary. At 0 the world changes
+   between one verse and the next; much above 3 and Genesis 1 is one long crossfade
+   with no places in it. Two was chosen on the argument, not on the screen.
+9. **Genesis 1 keeps its chapter row.** `Genesis 1 | apocalypse | light_from_dark` still
+   sits under the seven verse rows as the default, so a *warp* into Genesis 1 arrives on
+   the apocalypse rather than on the void, and only the level itself resolves finely. It
+   is the documented behaviour — a chapter citation is a question about the chapter —
+   but the first frame of a crossing into verse 1 is arguably the void's.
 
 ## Agreed, specified, not yet built
 
@@ -83,8 +99,15 @@ place named, so none of this depends on remembering a conversation.
 ## Not done
 
 - Sound polish. The ten tunes were transcribed against real notation and are
-  correct, but they are only lightly heard in play.
-- More sprite art. Twelve tiles cover ten themes; monsters are still two kinds.
+  correct, but they are only lightly heard in play. Two of the twelve themes now
+  share a tune with another (`void` with the abbey, `firmament` with the mountain);
+  neither has one of its own.
+- More sprite art. Fifteen tiles cover twelve themes; monsters are still two kinds.
+- **Jerusalem still has no landmarks.** `docs/design/05-scenery-warps.md#a-chapter-is-not-one-place`
+  names three faces of the same problem and two are now fixed: Genesis 1 moves, and every
+  Gospel passage the route names has a set piece. The third is the city — "a place you
+  arrive at, not a texture that repeats" — and it wants a gate, a wall and a temple
+  standing in the band rather than better brick. Nothing about it is built.
 - Other routes. `Canonical`, `Narrative` and `Wisdom` are specified in
   `docs/design/04-route.md` and only `Pilgrimage` is authored.
 - Chronicle levels — the genealogies, skipped by default, available as opt-in

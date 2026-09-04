@@ -43,6 +43,8 @@ const tuning: Tuning = loadTuning(loadDataFile('tuning.json'));
  * wrong.
  */
 const GENESIS_1_VERSES = 31;   // tuning-exempt: the verse count of Genesis 1
+const GEN_VERSE_FIRST = 3; // tuning-exempt: a verse number in a fixture citation
+const GEN_VERSE_LAST = 5;  // tuning-exempt: a verse number in a fixture citation
 const KINGS_CHAPTER = 3;       // tuning-exempt: a chapter number in a citation
 const PSALM_FIRST = 22;        // tuning-exempt: the range docs/design/04-route.md cites
 const PSALM_LAST = 23;         // tuning-exempt: likewise
@@ -127,19 +129,57 @@ test('resolved filenames are the ones actually on disk, when the texts are fetch
 });
 
 test('references parse, including numbered books and ranges', () => {
-  assert.deepEqual(parseReference('Genesis 1'), { book: 'Genesis', chapter: 1, lastChapter: 1 });
+  assert.deepEqual(parseReference('Genesis 1'), {
+    book: 'Genesis', chapter: 1, lastChapter: 1, verse: null, lastVerse: null,
+  });
   assert.deepEqual(parseReference('1 Kings 3'), {
     book: '1 Kings',
     chapter: KINGS_CHAPTER,
     lastChapter: KINGS_CHAPTER,
+    verse: null,
+    lastVerse: null,
   });
   assert.deepEqual(parseReference('Psalm 22-23'), {
     book: 'Psalms',
     chapter: PSALM_FIRST,
     lastChapter: PSALM_LAST,
+    verse: null,
+    lastVerse: null,
   });
   assert.throws(() => parseReference('Genesis'));
   assert.throws(() => parseReference(''));
+});
+
+test('A VERSE RANGE PARSES, AND IS NOT A CHAPTER RANGE WEARING A COLON', () => {
+  // docs/architecture/data-schemas.md#scenes: `Book C:V-V`, for a chapter that
+  // moves faster than one scene can hold. The verses are a *separate* field from
+  // the chapters, because "the chapter" and "the chapter from verse 1" are
+  // different claims and the scene map resolves them differently.
+  assert.deepEqual(parseReference('Genesis 1:3-5'), {
+    book: 'Genesis', chapter: 1, lastChapter: 1, verse: GEN_VERSE_FIRST, lastVerse: GEN_VERSE_LAST,
+  });
+  // A single verse is a range of one, which is what `chunkRef` writes for a
+  // one-verse chunk -- so the two spellings cannot disagree.
+  const one = parseReference('Genesis 1:3');
+  assert.equal(one.verse, GEN_VERSE_FIRST);
+  assert.equal(one.lastVerse, GEN_VERSE_FIRST);
+  // Whitespace either side of the colon is accepted; a chapter range still is
+  // not a verse range, and neither is a bare book.
+  assert.equal(parseReference('Genesis 1 : 3 - 5').lastVerse, GEN_VERSE_LAST);
+  assert.equal(parseReference('Genesis 2-3').verse, null);
+  assert.throws(() => parseReference('Genesis :3'));
+});
+
+test('a chunk citation round-trips through the parser it will be looked up with', () => {
+  // `chunkRef` writes `Genesis 1:1-3`, and `core/scenes.ts` resolves the scenery
+  // by parsing exactly that. If the two ever disagreed, every part after the
+  // first would silently resolve to the chapter's default theme.
+  const ref = chunkRef('Genesis', 1, { first: GEN_VERSE_FIRST, last: GEN_VERSE_LAST });
+  const parsed = parseReference(ref);
+  assert.equal(parsed.book, 'Genesis');
+  assert.equal(parsed.chapter, 1);
+  assert.equal(parsed.verse, GEN_VERSE_FIRST);
+  assert.equal(parsed.lastVerse, GEN_VERSE_LAST);
 });
 
 test('a chapter is cut at candle intervals, covering every verse exactly once', () => {

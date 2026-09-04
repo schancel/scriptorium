@@ -7,6 +7,41 @@
       "setpiece": "light_from_dark"
     },
     {
+      "range": "Genesis 1:1-2",
+      "theme": "void",
+      "setpiece": null
+    },
+    {
+      "range": "Genesis 1:3-5",
+      "theme": "apocalypse",
+      "setpiece": "light_from_dark"
+    },
+    {
+      "range": "Genesis 1:6-8",
+      "theme": "sea",
+      "setpiece": "waters_divided"
+    },
+    {
+      "range": "Genesis 1:9-13",
+      "theme": "garden",
+      "setpiece": "land_from_water"
+    },
+    {
+      "range": "Genesis 1:14-19",
+      "theme": "firmament",
+      "setpiece": null
+    },
+    {
+      "range": "Genesis 1:20-25",
+      "theme": "sea",
+      "setpiece": "swarming"
+    },
+    {
+      "range": "Genesis 1:26-31",
+      "theme": "garden",
+      "setpiece": null
+    },
+    {
       "range": "Genesis 2-3",
       "theme": "garden",
       "setpiece": null
@@ -69,7 +104,7 @@
     {
       "range": "Matthew 12",
       "theme": "city",
-      "setpiece": null
+      "setpiece": "bruised_reed"
     },
     {
       "range": "Matthew 27",
@@ -84,22 +119,22 @@
     {
       "range": "John 3",
       "theme": "city",
-      "setpiece": null
+      "setpiece": "lifted_up"
     },
     {
       "range": "John 6",
       "theme": "desert",
-      "setpiece": null
+      "setpiece": "loaves_multiplied"
     },
     {
       "range": "John 8",
       "theme": "temple",
-      "setpiece": null
+      "setpiece": "lamps_kindled"
     },
     {
       "range": "John 10",
       "theme": "garden",
-      "setpiece": null
+      "setpiece": "gate_of_the_fold"
     },
     {
       "range": "John 19",

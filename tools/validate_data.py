@@ -19,12 +19,30 @@ def load(rel):
 
 
 def parse_ref(ref: str):
-    """'Genesis 1' or 'Genesis 2-3' -> (book, first, last)"""
-    m = re.match(r"^(.+?)\s+(\d+)(?:-(\d+))?$", ref.strip())
+    """'Genesis 1', 'Genesis 2-3' or 'Genesis 1:3-5' -> (book, first, last)
+
+    A verse range names one chapter, so the chapter span of 'Genesis 1:3-5' is
+    1-1. Use parse_range() when the verses matter.
+    """
+    book, a, b, _, _ = parse_range(ref)
+    return book, a, b
+
+
+def parse_range(ref: str):
+    """-> (book, first_chapter, last_chapter, first_verse, last_verse)
+
+    Verses are None on a chapter range. Mirrors parseReference in
+    core/corpus.ts; see docs/architecture/data-schemas.md#scenes.
+    """
+    m = re.match(r"^(.+?)\s+(\d+)(?::(\d+)(?:-(\d+))?|-(\d+))?$", ref.strip())
     if not m:
         raise ValueError(f"unparseable passage reference: {ref!r}")
-    book, a, b = m.group(1), int(m.group(2)), int(m.group(3) or m.group(2))
-    return book, a, b
+    book = m.group(1)
+    a = int(m.group(2))
+    if m.group(3) is not None:
+        v = int(m.group(3))
+        return book, a, a, v, int(m.group(4) or m.group(3))
+    return book, a, int(m.group(5) or m.group(2)), None, None
 
 
 def chapter_text(edition: str, book: str, chapter: int) -> str | None:
@@ -59,18 +77,34 @@ def main() -> int:
                 errors.append(f"route: edge {e['id']}: {ex}")
 
     # --- scenes
+    #
+    # Overlap is checked *within* a precision. A verse row sitting inside a
+    # chapter row is the mechanism, not a clash: the finer row wins by rule.
+    # Two chapter rows claiming one chapter, or two verse rows claiming one
+    # verse, would make the theme depend on the order of the table.
     ranges: list[tuple[str, int, int]] = []
+    chapter_rows: list[tuple[str, int, int, str]] = []
+    verse_rows: list[tuple[str, int, int, int, str]] = []
     for s in scenes["scenes"]:
         if s["theme"] not in themes:
             errors.append(f"scenes: {s['range']} uses unknown theme {s['theme']!r}")
         try:
-            book, a, b = parse_ref(s["range"])
+            book, a, b, v, vb = parse_range(s["range"])
         except ValueError as ex:
             errors.append(f"scenes: {ex}")
             continue
-        for ob, oa, obb in ranges:
-            if ob == book and not (b < oa or a > obb):
-                errors.append(f"scenes: range {s['range']} overlaps {ob} {oa}-{obb}")
+        if v is not None and vb < v:
+            errors.append(f"scenes: range {s['range']} runs backwards")
+        if v is None:
+            for ob, oa, obb, orange in chapter_rows:
+                if ob == book and not (b < oa or a > obb):
+                    errors.append(f"scenes: range {s['range']} overlaps {orange}")
+            chapter_rows.append((book, a, b, s["range"]))
+        else:
+            for ob, och, ov, ovb, orange in verse_rows:
+                if ob == book and och == a and not (vb < ov or v > ovb):
+                    errors.append(f"scenes: range {s['range']} overlaps {orange}")
+            verse_rows.append((book, a, v, vb, s["range"]))
         ranges.append((book, a, b))
 
     # every routed passage resolves to a theme (abbey is the documented fallback)

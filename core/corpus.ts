@@ -224,27 +224,58 @@ export interface Reference {
   readonly chapter: number;
   /** The last chapter of a range: `Genesis 2-3`. Equal to `chapter` otherwise. */
   readonly lastChapter: number;
+  /**
+   * The first verse of a verse range: `Genesis 1:3-5`. Null when the citation
+   * names whole chapters.
+   *
+   * Null rather than 1, because "the chapter" and "the chapter from verse 1" are
+   * different claims and the scene map has to tell them apart: a `Genesis 1` row
+   * is the chapter's default and a `Genesis 1:1-2` row beats it over two verses.
+   * Defaulting to 1 would collapse the two into the same range and the finer row
+   * would win everywhere or nowhere.
+   */
+  readonly verse: number | null;
+  /** The last verse of a verse range. Equal to `verse`, or null with it. */
+  readonly lastVerse: number | null;
 }
 
-const CITATION = /^\s*(.+?)\s+(\d+)(?:\s*-\s*(\d+))?\s*$/;
+/**
+ * `Book C`, `Book C-C`, `Book C:V` or `Book C:V-V`.
+ *
+ * One expression rather than two, because a citation with a colon in it is the
+ * same citation with more of it spelled out -- and two regexes tried in order is
+ * two places for the book name to be split off differently.
+ */
+const CITATION = /^\s*(.+?)\s+(\d+)(?:\s*:\s*(\d+)(?:\s*-\s*(\d+))?|\s*-\s*(\d+))?\s*$/;
 
 /**
- * Parse `Genesis 1`, `1 Kings 3` or `Psalm 22-23`.
+ * Parse `Genesis 1`, `1 Kings 3`, `Psalm 22-23` or `Genesis 1:3-5`.
+ *
+ * A verse range names one chapter. `Genesis 1:26-31` is a span *inside* chapter
+ * 1, so `chapter` and `lastChapter` are both 1 and the span is in `verse` and
+ * `lastVerse` -- there is deliberately no way to write a range that crosses a
+ * chapter boundary at verse precision. A scene that ran from one chapter into
+ * the middle of the next would have to be resolved against a chapter length the
+ * scene map has never been given, and the level the player is typing is a
+ * chapter anyway.
  *
  * @throws if the string is not a passage reference
  */
 export function parseReference(citation: string): Reference {
   const match = CITATION.exec(citation);
   if (match === null) throw new Error(`corpus: unparseable reference "${citation}"`);
-  const [, name, first, last] = match;
+  const [, name, first, verse, lastVerse, lastChapter] = match;
   if (name === undefined || first === undefined) {
     throw new Error(`corpus: unparseable reference "${citation}"`);
   }
   const chapter = Number(first);
+  const verseFirst = verse === undefined ? null : Number(verse);
   return {
     book: canonicalBook(name) ?? name.trim(),
     chapter,
-    lastChapter: last === undefined ? chapter : Number(last),
+    lastChapter: lastChapter === undefined ? chapter : Number(lastChapter),
+    verse: verseFirst,
+    lastVerse: verseFirst === null ? null : (lastVerse === undefined ? verseFirst : Number(lastVerse)),
   };
 }
 

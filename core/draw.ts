@@ -47,7 +47,7 @@ import {
 } from './entities.js';
 import { setpieceParam, type SetpieceId, type SetpieceState } from './setpieces.js';
 import { CANDLE_UNLIT_FRAME, SPRITE_SIZE } from './sprites.js';
-import { roleIndex, worldFor, type ParallaxLayer, type World } from './worlds.js';
+import { blendThemeId, roleIndex, worldFor, type ParallaxLayer, type World } from './worlds.js';
 import {
   DEFAULT_SPACE_THUMB,
   FINGER_LABELS,
@@ -258,8 +258,8 @@ const NOTICE = {
  * `core/setpieces.ts` returns named scalars in 0..1 and nothing else -- "so
  * `rising_water` returns `water: 0.62` and the renderer decides what 0.62 of a
  * flood looks like". This is that decision, and it is deliberately made in one
- * place: ten little renderers, each with its own idea of the bands, is ten ways
- * for the picture to disagree with itself.
+ * place: a little renderer per flourish, each with its own idea of the bands, is
+ * one way per flourish for the picture to disagree with itself.
  *
  * Every number here is `tuning-exempt` on the same grounds as `M` and `SCENE`:
  * it composes a picture inside the scenery band. Nothing a player can win or
@@ -281,6 +281,8 @@ const PIECE = {
   bushInset: 90,     // tuning-exempt: art -- how far right of centre the bush is
   waterAlpha: 0.7,   // tuning-exempt: art -- water is deep, not opaque
   swellLift: 4,      // tuning-exempt: art -- how far a swell moves the surface
+  glowAlpha: 0.3,    // tuning-exempt: art -- how far a light warms a whole band
+  emberFloor: 0.4,   // tuning-exempt: art -- a wick that is never quite out
 } as const;
 
 /** The art role the sky behind the parallax takes; every theme supplies one. */
@@ -471,9 +473,36 @@ export interface SceneCandle {
   readonly lit: boolean;
 }
 
+/**
+ * The palette a scene is easing toward, and how far it has gone.
+ *
+ * "Colour eases from one scene's palette to the next across the boundary, and
+ * tiles change at the boundary itself." The tiles come from `theme`, which cuts;
+ * this moves. `mix` is a fraction of the way from this scene's palette to that
+ * one, and `core/scenes.ts` computes it from the verse under the cursor -- never
+ * from a clock, so the world does not change while the player is thinking.
+ *
+ * It is two fields rather than a pre-mixed palette because the display list
+ * carries palette *indices* and a theme id, never colours. `blendThemeId` folds
+ * these into one id the renderer resolves exactly as it resolves any other.
+ */
+export interface SceneBlend {
+  /** A theme id in `core/worlds.ts`. */
+  readonly theme: string;
+  /** 0 leaves the palette alone; 0.5 is the boundary itself. */
+  readonly mix: number;
+}
+
 export interface SceneState {
   /** A theme id in `core/worlds.ts`; unknown ids resolve to the abbey. */
   readonly theme: string;
+  /**
+   * The scene on the other side of a nearby boundary, if there is one.
+   *
+   * Absent on every settled frame, which is every frame the game used to have --
+   * and absent produces byte-for-byte the display list it always did.
+   */
+  readonly blend?: SceneBlend;
   /** Virtual px the world has travelled. Word-driven; never a clock. */
   readonly cameraX: number;
   /** True while the world is still moving, so the scribe walks rather than idles. */
@@ -1163,9 +1192,20 @@ function bandRect(
   });
 }
 
-/** A full-band veil: the one shape four of the ten flourishes are made of. */
+/** A full-band veil: the one shape four of the flourishes are made of. */
 function veil(cmds: DrawCmd[], theme: string, role: string, amount: number): void {
   bandRect(cmds, theme, role, 0, SCENE.top, M.vw, SCENE.height, amount * PIECE.veil);
+}
+
+/**
+ * How lit the `i`th of `PIECE.motes` things is, as one scalar climbs 0..1.
+ *
+ * Lamps kindle and baskets fill *one after another* rather than all together,
+ * which is the difference between a passage arriving somewhere and a slider
+ * being dragged. One line, so the two flourishes that want it cannot disagree.
+ */
+function inTurn(amount: number, index: number): number {
+  return Math.min(1, Math.max(0, amount * PIECE.motes - index));
 }
 
 /**
@@ -1173,7 +1213,7 @@ function veil(cmds: DrawCmd[], theme: string, role: string, amount: number): voi
  * over him.
  *
  * The switch is exhaustive by construction -- the `never` in the default is what
- * makes a scene table that grew an eleventh set piece a compile error here as
+ * makes a scene table that grew one more set piece a compile error here as
  * well as a test failure in `core/setpieces.test.ts`. A documented flourish that
  * computed parameters nobody drew would be the same class of bug as one nobody
  * implemented: it would look exactly like working software.
@@ -1202,6 +1242,39 @@ function setpieceArt(
       veil(front, theme, 'outline', p('dark'));
       const h = PIECE.glowH * p('light');
       bandRect(back, theme, 'highlight', 0, ground - h, M.vw, h, p('light'));
+      break;
+    }
+    case 'waters_divided': {
+      // The expanse opens: water above it and water below, drawing apart. The
+      // band starts full of water and ends with the theme's own sky between two
+      // seas, which is what the second day leaves behind.
+      const half = SCENE.height / 2;
+      const shut = 1 - p('gap');
+      const topH = half * shut + PIECE.swellLift * p('swell');
+      bandRect(back, theme, 'mid', 0, SCENE.top, M.vw, topH, PIECE.waterAlpha);
+      const botH = half * shut;
+      bandRect(back, theme, 'mid', 0, ground - botH, M.vw, botH, PIECE.waterAlpha);
+      break;
+    }
+    case 'land_from_water': {
+      // The sea drains off the ground, and green closes over what it leaves.
+      const water = rise * (1 - p('land'));
+      bandRect(back, theme, 'mid', 0, ground - water, M.vw, water, PIECE.waterAlpha);
+      const green = PIECE.glowH * p('green');
+      bandRect(back, theme, 'light', 0, ground - green, M.vw, green, p('green'));
+      break;
+    }
+    case 'swarming': {
+      // Things moving in a band that had nothing moving in it. Spread evenly
+      // rather than randomly: `core/rng.ts` exists, and a flourish that consumed
+      // draws from it would shift the monster placement stream by being drawn.
+      const step = M.vw / PIECE.motes;
+      for (let i = 0; i < PIECE.motes; i += 1) {
+        const y = SCENE.top + rise * ((i + 1) / (PIECE.motes + 1))
+          + PIECE.moteDrift * p('drift');
+        bandRect(back, theme, 'accent', i * step + step / 2, y,
+          PIECE.moteSize, PIECE.moteSize, p('teeming'));
+      }
       break;
     }
     case 'rising_water': {
@@ -1260,8 +1333,70 @@ function setpieceArt(
       veil(front, theme, 'outline', p('dark'));
       break;
     }
+    case 'bruised_reed': {
+      // The reed straightens and the wick keeps its ember. `quenched` is zero at
+      // every input and nothing here reads it, exactly as nothing reads the
+      // bush's `consumed`: the passage says the wick is *not* put out, so the
+      // floor under the flicker is the whole point of the picture.
+      const x = layout.scribeX + PIECE.bushInset;
+      const stalk = PIECE.fireH + (PIECE.glowH - PIECE.fireH) * p('lift');
+      bandRect(back, theme, 'light', x, ground - stalk, PIECE.markW, stalk, 1);
+      bandRect(back, theme, 'flame', x, ground - stalk - PIECE.moteSize,
+        PIECE.markW, PIECE.moteSize, PIECE.emberFloor + (1 - PIECE.emberFloor) * p('ember'));
+      break;
+    }
     case 'darkness_at_noon': {
       veil(front, theme, 'outline', p('grey'));
+      break;
+    }
+    case 'lifted_up': {
+      // A standard rises in the middle of the band and the sky behind it warms.
+      const h = rise * p('raised');
+      bandRect(back, theme, 'accent', (M.vw - PIECE.markW) / 2, ground - h, PIECE.markW, h, 1);
+      bandRect(back, theme, 'accent', (M.vw - PIECE.fireW) / 2, ground - h,
+        PIECE.fireW, PIECE.lintelH, p('raised'));
+      bandRect(back, theme, 'light', 0, SCENE.top, M.vw, SCENE.height,
+        p('glow') * PIECE.glowAlpha);
+      break;
+    }
+    case 'loaves_multiplied': {
+      // Baskets fill along the ground, one after another, and there is more at
+      // the end of the passage than there was at the start.
+      const step = M.vw / PIECE.motes;
+      const h = PIECE.moteSize + (PIECE.fireH - PIECE.moteSize) * p('fill');
+      for (let i = 0; i < PIECE.motes; i += 1) {
+        bandRect(back, theme, 'accent', i * step + step / 2, ground - h,
+          PIECE.moteSize + PIECE.moteSize, h, inTurn(p('baskets'), i));
+      }
+      break;
+    }
+    case 'lamps_kindled': {
+      // The temple lamps kindle one after another down the colonnade, and the
+      // whole band takes their light by the end.
+      const step = M.vw / PIECE.motes;
+      const flicker = PIECE.emberFloor + (1 - PIECE.emberFloor) * p('flame');
+      for (let i = 0; i < PIECE.motes; i += 1) {
+        bandRect(back, theme, 'flame', i * step + step / 2, ground - PIECE.glowH,
+          PIECE.moteSize, PIECE.moteSize, inTurn(p('lamps'), i) * flicker);
+      }
+      bandRect(back, theme, 'flame', 0, SCENE.top, M.vw, SCENE.height,
+        p('blaze') * PIECE.glowAlpha);
+      break;
+    }
+    case 'gate_of_the_fold': {
+      // Two leaves swing apart between two posts and stay open. The posts do not
+      // move: a gate whose frame moved would read as a wall falling over.
+      const middle = M.vw / 2;
+      const h = rise;
+      const leaf = PIECE.wallW * (1 - p('open'));
+      bandRect(back, theme, 'mid', middle - leaf, ground - h, leaf, h, PIECE.waterAlpha);
+      bandRect(back, theme, 'mid', middle, ground - h, leaf, h, PIECE.waterAlpha);
+      for (const x of [middle - PIECE.wallW - PIECE.markW, middle + PIECE.wallW]) {
+        bandRect(back, theme, 'outline', x, ground - h, PIECE.markW, h, 1);
+      }
+      bandRect(back, theme, 'highlight', middle - PIECE.moteSize
+        + PIECE.moteDrift * p('sway'), ground - PIECE.glowH,
+        PIECE.moteSize + PIECE.moteSize, PIECE.moteSize, p('flock'));
       break;
     }
     case 'tree_of_life': {
@@ -1289,7 +1424,14 @@ function setpieceArt(
  */
 function pushScene(cmds: DrawCmd[], scene: SceneState, tuning: Tuning): void {
   const world = worldFor(scene.theme);
-  const theme = world.id;
+  // The tiles, the layer geometry and the ground line all come from the world
+  // this scene *is*; only the colours move. That is the whole of "the palette
+  // eases and the tiles cut", and it is one line because the display list
+  // already separates the two: a `tile` command names its pixels by id and its
+  // colours by theme.
+  const theme = scene.blend === undefined
+    ? world.id
+    : blendThemeId(world.id, scene.blend.theme, scene.blend.mix);
   const projection = projectionOf(world.parallax);
   const layout = layoutIn(world, scene.scribe.x);
 

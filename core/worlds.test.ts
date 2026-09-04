@@ -17,6 +17,7 @@ import { NONE, PALETTE_ROLES, SPRITES, spriteFor } from './sprites.js';
 import {
   DEFAULT_THEME,
   WORLDS,
+  blendThemeId,
   colourFor,
   loadThemes,
   roleIndex,
@@ -194,4 +195,116 @@ test('every sprite in the sheet resolves against every theme', () => {
       }
     }
   }
+});
+
+// --- blending between two palettes ------------------------------------------
+//
+// docs/design/05-scenery-warps.md#between-two-scenes-the-palette-moves-and-the-tiles-cut.
+// Three things have to hold, and each fails silently if it does not: a settled
+// scene must be *exactly* what it was before this existed, a blend must actually
+// be between the two palettes rather than one of them, and the set of blended
+// ids must stay finite -- the renderer bakes a sprite sheet per palette, so a
+// continuous blend is an unbounded cache.
+
+const MIXES: readonly number[] = [0.1, 0.25, 0.4, 0.5, 0.6, 0.75, 0.9]; // tuning-exempt: samples
+
+function channels(colour: number): readonly number[] {
+  return [(colour >> 16) & 0xff, (colour >> 8) & 0xff, colour & 0xff]; // tuning-exempt: channel shifts
+}
+
+test('A SETTLED SCENE IS EXACTLY THE WORLD IT ALWAYS WAS', () => {
+  // The ends of the range are the authored ids themselves, so a frame that is
+  // not mid-transition emits the display list it emitted before blending
+  // existed. If this ever returns a blend id at 0, every settled frame in the
+  // game quietly starts resolving through a second palette.
+  assert.equal(blendThemeId('garden', 'sea', 0), 'garden');
+  assert.equal(blendThemeId('garden', 'sea', 1), 'sea');
+  assert.equal(blendThemeId('garden', 'garden', 0.5), 'garden'); // tuning-exempt: the midpoint of a mix
+  assert.equal(worldFor(blendThemeId('garden', 'sea', 0)), worldFor('garden'));
+});
+
+test('a blended palette lies between the two it is between, channel by channel', () => {
+  for (const from of ['void', 'garden', 'tomb']) {
+    for (const to of ['apocalypse', 'sea', 'firmament']) {
+      if (from === to) continue;
+      for (const mix of MIXES) {
+        const world = worldFor(blendThemeId(from, to, mix));
+        for (const [role] of PALETTE_ROLES.entries()) {
+          const a = channels(colourFor(worldFor(from), role));
+          const b = channels(colourFor(worldFor(to), role));
+          const mixed = channels(colourFor(world, role));
+          for (let c = 0; c < mixed.length; c += 1) {
+            const low = Math.min(a[c] ?? 0, b[c] ?? 0);
+            const high = Math.max(a[c] ?? 0, b[c] ?? 0);
+            assert.ok((mixed[c] ?? 0) >= low && (mixed[c] ?? 0) <= high,
+              `${from}->${to} role ${String(role)} left the range`);
+          }
+        }
+      }
+    }
+  }
+});
+
+test('the transparent role never takes a colour, however far the blend runs', () => {
+  // An unpainted pixel must stay unpainted. Mixing role 0 toward anything would
+  // paint the holes every distance tile is made of.
+  for (const mix of MIXES) {
+    assert.equal(colourFor(worldFor(blendThemeId('void', 'garden', mix)), roleIndex('none')), 0);
+  }
+});
+
+test('halfway from A to B is the same colour as halfway from B to A', () => {
+  // This is what makes the palette continuous across the frame the tiles cut on.
+  const left = worldFor(blendThemeId('sea', 'garden', 0.5));    // tuning-exempt: the midpoint of a mix
+  const right = worldFor(blendThemeId('garden', 'sea', 0.5));   // tuning-exempt: the midpoint of a mix
+  assert.deepEqual([...left.palette], [...right.palette]);
+});
+
+test('THE SET OF BLENDED PALETTES IS FINITE, BECAUSE EACH ONE IS BAKED', () => {
+  // The renderer paints every sprite frame once per theme into a little canvas
+  // and blits it thereafter -- "the cache is bounded by the art itself". A
+  // continuum of palettes would make that cache unbounded, so the mix is
+  // quantised. A hundred positions across a transition must not be a hundred
+  // palettes.
+  const ids = new Set<string>();
+  for (let i = 0; i <= 100; i += 1) ids.add(blendThemeId('void', 'garden', i / 100)); // tuning-exempt: samples
+  assert.ok(ids.size <= 20, `${String(ids.size)} distinct palettes across one transition`); // tuning-exempt: a cache bound
+  assert.ok(ids.size > 4, 'quantised so coarsely the ease would be visible as steps'); // tuning-exempt: a step floor
+});
+
+test('a blend id naming a theme that does not exist is an abbey, like any other', () => {
+  assert.equal(worldFor('atlantis~garden~4').id, DEFAULT_THEME);
+  assert.equal(worldFor('garden~atlantis~4').id, DEFAULT_THEME);
+  assert.equal(worldFor('garden~sea~notanumber').id, DEFAULT_THEME);
+  assert.equal(worldFor('garden~sea').id, DEFAULT_THEME);
+});
+
+test('a blended world keeps the tiles of the scene it is leaving', () => {
+  // Tiles cut at the boundary; only colour moves. Interpolating tile art would
+  // look like neither thing, which is the reason the mechanism is a palette.
+  const world = worldFor(blendThemeId('void', 'garden', 0.5)); // tuning-exempt: the midpoint of a mix
+  assert.equal(world.groundTile, worldFor('void').groundTile);
+  assert.deepEqual(
+    world.parallax.map((layer) => layer.tileId),
+    worldFor('void').parallax.map((layer) => layer.tileId),
+  );
+});
+
+test('THE VOID HAS NO HORIZON: ITS GROUND IS THE COLOUR OF ITS SKY', () => {
+  // "no ground, no horizon, only dark". The sky behind the parallax is the
+  // `shade` role and the floor is `groundTop`; in every other world those are
+  // far apart, because that difference *is* the horizon. In the void they are
+  // within a few values of each other, so there is nothing to see a line at --
+  // and what the player reads instead is the deep moving in the dark.
+  const gap = (id: string): number => {
+    const sky = channels(colourFor(worldFor(id), roleIndex('shade')));
+    const floor = channels(colourFor(worldFor(id), roleIndex('groundTop')));
+    return sky.reduce((sum, v, i) => sum + Math.abs(v - (floor[i] ?? 0)), 0);
+  };
+  const voidGap = gap('void');
+  for (const world of WORLDS.values()) {
+    if (world.id === 'void') continue;
+    assert.ok(gap(world.id) > voidGap, `${world.id} has a fainter horizon than the void`);
+  }
+  assert.ok(voidGap < 16, `the void's horizon is ${String(voidGap)} apart, which is visible`); // tuning-exempt: a channel distance
 });

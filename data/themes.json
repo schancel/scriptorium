@@ -59,6 +59,18 @@
       "palette": "white-gold, void black",
       "mood": "new creation, the end",
       "tune": "helmsley"
+    },
+    {
+      "id": "void",
+      "palette": "black on black, one shade of deep",
+      "mood": "before the first day: no ground, no horizon",
+      "tune": "veni-creator"
+    },
+    {
+      "id": "firmament",
+      "palette": "night blue, star white",
+      "mood": "the expanse, lights set in it",
+      "tune": "nicaea"
     }
   ],
   "_generated_from": "docs/design/05-scenery-warps.md"

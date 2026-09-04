@@ -42,7 +42,7 @@ import {
  */
 const SOLID_TILES: readonly string[] = [
   'tile_stone', 'tile_grass', 'tile_sand',
-  'tile_water', 'tile_brick', 'tile_bone', 'tile_rubble',
+  'tile_water', 'tile_brick', 'tile_bone', 'tile_rubble', 'tile_deep',
 ];
 
 /**
@@ -52,6 +52,7 @@ const SOLID_TILES: readonly string[] = [
 const DISTANCE_TILES: readonly string[] = [
   'tile_dune', 'tile_wave', 'tile_peak', 'tile_roofs',
   'tile_pillars', 'tile_arch', 'tile_foliage', 'tile_cloud',
+  'tile_swell', 'tile_stars',
 ];
 
 /** Everything the game names. A missing id is a sprite that cannot be drawn. */
@@ -609,6 +610,103 @@ test('the canopy is scalloped along the top and dense underneath', () => {
   // Leaf mass, seen from below and far off: broken at the crowns, solid beneath.
   assert.ok(widthAt('tile_foliage', 0) < SPRITE_SIZE, 'the crowns have no sky between them');
   assert.equal(widthAt('tile_foliage', SPRITE_SIZE - 1), SPRITE_SIZE, 'the canopy is see-through');
+});
+
+test('the deep has no surface, no course and no crest', () => {
+  // The void's floor. It has to read as *moving darkness* rather than as a
+  // floor: a repeating course would be masonry, a crest would be a wave, and
+  // this is water before there is any light to see its surface by.
+  assert.equal(toAscii(art('tile_deep'), 0), [
+    'gggggggggggggggg',
+    'ggggggKKKggggggg',
+    'gggggggggggggggg',
+    'ggKKKKgggggggggg',
+    'gggggggggggggggg',
+    'gggggggggGGGGggg',
+    'gggggggggggggggg',
+    'gGGGggggggggggGG',
+    'gggggggggggggggg',
+    'ggggggggKKKKgggg',
+    'gggggggggggggggg',
+    'gggKKgggggggggKK',
+    'gggggggggggggggg',
+    'gggggGGGGggggggg',
+    'gggggggggggggggg',
+    'gggggggggggggggg',
+  ].join('\n'));
+  // No two marks start in the same column, which is what "no course" means.
+  const rows = toAscii(art('tile_deep'), 0).split('\n');
+  const starts = rows
+    .map((row) => row.search(/[KG]/))
+    .filter((at) => at >= 0);
+  assert.equal(new Set(starts).size, starts.length, 'the deep has a repeating course in it');
+});
+
+test('the swell is one slow rise, and it is darker than the sky rather than lighter', () => {
+  // The one shape in the game drawn entirely in `outline`. Everything else in
+  // the distance stands *against* the sky; a mass of water in the dark stands
+  // in front of it, so it has to be the one ink darker than the air.
+  assert.equal(toAscii(art('tile_swell'), 0), [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '.......KK.......',
+    '.....KKKKKK.....',
+    '...KKKKKKKKKK...',
+    '.KKKKKKKKKKKKKK.',
+    'KKKKKKKKKKKKKKKK',
+    'KKKKKKKKKKKKKKKK',
+    'KKKKKKKKKKKKKKKK',
+    'KKKKKKKKKKKKKKKK',
+    'KKKKKKKKKKKKKKKK',
+    'KKKKKKKKKKKKKKKK',
+    'KKKKKKKKKKKKKKKK',
+  ].join('\n'));
+  assert.equal(crests('tile_swell'), 1, 'a second crest would make it a wave');
+  const drawn = new Set(toAscii(art('tile_swell'), 0).replace(/[\n.]/g, ''));
+  assert.deepEqual([...drawn], [ink('outline')], 'the swell is drawn in one ink and it is outline');
+});
+
+test('stars are points of light, with one of them bright enough to have arms', () => {
+  // A field of even dots reads as noise or as dust on the screen. One brighter
+  // star with arms is what says *star* at 16x16, and it is the whole design.
+  assert.equal(toAscii(art('tile_stars'), 0), [
+    '..W........L....',
+    '............W...',
+    '....L...........',
+    '.W..............',
+    '................',
+    '........L.......',
+    '.......LWL......',
+    '........L.......',
+    '..W.............',
+    '.............W..',
+    '.....L..........',
+    '..........W.....',
+    '...W............',
+    '................',
+    '.L...........W..',
+    '......W.........',
+  ].join('\n'));
+  // Sparse: the expanse is mostly expanse.
+  assert.ok(inked('tile_stars', 0) < SPRITE_SIZE * SPRITE_SIZE / 8, // tuning-exempt: an eighth of the cell
+    `${String(inked('tile_stars', 0))} lit pixels is a wall, not a sky`);
+  // The bright star has four arms around it, and no other lit pixel does.
+  const sprite = art('tile_stars');
+  const bright = ink('highlight');
+  const rows = toAscii(sprite, 0).split('\n');
+  let armed = 0;
+  for (let y = 1; y < SPRITE_SIZE - 1; y++) {
+    for (let x = 1; x < SPRITE_SIZE - 1; x++) {
+      if (rows[y]?.charAt(x) !== bright) continue;
+      const arms = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+        .filter(([dx, dy]) => rows[y + (dy ?? 0)]?.charAt(x + (dx ?? 0)) === ink('light'));
+      if (arms.length === 4) armed += 1; // tuning-exempt: the four sides of a pixel
+    }
+  }
+  assert.equal(armed, 1, 'exactly one star is drawn with arms');
 });
 
 test('the cloud is lit along the top and tapers away underneath', () => {

@@ -1234,6 +1234,93 @@ const TILE_CLOUD: readonly string[] = [
   '................',
 ];
 
+/**
+ * The face of the deep: slow, broad marks with no surface and no alignment.
+ *
+ * Every pixel is painted, because it is a ground tile as well as a distance one
+ * -- the void stands all three of its layers on it. The marks are long and
+ * unaligned on purpose: a repeating course would read as masonry and a crest
+ * would read as a wave, and this is water before there is anything to see it by.
+ * In the void its three roles are three shades of near-black, so what the player
+ * gets is darkness that is visibly *moving*; in any other palette the same
+ * pixels are a deep swell.
+ */
+const TILE_DEEP: readonly string[] = [
+  'gggggggggggggggg',
+  'ggggggKKKggggggg',
+  'gggggggggggggggg',
+  'ggKKKKgggggggggg',
+  'gggggggggggggggg',
+  'gggggggggGGGGggg',
+  'gggggggggggggggg',
+  'gGGGggggggggggGG',
+  'gggggggggggggggg',
+  'ggggggggKKKKgggg',
+  'gggggggggggggggg',
+  'gggKKgggggggggKK',
+  'gggggggggggggggg',
+  'gggggGGGGggggggg',
+  'gggggggggggggggg',
+  'gggggggggggggggg',
+];
+
+/**
+ * A swell in the dark: one slow rise, drawn entirely in `outline`.
+ *
+ * The distance tile the void stands behind itself. `outline` rather than `shade`
+ * because shade *is* the sky -- so this is the one shape in the game that is
+ * darker than the air around it, which is what a mass of water looks like before
+ * there is any light to catch its surface. One crest per cell and no foam: a
+ * second crest would make it a wave, and there is nothing yet for a wave to
+ * break against.
+ */
+const TILE_SWELL: readonly string[] = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '.......KK.......',
+  '.....KKKKKK.....',
+  '...KKKKKKKKKK...',
+  '.KKKKKKKKKKKKKK.',
+  'KKKKKKKKKKKKKKKK',
+  'KKKKKKKKKKKKKKKK',
+  'KKKKKKKKKKKKKKKK',
+  'KKKKKKKKKKKKKKKK',
+  'KKKKKKKKKKKKKKKK',
+  'KKKKKKKKKKKKKKKK',
+  'KKKKKKKKKKKKKKKK',
+];
+
+/**
+ * Stars in the expanse: points of light and nothing else.
+ *
+ * A distance tile, so almost all of it is sky showing through. The one plus-shaped
+ * star is the whole composition -- a field of even dots reads as noise or as dust
+ * on the screen, and a single brighter one with arms is what says *star* at this
+ * size. Bright points are `highlight` and faint ones are `light`, never `shade`,
+ * which is the sky itself.
+ */
+const TILE_STARS: readonly string[] = [
+  '..W........L....',
+  '............W...',
+  '....L...........',
+  '.W..............',
+  '................',
+  '........L.......',
+  '.......LWL......',
+  '........L.......',
+  '..W.............',
+  '.............W..',
+  '.....L..........',
+  '..........W.....',
+  '...W............',
+  '................',
+  '.L...........W..',
+  '......W.........',
+];
+
 // --- the sheet --------------------------------------------------------------
 
 /**
@@ -1266,6 +1353,7 @@ export const SPRITES: ReadonlyMap<string, PixelSprite> = new Map(
     sprite('tile_brick', [TILE_BRICK]),
     sprite('tile_bone', [TILE_BONE]),
     sprite('tile_rubble', [TILE_RUBBLE]),
+    sprite('tile_deep', [TILE_DEEP]),
     // Distance: the sky shows through what is not painted.
     sprite('tile_dune', [TILE_DUNE]),
     sprite('tile_wave', [TILE_WAVE]),
@@ -1275,6 +1363,8 @@ export const SPRITES: ReadonlyMap<string, PixelSprite> = new Map(
     sprite('tile_arch', [TILE_ARCH]),
     sprite('tile_foliage', [TILE_FOLIAGE]),
     sprite('tile_cloud', [TILE_CLOUD]),
+    sprite('tile_swell', [TILE_SWELL]),
+    sprite('tile_stars', [TILE_STARS]),
   ].map((s) => [s.id, s]),
 );
 

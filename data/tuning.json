@@ -55,7 +55,8 @@
     "report_reach_ratio": 2.0,
     "report_key_min_attempts": 12,
     "report_worst_key_rate": 0.12,
-    "first_run_note_keys": 8
+    "first_run_note_keys": 8,
+    "scene_blend_verses": 2
   },
   "meta": {
     "grey_snap_ms": {
@@ -281,6 +282,10 @@
     "first_run_note_keys": {
       "unit": "keystrokes",
       "description": "Correct keystrokes a [first-run note](10-first-run.md#2-then-straight-into-typing-with-three-notes-that-fire-once-each) stays under the rail before it leaves. It is a count of keystrokes rather than a duration because the note is dismissed by *continuing to type*: a clock would take the sentence away from the one player who stopped to read it, and at a beginner's pace eight keystrokes is roughly ten seconds."
+    },
+    "scene_blend_verses": {
+      "unit": "verses",
+      "description": "Width of the window a scene change's colour eases across, centred on the boundary verse. The tiles cut at the boundary; the palette moves over this many verses around it, driven by how far through them the player has typed and never by a clock. At zero the world changes between one verse and the next; much above three and Genesis 1 is one long crossfade with no places in it. See [scenery](05-scenery-warps.md#between-two-scenes-the-palette-moves-and-the-tiles-cut)."
     }
   },
   "_generated_from": "docs/design/07-tuning.md"

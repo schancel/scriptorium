@@ -37,7 +37,8 @@ import {
 } from './entities.js';
 import { createDamage } from './damage.js';
 import { CANDLE_UNLIT_FRAME, PALETTE_ROLES, SPRITE_SIZE, spriteFor } from './sprites.js';
-import { DEFAULT_THEME, WORLDS } from './worlds.js';
+import { DEFAULT_THEME, WORLDS, blendThemeId, worldFor } from './worlds.js';
+import { SETPIECE_IDS, setpieceState } from './setpieces.js';
 import { classify } from './illumination.js';
 import type { BlotCloud, DamageState, DrawCmd, Glyph, Key, Score, Tuning } from './types.js';
 
@@ -660,4 +661,150 @@ test('an unreached candle is drawn out, not drawn burning and faint', () => {
   assert.ok(lit !== undefined && unlit !== undefined);
   assert.equal(unlit.frame, CANDLE_UNLIT_FRAME, 'the unlit candle is still drawing a flame');
   assert.notEqual(lit.frame, CANDLE_UNLIT_FRAME);
+});
+
+// --- set pieces stay inside the band ----------------------------------------
+//
+// A flourish is the one thing in the scenery drawn from parameters rather than
+// from a tile grid, so it is the one thing that can be given an arithmetic error
+// and reach somewhere it must not. Below the band is the rail; below the rail is
+// the strip reserved for a first-run note. Neither may be touched, and the way
+// to know is to run every flourish at every progress and look at where it lands.
+
+const PROGRESS_STEPS = 6;   // tuning-exempt: samples across a passage
+const PIECE_CLOCKS: readonly number[] = [0, 1400]; // tuning-exempt: two art phases
+
+/**
+ * A different world per set piece, cycling through all of them.
+ *
+ * Where a flourish lands is a matter of geometry and not of colour -- every rect
+ * it draws is clamped into the same band whatever the palette is -- so drawing
+ * all eighteen in all twelve worlds is a hundred and fifty thousand frames to
+ * assert one number twelve identical times. Cycling covers every world across
+ * the test without multiplying it out.
+ */
+const THEME_ROTA: readonly string[] = [...WORLDS.keys()];
+
+test('NO SET PIECE EVER REACHES THE RAIL, AT ANY PROGRESS OR PHASE', () => {
+  SETPIECE_IDS.forEach((id, index) => {
+    const theme = THEME_ROTA[index % THEME_ROTA.length] ?? DEFAULT_THEME;
+    for (let i = 0; i <= PROGRESS_STEPS; i += 1) {
+      for (const elapsedMs of PIECE_CLOCKS) {
+        const piece = setpieceState(id, { elapsedMs, progress: i / PROGRESS_STEPS });
+        const cmds = drawFrame(
+          frame(0, { scene: scene({ theme, setpiece: piece }) }),
+          createRail(0),
+          TUNING,
+        );
+        for (const cmd of cmds) {
+          if (!('theme' in cmd) || cmd.theme === undefined) continue;
+          assert.ok(bottomOf(cmd) <= RAIL_TOP,
+            `${id} in ${theme} reaches ${String(bottomOf(cmd))}, past ${String(RAIL_TOP)}`);
+          assert.ok(!('h' in cmd) || cmd.h >= 0, `${id} drew a negative height`);
+        }
+      }
+    }
+  });
+});
+
+test('a set piece never moves the reading column', () => {
+  const target = focalX(VIRTUAL_W, TUNING);
+  for (const id of SETPIECE_IDS) {
+    const piece = setpieceState(id, { elapsedMs: 1400, progress: 0.5 }); // tuning-exempt: mid-passage
+    const cmds = drawFrame(frame(3, { scene: scene({ setpiece: piece }) }), createRail(0), TUNING); // tuning-exempt: a cursor
+    assert.equal(caretX(cmds), target, `${id} moved the caret`);
+  }
+});
+
+// --- the palette moves and the tiles cut ------------------------------------
+
+/** The sky: the first themed rect the band draws, full width. */
+function skyTheme(cmds: readonly DrawCmd[]): string {
+  for (const cmd of cmds) {
+    if (cmd.op === 'rect' && cmd.theme !== undefined && cmd.w === VIRTUAL_W) return cmd.theme;
+  }
+  throw new Error('no sky in the frame');
+}
+
+test('EVERY WORLD STANDS ON THE SAME GROUND LINE, SO A SCENE CHANGE CANNOT FLOAT ANYTHING', () => {
+  // The platform places monsters once, at level open, off `sceneLayout` for the
+  // chapter's theme -- and Genesis 1 then changes theme six times underneath
+  // them. That is only safe because every world composes its bands from the same
+  // geometry, so the ground the scribe stands on is the same row in all of them.
+  // If it ever stops being true, monsters placed in the void hang in the air over
+  // the garden, and nothing else in the repository would say so.
+  const ground = sceneLayout(DEFAULT_THEME, TUNING).groundY;
+  for (const theme of WORLDS.keys()) {
+    assert.equal(sceneLayout(theme, TUNING).groundY, ground, `${theme} stands somewhere else`);
+    assert.equal(sceneLayout(theme, TUNING).scribeX, sceneLayout(DEFAULT_THEME, TUNING).scribeX);
+  }
+});
+
+test('A SETTLED SCENE DRAWS EXACTLY THE FRAME IT ALWAYS DID', () => {
+  // The transition has to be impossible to leave switched on. A scene with no
+  // blend, and a scene blended zero of the way, must both produce the display
+  // list the game produced before any of this existed.
+  const settled = drawFrame(frame(0), createRail(0), TUNING);
+  const zeroed = drawFrame(
+    frame(0, { scene: scene({ blend: { theme: 'garden', mix: 0 } }) }),
+    createRail(0),
+    TUNING,
+  );
+  assert.deepEqual(zeroed, settled);
+});
+
+test('a blend recolours the band and changes not one tile in it', () => {
+  // docs/design/05-scenery-warps.md: "colour eases from one scene's palette to
+  // the next across the boundary, and tiles change at the boundary itself."
+  const plain = drawFrame(frame(0, { scene: scene({ theme: 'void' }) }), createRail(0), TUNING);
+  const mixed = drawFrame(
+    frame(0, { scene: scene({ theme: 'void', blend: { theme: 'garden', mix: 0.5 } }) }), // tuning-exempt: the midpoint of a mix
+    createRail(0),
+    TUNING,
+  );
+  const tiles = (cmds: readonly DrawCmd[]): string =>
+    JSON.stringify(cmds.filter((c) => c.op === 'tile').map((c) => ({ id: c.id, x: c.x, y: c.y })));
+  assert.equal(tiles(mixed), tiles(plain), 'the tiles moved or changed picture mid-transition');
+  assert.notEqual(skyTheme(mixed), skyTheme(plain), 'the palette did not move at all');
+  // And the palette it resolves to really is between the two.
+  const between = worldFor(skyTheme(mixed));
+  assert.notDeepEqual([...between.palette], [...worldFor('void').palette]);
+  assert.notDeepEqual([...between.palette], [...worldFor('garden').palette]);
+  assert.deepEqual([...between.palette], [...worldFor(blendThemeId('void', 'garden', 0.5)).palette]); // tuning-exempt: the midpoint of a mix
+});
+
+test('a blended frame is still plain data, and still leaves the rail alone', () => {
+  const cmds = drawFrame(
+    frame(4, { scene: scene({ theme: 'sea', blend: { theme: 'firmament', mix: 0.4 } }) }), // tuning-exempt: a cursor and a mix
+    createRail(0),
+    TUNING,
+  );
+  // Every command survives a round trip through JSON, which is the display
+  // list's whole contract -- a blended theme is a string like any other id.
+  assert.deepEqual(JSON.parse(JSON.stringify(cmds)) as DrawCmd[], cmds);
+  assert.equal(caretX(cmds), focalX(VIRTUAL_W, TUNING), 'the transition moved the caret');
+  for (const cmd of cmds) {
+    if (!('theme' in cmd) || cmd.theme === undefined) continue;
+    assert.ok(bottomOf(cmd) <= RAIL_TOP, 'a blended command reached the rail');
+  }
+});
+
+test('the fallback banner is still the last command with a world mid-transition', () => {
+  // ADR 0009. Nothing may cover it -- including a scenery band that has just
+  // grown a second palette and a set piece.
+  const lines = ['NOT THE REAL DATA - using built-in fallbacks for: the scenery'];
+  const cmds = drawFrame(
+    frame(0, {
+      notice: lines,
+      scene: scene({
+        theme: 'void',
+        blend: { theme: 'apocalypse', mix: 0.5 }, // tuning-exempt: the midpoint of a mix
+        setpiece: setpieceState('light_from_dark', { elapsedMs: 0, progress: 0.5 }), // tuning-exempt: mid-passage
+      }),
+    }),
+    createRail(0),
+    TUNING,
+  );
+  const last = cmds[cmds.length - 1];
+  assert.ok(last !== undefined && last.op === 'text' && lines.includes(last.value));
 });

@@ -35,6 +35,7 @@ const PROGRESSES: readonly number[] = [
 ];
 
 const CLOCKS: readonly number[] = [0, FRAME_MS, LONG_MS];
+const HALF_WAY = 0.5;      // tuning-exempt: the middle of the progress range
 
 test('every set piece produces only fractions, for any input at all', () => {
   for (const id of SETPIECE_IDS) {
@@ -80,6 +81,14 @@ test('the progress-driven flourishes only ever climb', () => {
     ['darkness_at_noon', 'grey'],
     ['light_from_dark', 'light'],
     ['tree_of_life', 'bloom'],
+    ['waters_divided', 'gap'],
+    ['land_from_water', 'land'],
+    ['swarming', 'teeming'],
+    ['bruised_reed', 'lift'],
+    ['lifted_up', 'raised'],
+    ['loaves_multiplied', 'baskets'],
+    ['lamps_kindled', 'lamps'],
+    ['gate_of_the_fold', 'open'],
   ];
   for (const [id, name] of climbing) {
     let last = -1;
@@ -111,6 +120,54 @@ test('the bush burns and is not consumed, at any point in the passage', () => {
   const a = setpieceState('burning_bush', { elapsedMs: 0, progress: 0 });
   const b = setpieceState('burning_bush', { elapsedMs: FRAME_MS * STEPS, progress: 0 });
   assert.notEqual(setpieceParam(a, 'flame'), setpieceParam(b, 'flame'), 'but it does flicker');
+});
+
+test('the wick is not quenched, at any point in the passage', () => {
+  // The same shape as the bush that is not consumed, and for the same reason:
+  // "a smoking flax he will not quench" is the whole of what the passage says
+  // about it, so a flourish that guttered it dark at the end would contradict
+  // the text it decorates.
+  for (const progress of PROGRESSES) {
+    for (const elapsedMs of CLOCKS) {
+      assert.equal(setpieceParam(setpieceState('bruised_reed', { elapsedMs, progress }), 'quenched'), 0);
+    }
+  }
+  const a = setpieceState('bruised_reed', { elapsedMs: 0, progress: 0 });
+  const b = setpieceState('bruised_reed', { elapsedMs: FRAME_MS * STEPS, progress: 0 });
+  assert.notEqual(setpieceParam(a, 'ember'), setpieceParam(b, 'ember'), 'but the ember moves');
+});
+
+test('THE GOSPEL FLOURISHES ARE THE WORLD RESPONDING, NEVER THE PLAYER GAINING', () => {
+  // The register the design doc sets: "a storm going flat on the water, light,
+  // the stone moved -- rather than anything the player gains." A set piece is a
+  // pure function of progress to fractions, so it cannot reach a heart, a combo
+  // or the mastery gate; this asserts the property that guarantees it, which is
+  // that the *only* things a set piece produces are named numbers in 0..1.
+  const gospel: readonly SetpieceId[] = [
+    'bruised_reed', 'lifted_up', 'loaves_multiplied', 'lamps_kindled', 'gate_of_the_fold',
+  ];
+  for (const id of gospel) {
+    const at = (progress: number) => setpieceState(id, { elapsedMs: 0, progress });
+    assert.notDeepEqual(at(0).params, at(1).params, `${id} does not respond to the passage at all`);
+    for (const value of Object.values(at(1).params)) {
+      assert.ok(value >= 0 && value <= 1, `${id} produced something that is not a fraction`);
+    }
+  }
+});
+
+test('every Gospel passage the route names has a flourish, and no two are the same', () => {
+  // "The Gospels have almost none while Exodus has four." Five were added; each
+  // has to be its own picture, or the New Testament is one effect five times.
+  const gospel: readonly SetpieceId[] = [
+    'light_from_dark', 'bruised_reed', 'darkness_at_noon',
+    'lifted_up', 'loaves_multiplied', 'lamps_kindled', 'gate_of_the_fold',
+  ];
+  const shapes = new Set<string>();
+  for (const id of gospel) {
+    const state = setpieceState(id, { elapsedMs: FRAME_MS, progress: HALF_WAY });
+    shapes.add(Object.keys(state.params).sort().join(','));
+  }
+  assert.equal(shapes.size, gospel.length, 'two Gospel flourishes produce the same parameters');
 });
 
 test('a set piece emits parameters, never draw commands', () => {

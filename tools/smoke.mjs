@@ -27,7 +27,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const calls = { fillText: [], lines: [], fillRect: 0, stroke: 0, ready: null };
+const calls = { fillText: [], lines: [], fills: [], fillRect: 0, stroke: 0, ready: null };
+// Every (verse, sky colour) the game has drawn while standing in Genesis 1.
+// The scenery is the one thing in the game a unit test can only ever see as a
+// display list: `core/scenes.test.ts` proves the *resolver* returns seven
+// different places, and this proves the player is actually shown them.
+const genesisSky = [];
 // Every string the game has drawn since it booted, kept across frames. The
 // per-frame lists above are cleared by `tick`, and the tone sweep at the foot
 // of this file needs the whole run rather than the last sixteen milliseconds.
@@ -40,7 +45,8 @@ class Ctx2D {
     this.imageSmoothingEnabled = true;
   }
   setTransform() {} translate() {} scale() {} save() {} restore() {}
-  clearRect() {} fillRect() { calls.fillRect += 1; }
+  clearRect() {}
+  fillRect(x, y, w, h) { calls.fillRect += 1; calls.fills.push({ x, y, w, h, color: this.fillStyle }); }
   beginPath() {} rect() {} clip() {}
   // The caret and the focal guide are lines, and "the eyes never move" is a
   // claim about exactly where they are drawn -- so they are recorded rather
@@ -174,7 +180,32 @@ const press = (k) => (listeners.keydown ?? []).forEach((h) =>
   h({ key: k, preventDefault() {}, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false }));
 
 const rail = () => calls.fillText.filter((c) => c.style.includes('17px'));
-const frameNow = () => { calls.fillText = []; calls.lines = []; step(1000 + frames * 16); };
+
+// The scenery band is the full-width rect the world is painted on: virtual
+// (0, 22) to (640, 114), between the HUD and the rail. Its fill is the theme's
+// `shade` role resolved through `core/worlds.ts`, which is exactly what changes
+// when the world changes -- including mid-transition, when the theme id on the
+// command is a blend of two palettes.
+const SKY = { x: 0, w: 640, h: 92 };
+const skyColour = () => calls.fills.find(
+  (f) => f.x === SKY.x && f.w === SKY.w && f.h === SKY.h,
+)?.color ?? null;
+
+/** Record where the player is standing and what colour the world is there. */
+function sampleScene() {
+  const sky = skyColour();
+  if (sky === null) return;
+  const ref = calls.fillText.map((c) => c.v).find((v) => /^Genesis 1:\d+/.test(v));
+  if (!ref) return;
+  const verse = Number(/^Genesis 1:(\d+)/.exec(ref)?.[1]);
+  if (Number.isInteger(verse)) genesisSky.push({ verse, sky });
+}
+
+const frameNow = () => {
+  calls.fillText = []; calls.lines = []; calls.fills = [];
+  step(1000 + frames * 16);
+  sampleScene();
+};
 
 settle(); frameNow();
 
@@ -286,7 +317,11 @@ function askedFor() {
 
 let clock = 5000;
 function tick(n = 1) {
-  for (let i = 0; i < n; i++) { calls.fillText = []; calls.lines = []; step(clock += 16); }
+  for (let i = 0; i < n; i++) {
+    calls.fillText = []; calls.lines = []; calls.fills = [];
+    step(clock += 16);
+    sampleScene();
+  }
 }
 
 /** The caret: the one vertical line in a frame. Null when nothing is being asked for. */
@@ -349,6 +384,45 @@ for (; parts < 24; parts++) {
 const record = () => JSON.parse(store.get('scriptorium.progress') ?? '{}');
 ok((record().completed ?? []).includes('Genesis 1'),
    'a chapter typed to the end is recorded as completed', `after ${parts + 1} parts`);
+
+// --- the world changes under him while he types Genesis 1 --------------------
+//
+// The owner's report was that Genesis 1 "is still a cavern or something, rather
+// than like moving through space, to earth, to eden". The chapter is authored as
+// seven scenes now -- void, light, the waters divided, dry land, the stars,
+// living things, the garden -- and `core/scenes.test.ts` proves the resolver
+// returns all seven. None of that says the player is *shown* them: the resolver
+// is called by the platform, per frame, off the verse under the cursor, and a
+// level that resolved its scenery once at chapter open would pass every unit
+// test in the repository and still be a cavern. So this reads the colour the
+// running game actually painted the sky, verse by verse, off the canvas.
+
+const skyAt = (verse) => genesisSky.find((s) => s.verse === verse)?.sky ?? null;
+const skies = new Set(genesisSky.map((s) => s.sky));
+const versesSeen = new Set(genesisSky.map((s) => s.verse));
+ok(genesisSky.length > 0 && versesSeen.size > 5,
+   'the harness typed its way across Genesis 1',
+   `${versesSeen.size} verses sampled`);
+ok(skies.size >= 5, 'GENESIS 1 IS NOT ONE ROOM: THE WORLD CHANGES AS HE TYPES IT',
+   `${skies.size} distinct skies over ${genesisSky.length} frames`);
+
+// The one comparison the owner would make himself: the beginning against the
+// end. Verse 2 is the formless void and verse 30 is the garden, and if those
+// two paint the same sky then nothing above this line is reaching the screen.
+const early = skyAt(2);
+const late = skyAt(30);
+ok(early !== null && late !== null && early !== late,
+   'THE SCENE AT VERSE 2 IS NOT THE SCENE AT VERSE 30',
+   `v2 ${early} / v30 ${late}`);
+
+// docs/decisions/0004-idle-threat-not-speed-timer.md, on the scenery: the world
+// must not change while the player is thinking. Sit for ten seconds of frames
+// without touching a key and the sky must be the colour it was.
+const restingBefore = skyColour();
+for (let i = 0; i < 600; i++) tick();
+ok(restingBefore !== null && skyColour() === restingBefore,
+   'THE WORLD DOES NOT CHANGE WHILE HE IS THINKING',
+   `${restingBefore} became ${skyColour()}`);
 
 // --- the report card ---------------------------------------------------------
 //

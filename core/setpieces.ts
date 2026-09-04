@@ -5,18 +5,27 @@
  *
  * "A set piece is a one-off scripted flourish for a specific passage -- optional
  * per scene, so most passages need only a theme and the memorable ones can be
- * special." Ten of them are named in the scene table and every one has a
- * function here; `setpieces.test.ts` fails if the table ever grows an eleventh
- * that this module cannot run, which is the only way a documented flourish can
- * stay documented and imaginary.
+ * special." Every id the scene table names has a function here;
+ * `setpieces.test.ts` fails if the table ever grows one this module cannot run,
+ * which is the only way a documented flourish can stay documented and imaginary.
+ *
+ * ## The register: the world responding, never the player gaining
+ *
+ * Nothing here is picked up, scored, counted or lost. A set piece is the world
+ * answering what is being written -- a storm going flat, light arriving, a stone
+ * moved -- which is why every one of them can be a pure function of progress and
+ * why missing one costs the player exactly nothing. That constraint is what
+ * makes the mechanism safe to grow: a flourish that *gave* something would have
+ * to be reconciled with hearts, combo and the mastery gate, and none of these
+ * ever touch any of them.
  *
  * ## What a set piece is, and is not
  *
  * It is a **pure function of time and progress to a handful of named scalars**.
  * It is not a display list. `core/draw.ts` owns every rectangle in the game, and
  * a set piece that emitted draw commands would be a second renderer with its own
- * idea of the palette and the bands -- ten of those is ten places for the
- * picture to disagree with itself. So `rising_water` returns `water: 0.62` and
+ * idea of the palette and the bands -- one of those per flourish is one place
+ * per flourish for the picture to disagree with itself. So `rising_water` returns `water: 0.62` and
  * the renderer decides what 0.62 of a flood looks like.
  *
  * Every parameter is a fraction in 0..1 for the same reason the blot-cloud's `x`
@@ -28,14 +37,18 @@
  *
  * "Set pieces are scripted, not procedural -- there are few enough that
  * hand-authoring each is cheaper than a system." The mechanism is one record of
- * functions and one clamp. Anything larger would be a system for ten cases.
+ * functions and one clamp. Anything larger would be a system for a handful of
+ * cases, and the handful is the point.
  */
 
 // --- the shape --------------------------------------------------------------
 
-/** The ten flourishes named in the scene table, in the order it names them. */
+/** The flourishes named in the scene table, in the order it names them. */
 export type SetpieceId =
   | 'light_from_dark'
+  | 'waters_divided'
+  | 'land_from_water'
+  | 'swarming'
   | 'rising_water'
   | 'burning_bush'
   | 'blood_on_doorposts'
@@ -43,11 +56,19 @@ export type SetpieceId =
   | 'manna'
   | 'smoke_and_fire'
   | 'swallowed'
+  | 'bruised_reed'
   | 'darkness_at_noon'
+  | 'lifted_up'
+  | 'loaves_multiplied'
+  | 'lamps_kindled'
+  | 'gate_of_the_fold'
   | 'tree_of_life';
 
 export const SETPIECE_IDS: readonly SetpieceId[] = [
   'light_from_dark',
+  'waters_divided',
+  'land_from_water',
+  'swarming',
   'rising_water',
   'burning_bush',
   'blood_on_doorposts',
@@ -55,7 +76,12 @@ export const SETPIECE_IDS: readonly SetpieceId[] = [
   'manna',
   'smoke_and_fire',
   'swallowed',
+  'bruised_reed',
   'darkness_at_noon',
+  'lifted_up',
+  'loaves_multiplied',
+  'lamps_kindled',
+  'gate_of_the_fold',
   'tree_of_life',
 ];
 
@@ -194,6 +220,73 @@ const SCRIPTS: Readonly<Record<SetpieceId, Script>> = {
   darkness_at_noon: (_input, progress) => ({
     grey: progress,
     light: 1 - progress,
+  }),
+
+  /**
+   * Genesis 1:6-8: the expanse opens, water above it and water below.
+   *
+   * `gathering` rather than plain progress, because the firmament is *made* and
+   * then the waters are divided -- the opening should start slowly and then go.
+   */
+  waters_divided: (input, progress) => ({
+    gap: gathering(progress),
+    swell: wave(input.elapsedMs, SWELL_MS),
+  }),
+
+  /** Genesis 1:9-13: the sea drains off, and green closes over the ground. */
+  land_from_water: (input, progress) => ({
+    land: progress,
+    green: gathering(progress),
+    swell: wave(input.elapsedMs, SWELL_MS),
+  }),
+
+  /** Genesis 1:20-25: the band fills with things that were not moving in it. */
+  swarming: (input, progress) => ({
+    teeming: progress,
+    drift: wave(input.elapsedMs, DRIFT_MS),
+  }),
+
+  /**
+   * Matthew 12: "a bruised reed he will not break, and a smoking flax he will
+   * not quench".
+   *
+   * `quenched` is zero at every input and stays there, exactly as `consumed` is
+   * in the burning bush: the whole of what the passage says about the wick is
+   * that it is *not* put out, and a flourish that guttered it dark at the end
+   * would be contradicting its text.
+   */
+  bruised_reed: (input, progress) => ({
+    lift: progress,
+    ember: wave(input.elapsedMs, FLAME_MS),
+    quenched: 0,
+  }),
+
+  /** John 3: "as Moses lifted up the serpent" -- a standard rises, and the sky lightens. */
+  lifted_up: (input, progress) => ({
+    raised: progress,
+    glow: progress,
+    shimmer: wave(input.elapsedMs, SMOKE_MS),
+  }),
+
+  /** John 6: the baskets fill, and there is more at the end than there was. */
+  loaves_multiplied: (input, progress) => ({
+    baskets: progress,
+    fill: gathering(progress),
+    drift: wave(input.elapsedMs, DRIFT_MS),
+  }),
+
+  /** John 8: the temple lamps kindle one after another until the band is lit. */
+  lamps_kindled: (input, progress) => ({
+    lamps: progress,
+    blaze: gathering(progress),
+    flame: wave(input.elapsedMs, FLAME_MS),
+  }),
+
+  /** John 10: the gate of the fold opens across the band, and stays open. */
+  gate_of_the_fold: (input, progress) => ({
+    open: progress,
+    flock: gathering(progress),
+    sway: wave(input.elapsedMs, DRIFT_MS),
   }),
 
   /** Revelation 22: the tree barred at the start, open at the end. */

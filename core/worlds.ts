@@ -3,7 +3,7 @@
  *
  * @doc docs/design/05-scenery-warps.md#themes
  *
- * `docs/design/05-scenery-warps.md` names ten themes and describes each in a
+ * `docs/design/05-scenery-warps.md` names twelve themes and describes each in a
  * sentence -- "stone greys, candle amber", "ochre, bleached sky". `data/themes.json`
  * is compiled from that table and carries the prose and the tune. This module is
  * the picture: for each of those ids, the sixteen colours the art roles in
@@ -17,8 +17,8 @@
  * `PALETTE_ROLES` order. So the *same sixteen pixels* of `tile_stone` read as
  * cloister grey in the abbey and as ochre in the wilderness, and the scribe's
  * habit takes the light of wherever he is standing, with no second tileset and
- * no per-theme art. Ten themes cost ten rows of colour here rather than ten
- * copies of every sprite.
+ * no per-theme art. Twelve themes cost twelve rows of colour here rather than
+ * twelve copies of every sprite.
  *
  * Colours are 24-bit RGB integers rather than CSS strings, for the reason the
  * display list gives: a Flutter painter reads the same integer a Canvas renderer
@@ -144,7 +144,7 @@ function makeWorld(id: string, ink: ThemeInk, far: string, mid: string, ground: 
 }
 
 /**
- * The ten themes, in the order docs/design/05-scenery-warps.md lists them.
+ * The twelve themes, in the order docs/design/05-scenery-warps.md lists them.
  *
  * Each row chooses eleven colours and three tiles: what stands in the far
  * distance, what stands in the middle, and what the scribe walks on.
@@ -159,8 +159,14 @@ function makeWorld(id: string, ink: ThemeInk, far: string, mid: string, ground: 
  * and the sea rolls, and no palette turns an arch into a wave.
  *
  * So no two themes stack the same three tiles, and `worlds.test.ts` asserts it.
- * That assertion is the reason the tiles exist: ten palettes over one silhouette
- * is ten lightings of the same room.
+ * That assertion is the reason the tiles exist: twelve palettes over one
+ * silhouette is twelve lightings of the same room.
+ *
+ * `void` is the hardest case the table has: a world whose whole point is that
+ * there is nothing to see in it still has to differ between the horizon and the
+ * scribe's feet, or it is one backdrop sliding over itself. It does it in the
+ * dark -- an all-`outline` swell behind an all-ground deep -- rather than by
+ * giving up and putting a landmark in a chapter that has none yet.
  */
 export const WORLDS: ReadonlyMap<string, World> = new Map(
   [
@@ -233,8 +239,135 @@ export const WORLDS: ReadonlyMap<string, World> = new Map(
       groundTop: 0xc9b26a, groundBody: 0x6e5f38,
       // The end: nothing but cloud, opened, standing over white stone.
     }, 'tile_cloud', 'tile_cloud', 'tile_stone'),
+
+    makeWorld('void', {
+      outline: 0x05060a, shade: 0x090b12, mid: 0x141826, light: 0x1e2436, highlight: 0x9aa6c0,
+      robe: 0x2a2c3a, robeShade: 0x14161e, accent: 0x46506e, flame: 0x7f8cb0,
+      groundTop: 0x0b0e16, groundBody: 0x070910,
+      // Before the first day. The ground is painted within a shade of the sky on
+      // purpose: there is no horizon in this world, because there is not yet
+      // anything for a horizon to be between. What the player sees is the deep
+      // moving in the dark, which is the whole of what the two verses describe.
+      // The swell behind it is drawn in `outline`, which is the only ink darker
+      // than the sky -- so it is a mass, not a skyline.
+    }, 'tile_swell', 'tile_swell', 'tile_deep'),
+
+    makeWorld('firmament', {
+      outline: 0x05071a, shade: 0x0b1030, mid: 0x1c2454, light: 0x39447f, highlight: 0xf2f4ff,
+      robe: 0x3a3f66, robeShade: 0x22253f, accent: 0xffe9a8, flame: 0xfffdf0,
+      groundTop: 0x2c4a38, groundBody: 0x182a20,
+      // The fourth day: lights set in the expanse, over land that is already
+      // there. Two fields of stars at two depths -- which is the one place
+      // parallax does the work by itself, because near stars moving against far
+      // ones is exactly what a night sky looks like from a moving thing.
+    }, 'tile_stars', 'tile_stars', 'tile_grass'),
   ].map((w) => [w.id, w]),
 );
+
+// --- blending between two worlds --------------------------------------------
+
+/**
+ * How many steps a palette blend is quantised into.
+ *
+ * `tuning-exempt` for the same reason `DEPTH` is, and for one more: the renderer
+ * bakes every sprite once per palette it is asked for, so a *continuous* blend
+ * is a cache with no bound. A fixed number of steps is a fixed number of bakes --
+ * at most one per pair of themes per step -- and at sixteen the banding across a
+ * transition is finer than the parallax it is painted on.
+ *
+ * The window the blend runs over is `scene_blend_verses` and lives in the tuning
+ * table, because that one is about how the game feels; this one is about how the
+ * picture is stored.
+ */
+const BLEND_STEPS = 16;  // tuning-exempt: art -- quantisation of a baked palette
+
+/**
+ * The separator in a blended theme id. Not a character any authored theme id
+ * uses, so `worldFor('garden')` can never be mistaken for a blend.
+ */
+const BLEND_SEP = '~';
+
+/** Fields in a blended id: the theme left, the theme arriving, and the step. */
+const BLEND_FIELDS = 3;  // tuning-exempt: the shape of an id, not a number to turn
+
+const BYTE = 0xff;
+const R_SHIFT = 16;      // tuning-exempt: bit position of the red channel
+const G_SHIFT = 8;       // tuning-exempt: bit position of the green channel
+
+function mixByte(from: number, to: number, t: number): number {
+  return Math.round(from + (to - from) * t) & BYTE;
+}
+
+/** Two 24-bit colours mixed per channel. Linear, which is what an ease wants. */
+function mixRgb(from: number, to: number, t: number): number {
+  const r = mixByte((from >> R_SHIFT) & BYTE, (to >> R_SHIFT) & BYTE, t);
+  const g = mixByte((from >> G_SHIFT) & BYTE, (to >> G_SHIFT) & BYTE, t);
+  const b = mixByte(from & BYTE, to & BYTE, t);
+  return (r << R_SHIFT) | (g << G_SHIFT) | b;
+}
+
+/**
+ * The id of the palette `mix` of the way from one theme to another.
+ *
+ * Returns a plain theme id at either end and for a blend with itself, so a frame
+ * that is not mid-transition emits exactly the commands it always did -- the
+ * display list of a settled scene is byte-for-byte what it was before this
+ * existed, which is what makes the transition impossible to leave switched on.
+ *
+ * The id is data, like every other field in the display list: it survives
+ * `JSON.stringify`, and a renderer resolves it through `worldFor` without
+ * knowing a transition is happening.
+ */
+export function blendThemeId(from: string, to: string, mix: number): string {
+  if (from === to) return from;
+  const step = Math.round(Math.min(1, Math.max(0, mix)) * BLEND_STEPS);
+  if (step <= 0) return from;
+  if (step >= BLEND_STEPS) return to;
+  return `${from}${BLEND_SEP}${to}${BLEND_SEP}${String(step)}`;
+}
+
+/**
+ * Blended worlds already built, keyed by their id.
+ *
+ * Memoisation, not state: `worldFor` is a pure function of its argument and this
+ * only stops it recomputing sixteen colours per draw command. It is bounded by
+ * construction -- pairs of themes times `BLEND_STEPS` -- and in practice holds
+ * the handful of boundaries the authored scene map actually contains.
+ */
+const BLENDED = new Map<string, World>();
+
+/**
+ * Build the world a blend id names, or null when the id is not a blend.
+ *
+ * The tiles and the layer geometry come from the theme being left, not mixed:
+ * "colour eases from one scene's palette to the next across the boundary, and
+ * tiles change at the boundary itself". Interpolating tile art would look like
+ * neither thing.
+ */
+function blendedWorld(id: string): World | null {
+  const parts = id.split(BLEND_SEP);
+  if (parts.length !== BLEND_FIELDS) return null;
+  const [fromId, toId, stepText] = parts;
+  if (fromId === undefined || toId === undefined || stepText === undefined) return null;
+  const from = WORLDS.get(fromId);
+  const to = WORLDS.get(toId);
+  const step = Number(stepText);
+  if (from === undefined || to === undefined || !Number.isInteger(step)) return null;
+  if (step <= 0 || step >= BLEND_STEPS) return null;
+  const t = step / BLEND_STEPS;
+  const palette = from.palette.map((colour, index) => {
+    const other = to.palette[index];
+    // The transparent role stays transparent: mixing it toward a colour would
+    // paint the pixels the art deliberately leaves out.
+    return other === undefined || index === 0 ? colour : mixRgb(colour, other, t);
+  });
+  return {
+    id,
+    palette: Object.freeze(palette),
+    groundTile: from.groundTile,
+    parallax: from.parallax,
+  };
+}
 
 /**
  * The documented fallback. "Any passage on a route with no row here resolves to
@@ -244,9 +377,22 @@ export const WORLDS: ReadonlyMap<string, World> = new Map(
  */
 export const DEFAULT_THEME = 'abbey';
 
-/** The world for a theme id, falling back to the abbey. Never null. */
+/**
+ * The world for a theme id, falling back to the abbey. Never null.
+ *
+ * Accepts a blended id from `blendThemeId` as well as an authored one, which is
+ * what lets the renderer stay ignorant of transitions: it resolves whatever
+ * string the command carries and paints with the sixteen colours it gets back.
+ */
 export function worldFor(themeId: string): World {
-  return WORLDS.get(themeId) ?? WORLDS.get(DEFAULT_THEME) ?? unreachable();
+  const authored = WORLDS.get(themeId);
+  if (authored !== undefined) return authored;
+  const cached = BLENDED.get(themeId);
+  if (cached !== undefined) return cached;
+  const built = blendedWorld(themeId);
+  if (built === null) return WORLDS.get(DEFAULT_THEME) ?? unreachable();
+  BLENDED.set(themeId, built);
+  return built;
 }
 
 function unreachable(): never {

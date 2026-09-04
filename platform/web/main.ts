@@ -47,7 +47,10 @@ import {
   VIRTUAL_W, drawFrame, reportAdvice, reportCard, reportNote, reportTrend, sceneLayout,
   type FrameState, type ReportMemory, type SceneCandle, type SceneState, type WarpView,
 } from '../../core/draw.js';
-import { loadScenes, sceneFor as sceneAt, type Scene, type SceneMap } from '../../core/scenes.js';
+import {
+  loadScenes, sceneAtVerse, sceneFor as sceneAt,
+  type Scene, type SceneAt, type SceneMap,
+} from '../../core/scenes.js';
 import { setpieceState, type SetpieceState } from '../../core/setpieces.js';
 import {
   arriveAt, completePassage, createMap, discoverSecret, flashbacksFrom,
@@ -602,6 +605,16 @@ interface Level {
    * inferred from a character of the prose.
    */
   readonly scene: Scene;
+  /**
+   * The authored map the scenery is resolved against, per frame.
+   *
+   * Carried on the level rather than reached for, because `core/scenes.ts` now
+   * answers a question about *where in the chapter* the player is -- Genesis 1 is
+   * seven scenes -- and that has to be asked every frame, from the frame
+   * builders, which are module-level functions with no view of the boot scope.
+   * Null is the documented fallback and every passage is an abbey.
+   */
+  readonly sceneMap: SceneMap | null;
   /** The chapter, canonically cited: `Psalms 23`. What the route graph is keyed on. */
   readonly ref: string;
   /**
@@ -674,6 +687,37 @@ function verseUnder(level: Level): number {
   return level.verseAt[Math.max(0, index)] ?? level.chunk.first;
 }
 
+/**
+ * Where the cursor stands in the chapter, as a fractional verse number.
+ *
+ * 4.5 is halfway through verse 4. This is the only thing the scenery's
+ * transition is a function of, which is what makes
+ * docs/decisions/0004-idle-threat-not-speed-timer.md hold for the world as well
+ * as for the monsters: it moves when a key is struck and at no other time.
+ *
+ * Measured off `verseAt` -- the glyph-to-verse map the ribbon was built with --
+ * rather than off a character count, because a verse's length in glyphs is the
+ * only honest measure of how far through it the player has typed.
+ */
+function versePosition(level: Level): number {
+  const verse = verseUnder(level);
+  const total = level.verseAt.length;
+  if (total === 0) return verse;
+  const cursor = Math.min(Math.max(0, level.typing.cursor), total - 1);
+  let first = cursor;
+  while (first > 0 && level.verseAt[first - 1] === verse) first -= 1;
+  let last = cursor;
+  while (last + 1 < total && level.verseAt[last + 1] === verse) last += 1;
+  const span = last - first + 1;
+  // The cursor is clamped into the verse before the fraction is taken, so the
+  // position can never reach the *next* verse's number. At the end of the last
+  // verse of a chapter the cursor sits one past the final glyph, and without
+  // this the world resolved for a verse 32 that does not exist -- which fell
+  // through to the chapter's default row and repainted Eden as the apocalypse
+  // on the last keystroke of Genesis 1.
+  return verse + (Math.min(level.typing.cursor, last) - first) / span;
+}
+
 /** Where the camera wants to be: one stride per word behind the cursor. */
 function cameraTarget(level: Level): number {
   return wordProgress(level.breaks, level.typing.cursor, level.glyphs.length) * WORLD_STRIDE;
@@ -710,10 +754,25 @@ function passageProgress(level: Level): number {
  * ahead of the code would otherwise stay documented and imaginary for as long
  * as nobody happened to play that passage.
  */
-function setpieceFor(level: Level): SetpieceState | null {
-  const id = level.scene.setpiece;
+function setpieceFor(level: Level, scene: SceneAt): SetpieceState | null {
+  const id = scene.setpiece;
   if (id === null) return null;
-  return setpieceState(id, { elapsedMs: level.animMs, progress: passageProgress(level) });
+  // Progress through the thing the flourish decorates. A verse row knows its own
+  // span and says so; a chapter row does not, and the chapter is what it means.
+  const progress = scene.sceneProgress ?? passageProgress(level);
+  return setpieceState(id, { elapsedMs: level.animMs, progress });
+}
+
+/**
+ * The scene under the cursor *right now*, not the one the chapter opened in.
+ *
+ * `level.scene` is the chapter's row and stays fixed for the level's life --
+ * the tune is keyed on it, and a hymn restarted every five verses would be the
+ * scenery competing with the rail. The picture is resolved per verse instead,
+ * which is what makes Genesis 1 seven places rather than one.
+ */
+function sceneNow(level: Level, tuning: Tuning): SceneAt {
+  return sceneAtVerse(level.sceneMap, level.ref, versePosition(level), tuning);
 }
 
 function sceneStateFor(
@@ -722,9 +781,13 @@ function sceneStateFor(
   cloud: BlotCloud,
   tuning: Tuning,
 ): SceneState {
-  const piece = setpieceFor(level);
+  const scene = sceneNow(level, tuning);
+  const piece = setpieceFor(level, scene);
   return {
-    theme: level.scene.theme,
+    theme: scene.theme,
+    ...(scene.blendTheme === null || scene.blendMix <= 0
+      ? {}
+      : { blend: { theme: scene.blendTheme, mix: scene.blendMix } }),
     cameraX: level.cameraX,
     // The scribe walks exactly while the world is still moving under him, which
     // is exactly while there are words behind the cursor he has not been carried
@@ -1098,6 +1161,7 @@ async function boot(): Promise<void> {
       started: false,
       bookmark: verseAt[typing.cursor] ?? chunk.first,
       scene,
+      sceneMap: scenes,
       ref,
       doorways: doorwaysIn(ref, glyphs, verseAt),
       flashback: options.flashback ?? null,
