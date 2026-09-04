@@ -143,6 +143,10 @@
     font-size: 1.1rem;
     letter-spacing: .15em;
   }
+  /* The opening screen is one idea, so it is a narrow column rather than a
+     wall: it should read as a note, not as a manual. */
+  .panel.narrow { width: min(30rem, 100%); }
+  .keys.big { font-size: 1.8rem; letter-spacing: .3em; margin: .8rem 0; }
   #menu-history { margin: 0; padding: 0; list-style: none; font-size: .85rem; max-height: 12rem; overflow: auto; }
   #menu-history li { display: flex; gap: .6rem; padding: .12rem 0; border-bottom: 1px solid rgba(122, 107, 80, .18); }
   #menu-history li.promoted { color: var(--gold); border-bottom-color: rgba(240, 180, 41, .35); }
@@ -173,6 +177,22 @@
     <p class="dim" id="promotion-coverage"></p>
     <div class="row">
       <button id="promotion-ok" class="primary" type="button">Keep going</button>
+    </div>
+  </div>
+
+  <!-- The opening screen. One idea -- the bumps on F and J -- and one button.
+       Not a tutorial: an adult who already knows he types badly does not need
+       four screens of explanation before he is allowed to type a word. The
+       wording lives in core/onboarding.ts. docs/design/10-first-run.md. -->
+  <div class="panel narrow" id="panel-first-run" hidden>
+    <h2 id="first-run-title"></h2>
+    <p class="lead" id="first-run-lead"></p>
+    <p class="keys big" id="first-run-bumps"></p>
+    <p id="first-run-body"></p>
+    <p id="first-run-rest"></p>
+    <p class="keys" id="first-run-home"></p>
+    <div class="row">
+      <button id="first-run-ok" class="primary" type="button"></button>
     </div>
   </div>
 
@@ -289,6 +309,16 @@
       work. Taking a long time over a single key never brings it — only stopping
       does. Turn it off if it nags rather than nudges; nothing else changes, and
       the game is fully playable without it.
+    </p>
+
+    <h3>The opening</h3>
+    <div class="row">
+      <button id="menu-first-run" type="button">Show the opening again</button>
+    </div>
+    <p class="dim">
+      Where to rest your hands, and the three short notes about how the page
+      works. Worth a minute if you clicked past them, or if someone else is
+      about to sit down here.
     </p>
 
     <h3>Progress</h3>

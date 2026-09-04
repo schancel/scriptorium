@@ -101,6 +101,10 @@ const STYLES: Readonly<Record<string, TextStyle>> = {
   'hud-right': { font: `bold 11px ${SANS}`, align: 'right', baseline: 'middle' },
   key: { font: `9px ${SANS}`, align: 'center', baseline: 'middle' },
   'hint-center': { font: `bold 11px ${MONO}`, align: 'center', baseline: 'middle' },
+  // A first-run note is prose, so it is set in the interface face rather than
+  // the mono the key hint uses: the hint names keys and wants to look like
+  // keys, and a sentence set in the same face reads as more machinery.
+  'note-center': { font: `11px ${SANS}`, align: 'center', baseline: 'middle' },
   title: { font: `bold 17px ${SANS}`, align: 'left', baseline: 'middle' },
   report: { font: `11px ${MONO}`, align: 'left', baseline: 'middle' },
 };

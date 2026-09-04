@@ -12,6 +12,7 @@
  */
 
 import { CANON } from '../../core/corpus.js';
+import { OPENING } from '../../core/onboarding.js';
 import type { HistoryEntry, Promotion } from '../../core/progress.js';
 import type { KeyboardLayout, Thumb } from '../../core/types.js';
 
@@ -50,6 +51,14 @@ export interface OverlayHandlers {
    * avoid.
    */
   setGilding(on: boolean): void;
+  /**
+   * The player asked to see the opening again.
+   *
+   * For someone who clicked past it, and for someone handing the game to a
+   * friend for an evening. It is the only way back to it -- nothing in the game
+   * re-arms the first run by itself. See docs/design/10-first-run.md.
+   */
+  replayFirstRun(): void;
   startOver(): void;
   exportFile(): void;
   importFile(file: File): void;
@@ -85,6 +94,14 @@ export interface MenuView {
 
 export interface Overlay {
   isOpen(): boolean;
+  /**
+   * The opening screen: where to put your hands, and one button.
+   *
+   * `onDone` is called however it is dismissed -- the button, Enter or Escape.
+   * There is no "skip", because there is nothing to skip: it is one idea and
+   * the button is already the way past it.
+   */
+  showOpening(onDone: () => void): void;
   openMenu(view: MenuView): void;
   showPromotion(promotion: Promotion, onDismiss: () => void): void;
   /**
@@ -150,6 +167,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const exportButton = need('menu-export', HTMLButtonElement);
   const importInput = need('menu-import', HTMLInputElement);
   const resetButton = need('menu-reset', HTMLButtonElement);
+  const firstRunButton = need('menu-first-run', HTMLButtonElement);
   const historyList = need('menu-history', HTMLOListElement);
   const historyNote = need('history-note', HTMLParagraphElement);
 
@@ -164,6 +182,20 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const gildYes = need('gild-yes', HTMLButtonElement);
   const gildNo = need('gild-no', HTMLButtonElement);
 
+  // The opening screen. Its words come from `core/onboarding.ts` and are
+  // written in once, here, rather than spelled into index.html: the wording is
+  // the feature, and a string that lives only in a markup file is a string
+  // nothing tests.
+  const openingPanel = need('panel-first-run', HTMLDivElement);
+  const openingOk = need('first-run-ok', HTMLButtonElement);
+  need('first-run-title', HTMLHeadingElement).textContent = OPENING.title;
+  need('first-run-lead', HTMLParagraphElement).textContent = OPENING.lead;
+  need('first-run-bumps', HTMLParagraphElement).textContent = OPENING.bumps;
+  need('first-run-body', HTMLParagraphElement).textContent = OPENING.body;
+  need('first-run-rest', HTMLParagraphElement).textContent = OPENING.rest;
+  need('first-run-home', HTMLParagraphElement).textContent = OPENING.homeRow;
+  openingOk.textContent = OPENING.button;
+
   for (const entry of CANON) {
     const option = document.createElement('option');
     option.value = entry.title;
@@ -173,6 +205,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
 
   let dismissPromotion: (() => void) | null = null;
   let answerGild: ((accept: boolean) => void) | null = null;
+  let finishOpening: (() => void) | null = null;
 
   function isOpen(): boolean {
     return !overlay.hidden;
@@ -183,8 +216,10 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     menuPanel.hidden = true;
     promotionPanel.hidden = true;
     gildPanel.hidden = true;
+    openingPanel.hidden = true;
     dismissPromotion = null;
     answerGild = null;
+    finishOpening = null;
   }
 
   function showError(message: string): void {
@@ -257,6 +292,10 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   }
 
   function openMenu(view: MenuView): void {
+    // Walking off the opening screen into the menu counts as having read it.
+    // Leaving it unanswered would bring it back on the next reload, which is
+    // the one thing it must never do -- and the menu has it back on purpose.
+    if (!openingPanel.hidden) opened();
     where.textContent = view.where;
     stageLine.textContent = view.stageLine;
     editionSelect.value = view.edition;
@@ -271,6 +310,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     renderHistory(view.history);
     promotionPanel.hidden = true;
     gildPanel.hidden = true;
+    openingPanel.hidden = true;
     menuPanel.hidden = false;
     overlay.hidden = false;
     resumeButton.focus();
@@ -298,6 +338,8 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
       `Live characters: ${pct(promotion.coverageBefore)} of the text before, ` +
       `${pct(promotion.coverageAfter)} from here.`;
     menuPanel.hidden = true;
+    gildPanel.hidden = true;
+    openingPanel.hidden = true;
     promotionPanel.hidden = false;
     overlay.hidden = false;
     promotionOk.focus();
@@ -322,6 +364,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     answerGild = onAnswer;
     menuPanel.hidden = true;
     promotionPanel.hidden = true;
+    openingPanel.hidden = true;
     gildPanel.hidden = false;
     overlay.hidden = false;
     gildNo.focus();
@@ -331,6 +374,30 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     const done = answerGild;
     close();
     if (done !== null) done(accept);
+  }
+
+  /**
+   * The opening screen.
+   *
+   * One idea -- the bumps on F and J -- and one button. It says nothing about
+   * stages, hearts, the ink cloud or anything else the player will meet on his
+   * own, because he should be typing real words inside fifteen seconds and
+   * every extra sentence here is a sentence between him and that.
+   */
+  function showOpening(onDone: () => void): void {
+    finishOpening = onDone;
+    menuPanel.hidden = true;
+    promotionPanel.hidden = true;
+    gildPanel.hidden = true;
+    openingPanel.hidden = false;
+    overlay.hidden = false;
+    openingOk.focus();
+  }
+
+  function opened(): void {
+    const done = finishOpening;
+    close();
+    if (done !== null) done();
   }
 
   function go(): void {
@@ -349,6 +416,10 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     handlers.toggleAudio();
   });
   promotionOk.addEventListener('click', dismiss);
+  openingOk.addEventListener('click', opened);
+  firstRunButton.addEventListener('click', () => {
+    handlers.replayFirstRun();
+  });
   resumeButton.addEventListener('click', () => {
     close();
     handlers.resume();
@@ -412,6 +483,14 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     if (!isOpen()) return;
     if (event.key === 'Escape') {
       event.preventDefault();
+      if (!openingPanel.hidden) {
+        // Escaping the opening screen is dismissing it, not deferring it. He
+        // has found the bumps or he has decided not to; either way it has been
+        // offered, and offering it again tomorrow would say the game had not
+        // noticed. The menu has it back on purpose.
+        opened();
+        return;
+      }
       if (!gildPanel.hidden) {
         // Escaping the offer is "not now", and it is remembered like any other
         // answer. Leaving it unanswered would bring it back tomorrow.
@@ -429,8 +508,15 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     if (event.key === 'Enter' && !promotionPanel.hidden) {
       event.preventDefault();
       dismiss();
+      return;
+    }
+    if (event.key === 'Enter' && !openingPanel.hidden) {
+      event.preventDefault();
+      opened();
     }
   });
 
-  return { isOpen, openMenu, showPromotion, showGildOffer, showError, showAudio, close };
+  return {
+    isOpen, showOpening, openMenu, showPromotion, showGildOffer, showError, showAudio, close,
+  };
 }

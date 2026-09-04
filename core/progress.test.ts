@@ -19,12 +19,16 @@ import {
   migrate,
   promote,
   recordSession,
+  replayFirstRun,
   setGilding,
   setStage,
   shouldOfferGilding,
   withGildOffered,
+  withNotesSeen,
+  withOpeningSeen,
   withPosition,
 } from './progress.js';
+import { NOTE_ORDER } from './onboarding.js';
 
 function loadDataFile(name: string): unknown {
   for (const rel of ['../../data/', '../data/']) {
@@ -53,6 +57,7 @@ const V1_LATENCY_MS = 340;     // tuning-exempt: fixture
 const V1_WPM = 14.2;           // tuning-exempt: fixture
 const V1_ACCURACY = 0.97;      // tuning-exempt: fixture
 const RESUME_UNIT = 4;         // tuning-exempt: a verse number, not a knob
+const V3_VERSION = 3;          // tuning-exempt: fixture from the published version 3 record
 
 const window = tuningValue(tuning, 'gate_window');
 const fastMs = tuningValue(tuning, 'gate_latency_floor_ms');
@@ -134,6 +139,12 @@ test('a version 1 record keeps everything it had and gains a position', () => {
   assert.deepEqual(migrated.recent, {});
   assert.equal(migrated.history[0]?.promoted, false);
   assert.equal(migrated.spaceThumb, 'rt');
+
+  // And this record's owner has been playing since before there *was* a first
+  // run. Starting to explain the game to him now would be worse than never
+  // having explained it, so a stored record defaults to "already done".
+  assert.equal(migrated.firstRun, false, 'a returning player was shown the opening screen');
+  assert.deepEqual([...migrated.notesSeen], [...NOTE_ORDER]);
 });
 
 test('a record round-trips through JSON unchanged', () => {
@@ -336,6 +347,8 @@ test('a version 2 record migrates with its history and statistics intact', () =>
   // mode did not exist, so it was off and had never been offered.
   assert.equal(migrated.gilding, false);
   assert.equal(migrated.gildOffered, false);
+  assert.equal(migrated.firstRun, false);
+  assert.deepEqual([...migrated.notesSeen], [...NOTE_ORDER]);
 });
 
 test('the gilding mode survives a reload', () => {
@@ -422,4 +435,90 @@ test('the offer is made once, whichever way it is answered', () => {
   assert.equal(shouldOfferGilding(withGildOffered(earned), tuning), false);
   // And a player already gilding is never asked.
   assert.equal(shouldOfferGilding(setGilding(earned, true), tuning), false);
+});
+
+// --- the first run ----------------------------------------------------------
+
+test('a brand new record owes the opening screen; every stored one does not', () => {
+  assert.equal(DEFAULT_PROGRESS.firstRun, true);
+  assert.deepEqual([...DEFAULT_PROGRESS.notesSeen], []);
+
+  // The version does not matter: a record that exists is a record somebody has
+  // been playing, whatever schema it was written under.
+  for (const stored of [V2_RECORD, { ...V2_RECORD, version: V3_VERSION, gilding: true }]) {
+    const migrated = migrate(stored);
+    assert.equal(migrated.firstRun, false);
+    assert.deepEqual([...migrated.notesSeen], [...NOTE_ORDER]);
+  }
+});
+
+test('A VERSION 3 RECORD MIGRATES WITH EVERYTHING IT EARNED, AND SEES NO FIRST RUN', () => {
+  // A whole player, one schema behind: history, lifetime statistics, the
+  // trailing window, the bookmark, both settings.
+  const v3 = { ...V2_RECORD, version: V3_VERSION, gilding: true, gildOffered: true };
+  const migrated = migrate(v3);
+
+  assert.equal(migrated.version, SCHEMA_VERSION);
+  assert.notEqual(SCHEMA_VERSION, V3_VERSION);
+  assert.equal(migrated.stage, V1_STAGE);
+  assert.equal(migrated.translation, 'KJV');
+  assert.equal(migrated.route, 'pilgrimage');
+  assert.equal(migrated.layout, 'iso');
+  assert.equal(migrated.spaceThumb, 'lt');
+  assert.deepEqual(migrated.position, { book: 'Psalms', chapter: 23, unit: 4 }); // tuning-exempt: fixture
+  assert.deepEqual(migrated.completed, ['Genesis 1']);
+  assert.equal(migrated.keyStats['a']?.hits, V1_HITS);
+  assert.equal(migrated.keyStats['a']?.errors, V1_ERRORS);
+  assert.equal(migrated.recent['a']?.length, 2);   // tuning-exempt: two attempts in the fixture
+  assert.equal(migrated.history.length, 1);
+  assert.equal(migrated.history[0]?.wpm, V1_WPM);
+  assert.equal(migrated.history[0]?.promoted, true);
+  assert.equal(migrated.gilding, true);
+  assert.equal(migrated.gildOffered, true);
+
+  // And the game says nothing to him it has not said before.
+  assert.equal(migrated.firstRun, false);
+  assert.deepEqual([...migrated.notesSeen], [...NOTE_ORDER]);
+});
+
+test('the opening screen does not come back once it has been dismissed', () => {
+  const done = withOpeningSeen(DEFAULT_PROGRESS);
+  assert.equal(done.firstRun, false);
+  assert.equal(withOpeningSeen(done), done, 'dismissing twice made a new record');
+
+  const reloaded = migrate(JSON.parse(JSON.stringify(done)) as unknown);
+  assert.equal(reloaded.firstRun, false, 'a reload put the opening screen back');
+  assert.deepEqual(reloaded, done, 'the record did not round-trip');
+});
+
+test('the notes survive a reload, and nothing else moves when one is spent', () => {
+  const played = play(withPosition(DEFAULT_PROGRESS, SOMEWHERE), stat(perKey, 1, fastMs));
+  const spent = withNotesSeen(played, ['space', 'greyed']);
+
+  assert.deepEqual([...spent.notesSeen], ['greyed', 'space'], 'the order is canonical');
+  assert.deepEqual({ ...spent, notesSeen: played.notesSeen }, played, 'a note moved something else');
+
+  const reloaded = migrate(JSON.parse(JSON.stringify(spent)) as unknown);
+  assert.deepEqual(reloaded, spent, 'the record did not round-trip');
+});
+
+test('replaying from the menu re-arms it, and then it stays dismissed again', () => {
+  const played = withNotesSeen(withOpeningSeen(DEFAULT_PROGRESS), NOTE_ORDER);
+  const again = replayFirstRun(played);
+  assert.equal(again.firstRun, true);
+  assert.deepEqual([...again.notesSeen], [], 'the friend has not met a dim letter either');
+
+  // It is a replay, not a reset: nothing the player earned moves.
+  const earned = replayFirstRun(play(DEFAULT_PROGRESS, stat(perKey, 1, fastMs)));
+  const before = play(DEFAULT_PROGRESS, stat(perKey, 1, fastMs));
+  assert.equal(earned.stage, before.stage);
+  assert.deepEqual(earned.keyStats, before.keyStats);
+  assert.deepEqual(earned.recent, before.recent);
+  assert.deepEqual(earned.history, before.history);
+  assert.deepEqual(earned.position, before.position);
+
+  // And once it has been read again it goes away again, permanently.
+  const done = withNotesSeen(withOpeningSeen(again), NOTE_ORDER);
+  assert.equal(migrate(JSON.parse(JSON.stringify(done)) as unknown).firstRun, false);
+  assert.deepEqual([...migrate(JSON.parse(JSON.stringify(done)) as unknown).notesSeen], [...NOTE_ORDER]);
 });

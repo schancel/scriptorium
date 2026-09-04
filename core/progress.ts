@@ -26,17 +26,18 @@
 
 import type { Key, KeyStat, KeyboardLayout, Stage, Thumb, Tuning } from './types.js';
 import { evaluateGate, stageAt } from './curriculum.js';
+import { NOTE_ORDER, type NoteId } from './onboarding.js';
 import { tuningValue } from './tuning.js';
 
 /**
- * Bumped to 2 when `position` and `recent` were added, and to 3 for the gilding
- * mode and whether its offer has been made. A record at any older version is
- * *migrated*, never discarded: months of a beginner's curve is the one thing in
- * this program that cannot be regenerated.
+ * Bumped to 2 when `position` and `recent` were added, to 3 for the gilding
+ * mode and whether its offer has been made, and to 4 for the first run. A
+ * record at any older version is *migrated*, never discarded: months of a
+ * beginner's curve is the one thing in this program that cannot be regenerated.
  *
  * See the version table in docs/architecture/data-schemas.md#progress.
  */
-export const SCHEMA_VERSION = 3;   // tuning-exempt: a schema version, not a tunable
+export const SCHEMA_VERSION = 4;   // tuning-exempt: a schema version, not a tunable
 
 // --- the record -------------------------------------------------------------
 
@@ -112,6 +113,25 @@ export interface Progress {
    * offer and become nagging, which is the same failure in a politer voice.
    */
   readonly gildOffered: boolean;
+  /**
+   * Whether the opening screen is still owed.
+   *
+   * True in a brand new record and false the moment the screen is dismissed.
+   * It is stored rather than held for the session because the screen exists for
+   * someone who has never typed properly before, and showing it again on the
+   * second evening would say the game had not noticed the first one.
+   * See docs/design/10-first-run.md#once-only-and-gone.
+   */
+  readonly firstRun: boolean;
+  /**
+   * The just-in-time notes already spent, one flag per note.
+   *
+   * A list rather than three booleans so that adding or retiring a note is a
+   * change to `core/onboarding.ts` and not to the record's shape. Written the
+   * moment a note is *shown*: a tip that returns after you have understood it
+   * is an insult, and a closed tab is not a reason to be told twice.
+   */
+  readonly notesSeen: readonly NoteId[];
 }
 
 /** Genesis 1:1. The first verse of the first chapter of the first book. */
@@ -132,6 +152,8 @@ export const DEFAULT_PROGRESS: Progress = {
   history: [],
   gilding: false,
   gildOffered: false,
+  firstRun: true,
+  notesSeen: [],
 };
 
 // --- migration --------------------------------------------------------------
@@ -174,6 +196,24 @@ function migrateAttempts(value: unknown): Readonly<Record<Key, readonly Attempt[
     out[key] = attempts;
   }
   return out;
+}
+
+/**
+ * Which first-run notes a stored record has already spent.
+ *
+ * The absent case is the whole point. A record written before version 4 has no
+ * such field, and the player who wrote it has been playing for weeks -- the
+ * notes were never shown to him and must never start being shown to him now, so
+ * an absent list reads as *all of them spent*, not as none. `firstRun` is
+ * defaulted the same way, by requiring an explicit `true`.
+ *
+ * Anything that is not a note id is dropped and the order is canonical, so a
+ * hand-edited record cannot invent a note or resurrect one.
+ */
+function migrateNotes(value: unknown): readonly NoteId[] {
+  if (!Array.isArray(value)) return NOTE_ORDER;
+  const stored: readonly unknown[] = value;
+  return NOTE_ORDER.filter((id) => stored.includes(id));
 }
 
 function migrateHistory(value: unknown): readonly HistoryEntry[] {
@@ -226,6 +266,11 @@ export function migrate(parsed: unknown): Progress {
     // the mode did not exist, so it was off and had never been offered.
     gilding: parsed['gilding'] === true,
     gildOffered: parsed['gildOffered'] === true,
+    // A stored record is by definition a record someone has already played, so
+    // the opening screen is behind them whether or not it existed when they
+    // played it. Both fields therefore default to "already done".
+    firstRun: parsed['firstRun'] === true,
+    notesSeen: migrateNotes(parsed['notesSeen']),
   };
 }
 
@@ -485,6 +530,44 @@ export function shouldOfferGilding(progress: Progress, tuning: Tuning): boolean 
   const recent = progress.history.slice(-need);
   if (recent.length < need) return false;
   return recent.every((entry) => entry.wpm >= wpm);
+}
+
+// --- the first run ----------------------------------------------------------
+
+/**
+ * The opening screen has been read. It does not come back.
+ *
+ * Nothing else moves: the first run is a thing the game has said, not a thing
+ * the player has done, so it touches no statistic and no stage.
+ */
+export function withOpeningSeen(progress: Progress): Progress {
+  return progress.firstRun ? { ...progress, firstRun: false } : progress;
+}
+
+/**
+ * Remember which notes have been shown.
+ *
+ * Takes the coach's whole set rather than one id, because the coach is the one
+ * thing that knows what has been said and a record that could disagree with it
+ * would be a second copy of the same fact.
+ */
+export function withNotesSeen(progress: Progress, seen: readonly NoteId[]): Progress {
+  return { ...progress, notesSeen: NOTE_ORDER.filter((id) => seen.includes(id)) };
+}
+
+/**
+ * Arm the first run again, from the menu.
+ *
+ * For someone who clicked past the opening screen without reading it, and for
+ * someone handing the game to a friend for an evening. It re-arms the notes
+ * too: the friend has not met a dim letter either.
+ *
+ * It is the only way back in. Nothing in the game re-arms this by itself, for
+ * the same reason nothing turns gilding on by itself -- an explanation the
+ * player did not ask for twice is nagging, whatever it says.
+ */
+export function replayFirstRun(progress: Progress): Progress {
+  return { ...progress, firstRun: true, notesSeen: [] };
 }
 
 /** Remember that the offer has been made, whichever way it was answered. */

@@ -561,6 +561,74 @@ test('A FRAME RUNNING ON FALLBACK DATA SAYS SO, AND SAYS IT OVER EVERYTHING', ()
   );
 });
 
+// --- the first-run note ------------------------------------------------------
+
+test('A FIRST-RUN NOTE IS DRAWN UNDER THE RAIL AND MOVES NOTHING ON IT', () => {
+  // docs/design/10-first-run.md: the note sits under the rail, it never
+  // competes with the next-key hint for the eye, and above all it does not
+  // shift the picture -- a layout that jumped when the game spoke would pull
+  // the eye off the focal point, which is the one thing the rail exists to
+  // hold still.
+  const quiet = drawFrame(frame(0), createRail(0), TUNING);
+  const sentence = 'The bar means a space. Either thumb.';
+  const spoken = drawFrame(frame(0, { note: sentence }), createRail(0), TUNING);
+
+  const note = spoken.find(
+    (c): c is Extract<DrawCmd, { op: 'text' }> => c.op === 'text' && c.value === sentence,
+  );
+  assert.ok(note !== undefined, 'the note was not drawn');
+  assert.equal(quiet.some((c) => c.op === 'text' && c.value === sentence), false);
+
+  // Under the rail, and not in it: below the ribbon and below the lower focal
+  // rule, which is the bottom edge of the thing the player is reading.
+  const guideY = Math.max(
+    ...spoken
+      .filter((c): c is Extract<DrawCmd, { op: 'line' }> => c.op === 'line' && c.y1 === c.y2)
+      .map((c) => c.y1),
+  );
+  const glyphY = Math.max(
+    ...spoken
+      .filter((c): c is Extract<DrawCmd, { op: 'text' }> =>
+        c.op === 'text' && c.style.startsWith('rail-'))
+      .map((c) => c.y),
+  );
+  assert.ok(note.y > guideY, 'the note is drawn inside the focal guide');
+  assert.ok(note.y > glyphY, 'the note is drawn over the ribbon');
+
+  // Not gold: gold is how this game says *press this key next*, and a remark
+  // that borrowed it would compete with the one thing he has to act on.
+  const hint = spoken.find(
+    (c): c is Extract<DrawCmd, { op: 'text' }> => c.op === 'text' && c.style === 'hint-center',
+  );
+  assert.ok(hint !== undefined, 'the next-key hint went missing');
+  assert.notEqual(note.color, hint.color, 'the note is drawn in the hint\'s colour');
+  assert.notEqual(note.style, hint.style);
+  // And below the note rather than on top of it.
+  assert.ok(hint.y > note.y, 'the hint and the note are stacked the wrong way round');
+
+  // The rail itself is untouched: same caret, same focal guide, same glyphs.
+  assert.equal(caretX(spoken), caretX(quiet), 'the note moved the focal point');
+  const rail = (cmds: readonly DrawCmd[]): string =>
+    JSON.stringify(cmds.filter((c) => c.op === 'text' && c.style.startsWith('rail-')));
+  assert.equal(rail(spoken), rail(quiet), 'the note moved the ribbon');
+
+  // Absent and empty are the same frame; a note is not something a healthy
+  // frame carries an empty slot for.
+  assert.deepEqual(drawFrame(frame(0, { note: '' }), createRail(0), TUNING), quiet);
+});
+
+test('the fallback banner still paints over a first-run note', () => {
+  // The banner is last in the list, whatever else the frame is carrying.
+  const lines = ['NOT THE REAL DATA - using built-in fallbacks for: the text'];
+  const cmds = drawFrame(
+    frame(0, { note: 'The bar means a space. Either thumb.', notice: lines }),
+    createRail(0),
+    TUNING,
+  );
+  const last = cmds[cmds.length - 1];
+  assert.ok(last !== undefined && last.op === 'text' && lines.includes(last.value));
+});
+
 test('nothing about the combat loop moves without a keystroke', () => {
   // The property ADR 0004 exists to protect, asserted on the picture rather than
   // on the state: ten seconds of silence over a level with a standing monster

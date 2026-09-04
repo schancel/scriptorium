@@ -47,6 +47,9 @@ import {
 } from '../../core/entities.js';
 import { applyItem, createPlayer, dropsInkPot, type PlayerState } from '../../core/items.js';
 import {
+  createCoach, crossedGreyed, noteText, onOwedSpace, stepCoach, type CoachState,
+} from '../../core/onboarding.js';
+import {
   applyCloudStrike, applyCorrect, applyError, createDamage, isDead, maxHearts,
   restoreHeart,
 } from '../../core/damage.js';
@@ -75,10 +78,13 @@ import {
   evaluatePromotion,
   promote,
   recordSession,
+  replayFirstRun,
   setGilding,
   setStage,
   shouldOfferGilding,
   withGildOffered,
+  withNotesSeen,
+  withOpeningSeen,
   withPosition,
 } from '../../core/progress.js';
 import {
@@ -141,7 +147,7 @@ const FALLBACK_TUNING = {
     monster_burst_ms: 320, strike_reach: 36, stomp_ms: 460, ink_ms: 420,
     monster_drop_chance: 0.2, combo_drop_bonus: 0.2,
     gild_score_per_char: 2, gild_page_bonus: 50, gild_offer_wpm: 60, gild_offer_sessions: 3,
-    wpm_chars_per_word: 5, history_max_sessions: 500,
+    wpm_chars_per_word: 5, history_max_sessions: 500, first_run_note_keys: 8,
   },
 };
 
@@ -614,6 +620,7 @@ function frameFor(
   cloud: BlotCloud,
   tuning: Tuning,
   gildPoints: number,
+  note: string | null,
 ): FrameState {
   const candle = `${String(level.chunkIndex + 1)}/${String(level.chunks.length)}`;
   return {
@@ -633,6 +640,9 @@ function frameFor(
     scene: sceneFor(level, damage, cloud, tuning),
     // Drawn over everything, every frame, for as long as a fallback is in use.
     notice: noticeLines(),
+    // Absent on all but a handful of frames in a player's life -- and absent is
+    // not the same as empty here, so it is spread in rather than set to null.
+    ...(note === null ? {} : { note }),
   };
 }
 
@@ -753,6 +763,17 @@ async function boot(): Promise<void> {
   }
 
   let progress: Progress = loadProgress();
+
+  /**
+   * The first-run coach: which of the three notes have been spent, and which
+   * one -- if any -- is under the rail right now.
+   *
+   * Seeded from the record, so a note dismissed last week does not come back
+   * today, and written back the instant one is shown rather than when it is
+   * dismissed. It holds nothing the player could win or lose by; see
+   * `coachKeystroke` below.
+   */
+  let coach: CoachState = createCoach(progress.notesSeen);
 
   /**
    * Open a chunk. `at` overrides the bookmark -- used by "type it again" and by
@@ -1049,10 +1070,33 @@ async function boot(): Promise<void> {
     };
   }
 
+  /**
+   * The opening screen: the bumps on F and J, and one button.
+   *
+   * Typing is detached while it is up and handed back when it goes, which is
+   * the same treatment every other panel gets -- the player cannot type into
+   * the rail behind a dialogue he is reading.
+   *
+   * Reached from exactly two places: a record whose `firstRun` is still set,
+   * and the menu. Nothing in the game raises it by itself.
+   */
+  function showOpening(): void {
+    detachTyping();
+    overlay.showOpening(() => {
+      progress = withOpeningSeen(progress);
+      saveProgress(progress);
+      attachTyping();
+    });
+  }
+
   function openMenu(): void {
     bookmark();
-    detachTyping();
     overlay.openMenu(menuView());
+    // After opening it, not before. Walking off an undismissed opening screen
+    // into the menu counts that screen as read, and the way the overlay says so
+    // is by running its completion -- which hands the keyboard back. The menu
+    // needs it again, so this has the last word.
+    detachTyping();
   }
 
   const overlay: Overlay = createOverlay({
@@ -1137,13 +1181,36 @@ async function boot(): Promise<void> {
       // through would read as not having worked.
       if (!enabled) cloud = createCloud();
     },
+    /**
+     * The player asked to see the opening again.
+     *
+     * It re-arms the three notes as well as the screen, because the two most
+     * likely people to ask for this are someone who clicked past it without
+     * reading and someone who has just handed the keyboard to a friend -- and
+     * the friend has not met a dim letter either.
+     */
+    replayFirstRun: () => {
+      progress = replayFirstRun(progress);
+      coach = createCoach(progress.notesSeen);
+      saveProgress(progress);
+      showOpening();
+    },
     startOver: () => {
       clearProgress();
       progress = DEFAULT_PROGRESS;
+      coach = createCoach(progress.notesSeen);
       saveProgress(progress);
-      goTo(progress.position, (message) => {
-        overlay.showError(message);
-      });
+      // `resume` is false because the opening screen is going up over the top
+      // of this: a fresh record is a first run, and handing the keyboard back
+      // while that panel is open would send the next keystroke into the rail.
+      goTo(
+        progress.position,
+        (message) => {
+          overlay.showError(message);
+        },
+        false,
+      );
+      showOpening();
     },
     exportFile: () => {
       const url = URL.createObjectURL(exportProgress(progress));
@@ -1216,10 +1283,43 @@ async function boot(): Promise<void> {
     level.started = true;
     const before = level.typing;
     level.typing = applyKey(level.typing, event.value, tuning);
+    coachKeystroke(before);
     scoreKeystroke(before, level.typing);
     resolveDefeats(before.cursor);
     bookmark();
     if (atEnd(level.typing)) finishChunk();
+  }
+
+  /**
+   * One keystroke, as the first-run coach sees it.
+   *
+   * It reads the typing state and writes nothing back to it. Nothing in this
+   * function can advance the cursor, charge a key, change what the passage asks
+   * for or touch the score -- the only thing it can do is put one sentence
+   * under the rail and remember that it has been said. A first run and a second
+   * run through the same verse therefore produce identical statistics, which is
+   * asserted in `core/onboarding.test.ts` rather than merely intended.
+   *
+   * The record is saved the moment a note is *shown*. A player who reads it and
+   * closes the tab has been told; telling him again tomorrow would say the game
+   * had not noticed.
+   */
+  function coachKeystroke(before: TypingState): void {
+    const next = stepCoach(
+      coach,
+      {
+        greyed: crossedGreyed(level.glyphs, before.cursor, level.typing.cursor),
+        wrong: level.typing.blocked,
+        space: onOwedSpace(level.glyphs, level.typing.cursor),
+      },
+      level.typing.correct > before.correct,
+      tuning,
+    );
+    const spent = next.seen.length !== coach.seen.length;
+    coach = next;
+    if (!spent) return;
+    progress = withNotesSeen(progress, coach.seen);
+    saveProgress(progress);
   }
 
   /**
@@ -1363,7 +1463,10 @@ async function boot(): Promise<void> {
     webAudio.play(step.events);
   }
 
-  attachTyping();
+  // A record still owing its opening screen does not get the keyboard yet; the
+  // screen goes up below, once the canvas behind it is drawn and #boot is out
+  // of the way, and hands the keyboard over when it is dismissed.
+  if (!progress.firstRun) attachTyping();
   overlay.showAudio(audio.on);
   window.addEventListener('resize', () => {
     renderer.resize();
@@ -1401,7 +1504,11 @@ async function boot(): Promise<void> {
     const target = layoutRail(level.glyphs, level.typing.cursor, VIRTUAL_W, tuning).offset;
     level.rail = stepRail(level.rail, target, tuning);
     renderer.render(
-      drawFrame(frameFor(level, damage, cloud, tuning, gildPoints()), level.rail, tuning),
+      drawFrame(
+        frameFor(level, damage, cloud, tuning, gildPoints(), noteText(coach)),
+        level.rail,
+        tuning,
+      ),
     );
     stepAudio(live ? dtMs : 0);
     requestAnimationFrame(loop);
@@ -1409,6 +1516,10 @@ async function boot(): Promise<void> {
   requestAnimationFrame(loop);
 
   document.body.classList.add('ready');
+  // Last, and only now: #boot covers the whole window until `ready` lands, so
+  // an opening screen raised any earlier would be behind it. He should see the
+  // page he is about to type on underneath the one thing he is being told.
+  if (progress.firstRun) showOpening();
 }
 
 void boot().catch((error: unknown) => {

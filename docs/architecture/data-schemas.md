@@ -68,7 +68,7 @@ Browser local storage, exportable to a file. Written by
 `core/progress.ts`.
 
 ```json
-{ "version": 3, "stage": 3, "translation": "WEB", "route": "pilgrimage",
+{ "version": 4, "stage": 3, "translation": "WEB", "route": "pilgrimage",
   "layout": "ansi", "spaceThumb": "rt",
   "position": { "book": "Genesis", "chapter": 1, "unit": 7 },
   "completed": ["Genesis 1"],
@@ -77,7 +77,8 @@ Browser local storage, exportable to a file. Written by
   "recent": { "a": [ { "ok": true, "ms": 312 }, { "ok": false, "ms": null } ] },
   "history": [ { "date": "2026-09-03", "stage": 3, "ref": "Genesis 1:1-3",
                  "wpm": 14.2, "accuracy": 0.97, "promoted": false } ],
-  "gilding": false, "gildOffered": false }
+  "gilding": false, "gildOffered": false,
+  "firstRun": false, "notesSeen": ["greyed", "wrong", "space"] }
 ```
 
 `position` is the bookmark: the translation is `translation`, and `unit` is the
@@ -101,6 +102,16 @@ itself, and an offer that returns after every good session has stopped being an 
 Neither field touches the gate: see
 [ADR 0008](../decisions/0008-gilding-permissive-input.md#why-gilding-must-not-open-the-gate).
 
+`firstRun` and `notesSeen` are [the first run](../design/10-first-run.md): the opening
+screen about the bumps on `F` and `J`, and the three one-sentence notes that fire the
+first time a dim letter is skipped, a wrong key is pressed and a space is reached.
+`firstRun` is true only in a brand new record and false the moment the screen is
+dismissed; `notesSeen` names the notes already spent, and a note is added to it when it
+is *shown* rather than when it is dismissed, so a closed tab cannot cost the player the
+same sentence twice. Both are stored rather than held for the session because a tip that
+returns after you have understood it is an insult. The menu can set them back, and it is
+the only thing that ever does.
+
 `promoted` marks the session that opened the gate. The history view needs it: the
 sessions *after* a promotion are slower, because a new stage lights up more of the page,
 and an unexplained dip in the curve is the single most likely reason a beginner concludes
@@ -115,6 +126,7 @@ not optional.
 | 1 | initial: stage, translation, route, completed, keyStats, history | — |
 | 2 | added `position`, `recent`, `spaceThumb`, and `promoted` on a history entry | every version 1 field is carried across unchanged; the new ones default (position to Genesis 1:1, `recent` to empty, `spaceThumb` to `rt`, `promoted` to false). Nothing is dropped. |
 | 3 | added `gilding` and `gildOffered` | every version 2 field is carried across unchanged — stage, position, `completed`, `keyStats`, `recent` and the whole history. Both new fields default to `false`, which is exactly what a version 2 record meant: the mode did not exist, so it was off and had never been offered. Nothing is dropped. |
+| 4 | added `firstRun` and `notesSeen` | every version 3 field is carried across unchanged — stage, translation, route, layout, `spaceThumb`, position, `completed`, `keyStats`, `recent`, the whole history, `gilding` and `gildOffered`. The two new fields default to *already done*: `firstRun` to false and `notesSeen` to every note. That is the only correct default, because a stored record is by definition one somebody has already been playing, and starting to explain the game to a player three weeks in would be worse than never having explained it at all. Nothing is dropped. |
 
 `core/progress.ts` defaults every field individually rather than trusting the stored
 blob, so a partially corrupt record loses the corrupt field and keeps the history.

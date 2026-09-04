@@ -79,5 +79,43 @@ dismissed; each note carries its own seen-flag. They must never reappear — a t
 returns after you have understood it is an insult. Both survive a reload, so this needs a
 record migration rather than session state.
 
+That is schema **version 4**: `firstRun` and `notesSeen`, and a migration that carries
+every version 3 field across untouched. Both new fields default to *already done* for a
+stored record, which is the only correct default — a record that exists is a record
+somebody has been playing, and starting to explain the game to a player three weeks in
+would be worse than never having explained it. See
+[data schemas](../architecture/data-schemas.md#progress).
+
 There must also be a way to see it again on purpose, from the menu, for someone who skipped
-it or lends the game to a friend.
+it or lends the game to a friend. It re-arms the notes as well as the screen: the friend
+has not met a dim letter either.
+
+## How it is wired
+
+`core/onboarding.ts` holds the wording and one function. `stepCoach` takes an *occasion* —
+three booleans read off the rail after a keystroke, saying whether the cursor was carried
+over a dim character, whether the key was wrong, and whether the cursor is now resting on
+a space that is still owed — and returns which note, if any, is on screen.
+
+Three properties fall out of that shape and all three are asserted rather than intended:
+
+- **The coach cannot touch the game.** It is handed no cursor and no key statistics and
+  returns none, so a first run and a second run through the same verse produce identical
+  numbers. A note is a sentence and nothing else.
+- **A note is spent when it is shown**, not when it is dismissed, and the platform writes
+  that to the record immediately. Reading a note and closing the tab counts as having
+  been told.
+- **Only one note is ever up.** The others are not queued behind it; they fire the next
+  time their own occasion comes round, which for all three is within a line or two.
+  Queueing them would be the tutorial wall arriving late.
+
+Dismissal is `first_run_note_keys` correct keystrokes — [tuning](07-tuning.md). A count
+of keystrokes rather than a duration, because "dismissed by continuing to type" is the
+rule: a clock would take the sentence away from the one player who stopped to read it.
+
+The note is drawn on the canvas, in a strip immediately under the rail, in the band's own
+colour and the interface palette's ordinary text. Never gold — gold is how the game says
+*press this key next*, and a remark that borrowed it would compete with the one thing on
+screen the player has to act on. The strip's space is reserved in the layout whether a
+note is present or not, so nothing jumps when the game speaks; a layout that moved would
+pull the eye off the focal point, which is the one thing the rail exists to hold still.

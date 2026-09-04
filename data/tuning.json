@@ -43,7 +43,8 @@
     "master_volume": 0.35,
     "audio_default_on": 0,
     "wpm_chars_per_word": 5,
-    "history_max_sessions": 500
+    "history_max_sessions": 500,
+    "first_run_note_keys": 8
   },
   "meta": {
     "grey_snap_ms": {
@@ -221,6 +222,10 @@
     "history_max_sessions": {
       "unit": "sessions",
       "description": "How much practice history is retained locally."
+    },
+    "first_run_note_keys": {
+      "unit": "keystrokes",
+      "description": "Correct keystrokes a [first-run note](10-first-run.md#2-then-straight-into-typing-with-three-notes-that-fire-once-each) stays under the rail before it leaves. It is a count of keystrokes rather than a duration because the note is dismissed by *continuing to type*: a clock would take the sentence away from the one player who stopped to read it, and at a beginner's pace eight keystrokes is roughly ten seconds."
     }
   },
   "_generated_from": "docs/design/07-tuning.md"

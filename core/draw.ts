@@ -126,9 +126,9 @@ const M = {
   guideBotY: 170,    // tuning-exempt: band composition
   caretTop: 132,     // tuning-exempt: band composition
   caretBot: 166,     // tuning-exempt: band composition
-  hintY: 192,        // tuning-exempt: band composition
+  hintY: 200,        // tuning-exempt: band composition
   kbUnit: 26,        // tuning-exempt: band composition
-  kbTop: 202,        // tuning-exempt: band composition
+  kbTop: 210,        // tuning-exempt: band composition
   keyPad: 2,
   spaceMarkY: 157,   // tuning-exempt: band composition -- one px under the rail baseline
   spaceMarkH: 2,
@@ -177,6 +177,25 @@ const SCENE = {
   layerAlphaSpan: 0.55, // tuning-exempt: art -- and how much nearer depth closes it up
   dropRise: 12,         // tuning-exempt: art -- how far a dropped ink pot floats up
   dropFloor: 0.35,      // tuning-exempt: art -- the pot is never fainter than this
+} as const;
+
+/**
+ * The coaching strip: one sentence, immediately under the rail.
+ *
+ * Its top is *derived* from the rail band rather than restated, so the strip
+ * cannot drift away from the thing it is explaining. It carries the band's own
+ * colour and a hairline above it, which is what makes it read as an aside
+ * attached to the text rather than as a second HUD -- and the rest of the
+ * picture does not move when it appears, because the hint line and the keyboard
+ * are placed below it whether it is there or not. A layout that jumped when the
+ * game spoke would pull the eye off the focal point, which is the one thing the
+ * rail exists to hold still.
+ *
+ * It is used three times in a player's life. See docs/design/10-first-run.md.
+ */
+const COACH = {
+  top: M.bandTop + M.bandH,
+  height: 18,        // tuning-exempt: band composition
 } as const;
 
 /**
@@ -276,6 +295,17 @@ export interface FrameState {
    * running on one it says so on the screen and cannot stop saying it.
    */
   readonly notice?: readonly string[];
+  /**
+   * One sentence of coaching, drawn in its own strip under the rail. Absent or
+   * empty draws nothing, which is what every frame after the first few minutes
+   * of a player's life looks like.
+   *
+   * It reaches the display list as a *string* rather than as a note id, because
+   * choosing which of the three sentences is owed is a rule about what the
+   * player has already been told, and that rule lives in `core/onboarding.ts`
+   * with the wording it decides between. The frame only draws it.
+   */
+  readonly note?: string;
 }
 
 /**
@@ -735,6 +765,8 @@ export function drawFrame(state: FrameState, rail: RailState, tuning: Tuning): D
   if (state.scene !== undefined) pushScene(cmds, state.scene, tuning);
   pushHud(cmds, state, tuning);
   pushRail(cmds, state, rail, tuning);
+  const note = state.note;
+  if (note !== undefined && note.length > 0) pushNote(cmds, note);
   pushKeyboard(cmds, state, tuning);
   if (state.mode === 'report') pushReport(cmds, state);
   // Last, so the report card cannot bury it. Running on fallback data must be
@@ -995,6 +1027,29 @@ function highlightedKeys(
     out.add(boardKeyFor(stroke.key, stroke.finger));
   }
   return out;
+}
+
+/**
+ * A first-run note.
+ *
+ * Quiet on purpose: the band's own colour, the interface palette's ordinary
+ * text, and a hairline to attach it to the rail. Nothing here is gold -- gold
+ * is what the game uses to say *press this key next*, and a sentence that
+ * borrowed it would compete with the one thing on screen the player has to act
+ * on. Nothing here blinks, either. It is a remark, not an alarm.
+ */
+function pushNote(cmds: DrawCmd[], note: string): void {
+  cmds.push({
+    op: 'rect', x: 0, y: COACH.top, w: M.vw, h: COACH.height, color: pal('band'),
+  });
+  cmds.push({
+    op: 'line', x1: 0, y1: COACH.top, x2: M.vw, y2: COACH.top,
+    color: pal('rule'), width: 1,
+  });
+  cmds.push({
+    op: 'text', value: note, x: M.vw / 2, y: COACH.top + COACH.height / 2,
+    style: 'note-center', color: pal('hud'),
+  });
 }
 
 /** The keys of the next character, named in striking order: shift first. */
