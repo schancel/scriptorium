@@ -1,5 +1,6 @@
 /**
- * The two panels that live outside the canvas: the promotion notice and the menu.
+ * The chrome outside the canvas: the promotion notice, the menu, and the two
+ * always-visible controls beside them.
  *
  * Everything here is DOM. It holds no rule -- what a promotion *is* comes from
  * `core/progress.ts`, and what a passage *is* comes from `core/corpus.ts`. This
@@ -25,6 +26,15 @@ export interface OverlayHandlers {
   startOver(): void;
   exportFile(): void;
   importFile(file: File): void;
+  /**
+   * The player asked for sound on or off.
+   *
+   * Called from inside the click, and it must stay that way: a browser will not
+   * let an `AudioContext` start outside a user gesture, and one constructed
+   * anywhere else sits suspended while the first notes are swallowed -- which
+   * reads as "the sound is broken" rather than "the sound is blocked".
+   */
+  toggleAudio(): void;
 }
 
 /** The menu is a view of the record; the caller supplies the record's summary. */
@@ -44,6 +54,8 @@ export interface Overlay {
   openMenu(view: MenuView): void;
   showPromotion(promotion: Promotion, onDismiss: () => void): void;
   showError(message: string): void;
+  /** Say out loud whether the sound is on. The control is the only indicator. */
+  showAudio(on: boolean): void;
   close(): void;
 }
 
@@ -80,6 +92,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const promotionPanel = need('panel-promotion', HTMLDivElement);
 
   const openButton = need('menu-open', HTMLButtonElement);
+  const audioButton = need('audio-toggle', HTMLButtonElement);
   const where = need('menu-where', HTMLParagraphElement);
   const stageLine = need('menu-stage', HTMLParagraphElement);
   const editionSelect = need('menu-edition', HTMLSelectElement);
@@ -126,6 +139,18 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
 
   function showError(message: string): void {
     errorLine.textContent = message;
+  }
+
+  /**
+   * The mute control's label.
+   *
+   * It states the *current* state rather than the action, because a beginner
+   * reading "mute" on a silent game cannot tell whether he is about to turn the
+   * sound on or has already turned it off.
+   */
+  function showAudio(on: boolean): void {
+    audioButton.textContent = on ? '\u266a sound: on' : '\u266a sound: off';
+    audioButton.setAttribute('aria-pressed', on ? 'true' : 'false');
   }
 
   function renderHistory(history: readonly HistoryEntry[]): void {
@@ -224,6 +249,9 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   openButton.addEventListener('click', () => {
     handlers.requestMenu();
   });
+  audioButton.addEventListener('click', () => {
+    handlers.toggleAudio();
+  });
   promotionOk.addEventListener('click', dismiss);
   resumeButton.addEventListener('click', () => {
     close();
@@ -286,5 +314,5 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     }
   });
 
-  return { isOpen, openMenu, showPromotion, showError, close };
+  return { isOpen, openMenu, showPromotion, showError, showAudio, close };
 }

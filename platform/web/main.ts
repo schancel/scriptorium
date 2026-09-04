@@ -18,6 +18,15 @@
  *
  * **Candles.** A chapter is cut into `candle_interval` chunks, so a sitting is
  * a few verses rather than 20+ minutes and quitting costs a verse.
+ *
+ * ## The world is driven by words, never by a clock
+ *
+ * The camera advances `WORLD_STRIDE` virtual pixels per word the player
+ * completes, and everything that appears to move -- parallax, monsters sliding
+ * past, the candle coming up -- is a function of that one number. Nothing here
+ * advances the world on a timer, and nothing may be added that does. The only
+ * pressure in the game is the blot-cloud, which watches silence rather than
+ * speed. See docs/decisions/0004-idle-threat-not-speed-timer.md.
  */
 
 import { createRenderer, type Renderer } from './canvas_renderer.js';
@@ -28,7 +37,23 @@ import { keySetFor, loadStages, stageAt } from '../../core/curriculum.js';
 import { classify } from '../../core/illumination.js';
 import { applyKey, atEnd, createTypingState, score, tick } from '../../core/typing.js';
 import { createRail, layoutRail, stepRail } from '../../core/rail.js';
-import { VIRTUAL_W, drawFrame, type FrameState } from '../../core/draw.js';
+import {
+  VIRTUAL_W, drawFrame, sceneLayout, type FrameState, type SceneCandle, type SceneState,
+} from '../../core/draw.js';
+import { SPRITE_SIZE } from '../../core/sprites.js';
+import {
+  createCloud, createEntity, stepCloud, stepEntities, type Entity,
+} from '../../core/entities.js';
+import {
+  applyCloudStrike, applyCorrect, applyError, createDamage, isDead, maxHearts,
+} from '../../core/damage.js';
+import { draws, seedFrom } from '../../core/rng.js';
+import { DEFAULT_THEME } from '../../core/worlds.js';
+import {
+  createAudio, setAudioOn, stepSound, type AudioState, type Cue, type Songbook,
+} from '../../core/sound.js';
+import { createLibrary, loadThemeTunes, loadTune, type Tune } from '../../core/tunes.js';
+import { createWebAudio, type WebAudio } from './web_audio.js';
 import {
   type Book,
   type Chunk,
@@ -58,7 +83,8 @@ import {
   today,
 } from './local_storage.js';
 import type {
-  Glyph, Key, KeyboardLayout, RailState, Stage, Thumb, Tuning, TypingState,
+  BlotCloud, DamageState, Glyph, Key, KeyboardLayout, RailState, Stage, Thumb,
+  Tuning, TypingState,
 } from '../../core/types.js';
 
 // --- fallbacks --------------------------------------------------------------
@@ -158,6 +184,162 @@ async function fetchBook(translation: string, book: string): Promise<Book> {
   throw new Error(`no text for ${book} (${translation}) -- run \`make fetch\``);
 }
 
+// --- the world --------------------------------------------------------------
+
+/**
+ * Virtual pixels the world travels for one completed word.
+ *
+ * This is the whole movement model. A word finished is a step taken; nothing
+ * else moves the scribe, and in particular no amount of elapsed time does.
+ */
+const WORLD_STRIDE = 24;
+
+/**
+ * How much of the remaining distance the camera closes each frame.
+ *
+ * Easing, not a clock: the target is a pure function of how many words are
+ * behind the cursor, and this only decides how abruptly the world catches up
+ * with it. Set it to 1 and the picture jumps a stride per word; it would still
+ * be the same game.
+ */
+const CAMERA_LERP = 0.18;
+
+/** Roughly how far apart the idling monsters stand, in virtual px. */
+const MONSTER_SPACING = 220;
+
+/** How high above the ground a bat hangs. */
+const BAT_LIFT = 34;
+
+/** Spread of the animation-clock stagger, so a row of bats does not beat as one. */
+const PHASE_SPREAD_MS = 1200;
+
+/** Draws per monster: position jitter, kind, phase. */
+const DRAWS_PER_MONSTER = 3;
+
+/**
+ * How far short of a candle the player counts as having reached it.
+ *
+ * One stride, so the checkpoint at the end of a part lights on the last word
+ * rather than under the report card that replaces the screen a moment later.
+ */
+const CANDLE_REACH = WORLD_STRIDE;
+
+/**
+ * Where the ribbon breaks into words.
+ *
+ * A space is a word boundary whether the stage has taught it or not: the
+ * scribe's stride is about the text, not about the curriculum.
+ */
+function wordBreaks(glyphs: readonly Glyph[]): number[] {
+  const out: number[] = [];
+  glyphs.forEach((glyph, index) => {
+    if (glyph.ch === ' ' || glyph.ch === '\n') out.push(index);
+  });
+  return out;
+}
+
+/**
+ * Progress through the ribbon, in words, including the fraction of the word
+ * currently under the cursor.
+ *
+ * The fraction is what makes the world move while a word is being typed rather
+ * than lurching a whole stride when it ends. It is still word-driven -- a word
+ * is worth exactly one stride however many letters it has.
+ */
+function wordProgress(breaks: readonly number[], cursor: number, count: number): number {
+  let done = 0;
+  let start = 0;
+  let end = count;
+  for (const at of breaks) {
+    if (at < cursor) {
+      done += 1;
+      start = at + 1;
+    } else {
+      end = at;
+      break;
+    }
+  }
+  const span = end - start;
+  const fraction = span > 0 ? Math.min(1, Math.max(0, (cursor - start) / span)) : 0;
+  return done + fraction;
+}
+
+/**
+ * The idling monsters standing in one stretch of world.
+ *
+ * Their positions come from the seeded generator in `core/rng.ts`, keyed on the
+ * passage, so the same part is decorated the same way on every reload without a
+ * byte being stored -- and never from `Math.random`, which would make a replay
+ * of a recorded run a different level.
+ *
+ * They face left, toward the oncoming scribe, and they never move. The scribe
+ * arrives at them because he typed; they never arrive at him.
+ */
+function placeMonsters(seed: number, span: number, groundY: number): Entity[] {
+  const count = Math.max(1, Math.round(span / MONSTER_SPACING));
+  const rolls = draws(seed, count * DRAWS_PER_MONSTER);
+  const out: Entity[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const jitter = rolls[i * DRAWS_PER_MONSTER] ?? 0;
+    const kind = (rolls[i * DRAWS_PER_MONSTER + 1] ?? 0) < 0.5 ? 'bat' : 'skeleton';
+    const phase = rolls[i * DRAWS_PER_MONSTER + 2] ?? 0;
+    const x = Math.round((i + 0.4 + jitter * 0.4) * MONSTER_SPACING);
+    const y = groundY - SPRITE_SIZE - (kind === 'bat' ? BAT_LIFT : 0);
+    out.push(createEntity(`${kind}-${String(i)}`, kind, x, y, phase * PHASE_SPREAD_MS, -1));
+  }
+  return out;
+}
+
+// --- which world a passage is set in ----------------------------------------
+
+/**
+ * One row of `data/scenes/bible.json`: a chapter range and the theme it wears.
+ *
+ * `core/scenes.ts` is specced in docs/design/05-scenery-warps.md and not yet
+ * written; when it lands, this reader and `themeFor` move into it wholesale and
+ * this file goes back to asking one question. Until then the scenery is still
+ * *authored* rather than inferred, which is the part of that doc that matters:
+ * a passage with no row gets the abbey, and nothing here guesses a theme from
+ * the text.
+ */
+interface SceneRow {
+  readonly book: string;
+  readonly first: number;
+  readonly last: number;
+  readonly theme: string;
+}
+
+const RANGE = /^(.+?)\s+(\d+)(?:-(\d+))?$/;
+
+function loadScenes(parsed: unknown): SceneRow[] {
+  if (typeof parsed !== 'object' || parsed === null) return [];
+  const rows: unknown = (parsed as { scenes?: unknown }).scenes;
+  if (!Array.isArray(rows)) return [];
+  const out: SceneRow[] = [];
+  for (const raw of rows as readonly unknown[]) {
+    if (typeof raw !== 'object' || raw === null) continue;
+    const row = raw as { range?: unknown; theme?: unknown };
+    if (typeof row.range !== 'string' || typeof row.theme !== 'string') continue;
+    const match = RANGE.exec(row.range.trim());
+    if (match === null) continue;
+    const book = canonicalBook(match[1] ?? '');
+    const first = Number(match[2]);
+    const last = Number(match[3] ?? match[2]);
+    if (book === null || !Number.isFinite(first) || !Number.isFinite(last)) continue;
+    out.push({ book, first, last, theme: row.theme });
+  }
+  return out;
+}
+
+/** The documented fallback: any passage with no row is the abbey. */
+function themeFor(scenes: readonly SceneRow[], book: string, chapter: number): string {
+  const canonical = canonicalBook(book) ?? book;
+  for (const row of scenes) {
+    if (row.book === canonical && chapter >= row.first && chapter <= row.last) return row.theme;
+  }
+  return DEFAULT_THEME;
+}
+
 // --- the ribbon -------------------------------------------------------------
 
 /**
@@ -222,6 +404,23 @@ interface Level {
   started: boolean;
   /** The verse under the cursor; what gets written to the bookmark. */
   bookmark: number;
+
+  // --- the world this part is set in ---------------------------------------
+  /** A theme id in `core/worlds.ts`, from the authored scene map. */
+  readonly theme: string;
+  /** Word-boundary indices into `glyphs`, so progress can be counted in strides. */
+  readonly breaks: readonly number[];
+  /** Virtual px from the candle at the start of this part to the one at its end. */
+  readonly span: number;
+  /** The two checkpoints bounding this part, in world x. */
+  readonly candleXs: readonly number[];
+  /** Standing scenery. Placed once, and never moved. */
+  monsters: Entity[];
+  scribe: Entity;
+  /** Where the world has got to. A pure function of words completed, eased. */
+  cameraX: number;
+  /** Accumulated animation time, for art that flickers rather than moves. */
+  animMs: number;
 }
 
 function verseUnder(level: Level): number {
@@ -229,7 +428,44 @@ function verseUnder(level: Level): number {
   return level.verseAt[Math.max(0, index)] ?? level.chunk.first;
 }
 
-function frameFor(level: Level, tuning: Tuning): FrameState {
+/** Where the camera wants to be: one stride per word behind the cursor. */
+function cameraTarget(level: Level): number {
+  return wordProgress(level.breaks, level.typing.cursor, level.glyphs.length) * WORLD_STRIDE;
+}
+
+function candlesOf(level: Level): SceneCandle[] {
+  return level.candleXs.map((x) => ({ x, lit: level.cameraX >= x - CANDLE_REACH }));
+}
+
+function sceneFor(
+  level: Level,
+  damage: DamageState,
+  cloud: BlotCloud,
+  tuning: Tuning,
+): SceneState {
+  return {
+    theme: level.theme,
+    cameraX: level.cameraX,
+    // The scribe walks exactly while the world is still moving under him, which
+    // is exactly while there are words behind the cursor he has not been carried
+    // past yet. Stop typing and he stops walking; there is no other input.
+    walking: Math.abs(cameraTarget(level) - level.cameraX) >= 1,
+    animMs: level.animMs,
+    scribe: level.scribe,
+    entities: level.monsters,
+    cloud,
+    damage,
+    heartsMax: maxHearts(tuning),
+    candles: candlesOf(level),
+  };
+}
+
+function frameFor(
+  level: Level,
+  damage: DamageState,
+  cloud: BlotCloud,
+  tuning: Tuning,
+): FrameState {
   const candle = `${String(level.chunkIndex + 1)}/${String(level.chunks.length)}`;
   return {
     mode: level.reporting ? 'report' : 'level',
@@ -243,10 +479,42 @@ function frameFor(level: Level, tuning: Tuning): FrameState {
     layout: level.layout,
     spaceThumb: level.spaceThumb,
     keySet: level.keySet,
+    scene: sceneFor(level, damage, cloud, tuning),
   };
 }
 
 // --- boot -------------------------------------------------------------------
+
+/**
+ * The score: every tune a theme asks for, plus the theme -> tune column.
+ *
+ * A tune that will not load leaves its theme silent rather than stopping the
+ * game -- `tuneForTheme` already returns null for a theme with no tune, and a
+ * missing hymn is not a reason a beginner cannot type today. A malformed one
+ * still throws inside `loadTune`, which is where a wrong note is meant to be
+ * found; it is caught here per tune, so one bad file costs one theme.
+ */
+async function loadSongbook(): Promise<Songbook> {
+  const parsed = await fetchJsonOr('data/themes.json', { themes: [] });
+  let themes;
+  try {
+    themes = loadThemeTunes(parsed);
+  } catch {
+    return { library: createLibrary([]), themes: new Map<string, string>() };
+  }
+  const ids = [...new Set(themes.values())];
+  const loaded = await Promise.all(
+    ids.map(async (id): Promise<Tune | null> => {
+      try {
+        return loadTune(await fetchJson(`data/tunes/${id}.json`));
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const tunes = loaded.filter((tune): tune is Tune => tune !== null);
+  return { library: createLibrary(tunes), themes };
+}
 
 const MAX_FRAME_MS = 100;
 
@@ -265,6 +533,21 @@ async function boot(): Promise<void> {
     // where a beginner starts anyway. Never guess a *larger* set than that --
     // the illumination invariant is the one thing that must not be approximated.
   }
+
+  // The authored scene map. Unreachable, it is an empty list and every passage
+  // wears the abbey -- which is the documented fallback, not a degraded mode.
+  const scenes: SceneRow[] = loadScenes(await fetchJsonOr('data/scenes/bible.json', null));
+
+  const songbook = await loadSongbook();
+  const webAudio: WebAudio = createWebAudio(tuning);
+  let audio: AudioState = createAudio(tuning);
+  /** Cues raised since the last frame of sound. Drained by the loop. */
+  let cues: Cue[] = [];
+
+  // Hearts and the meter live above the level, because they are the player's and
+  // not the passage's: finishing a part must not quietly hand back a heart.
+  let damage: DamageState = createDamage(tuning);
+  let cloud: BlotCloud = createCloud();
 
   function keySetAt(stage: number): ReadonlySet<Key> {
     return stages.length === 0 ? new Set(FALLBACK_KEY_SET) : keySetFor(stages, stage);
@@ -309,6 +592,13 @@ async function boot(): Promise<void> {
     const base = createTypingState(glyphs);
     const typing = resumeAt <= base.cursor ? base : { ...base, cursor: resumeAt };
 
+    const theme = themeFor(scenes, book.title, chapter);
+    const layout = sceneLayout(theme, tuning);
+    const breaks = wordBreaks(glyphs);
+    // One stride per word, and the part's far candle stands at the end of them.
+    const span = (breaks.length + 1) * WORLD_STRIDE;
+    const seed = seedFrom(`${book.title} ${String(chapter)} ${String(chunkIndex)}`);
+
     return {
       book,
       bookTitle: book.title,
@@ -327,6 +617,18 @@ async function boot(): Promise<void> {
       reporting: false,
       started: false,
       bookmark: verseAt[typing.cursor] ?? chunk.first,
+      theme,
+      breaks,
+      span,
+      // The candle behind him is the checkpoint he is standing on; the one ahead
+      // is the next, and it lights as he reaches it.
+      candleXs: [0, span],
+      monsters: placeMonsters(seed, span, layout.groundY),
+      scribe: createEntity('scribe', 'scribe', layout.scribeX, layout.groundY - SPRITE_SIZE),
+      // The camera opens where the cursor already is, so resuming mid-part does
+      // not scroll the whole passage past the player before it settles.
+      cameraX: wordProgress(breaks, typing.cursor, glyphs.length) * WORLD_STRIDE,
+      animMs: 0,
     };
   }
 
@@ -540,6 +842,20 @@ async function boot(): Promise<void> {
       link.click();
       URL.revokeObjectURL(url);
     },
+    toggleAudio: () => {
+      const on = !audio.on;
+      // Synchronous, inside the click: `start()` constructs the AudioContext
+      // before this handler returns, which is the only moment a browser will
+      // allow it. The promise it hands back is only the resume.
+      if (on) {
+        void webAudio.start().catch(() => {
+          /* The browser refused the context. The label still says what we asked
+             for, and the next gesture will try again. */
+        });
+      }
+      audio = setAudioOn(audio, on);
+      overlay.showAudio(on);
+    },
     importFile: (file) => {
       void importProgress(file)
         .then((imported) => {
@@ -579,12 +895,113 @@ async function boot(): Promise<void> {
       return;
     }
     level.started = true;
+    const before = level.typing;
     level.typing = applyKey(level.typing, event.value, tuning);
+    scoreKeystroke(before, level.typing);
     bookmark();
     if (atEnd(level.typing)) finishChunk();
   }
 
+  /**
+   * What one keystroke did to the page.
+   *
+   * A correct key wipes `smudge_decay_per_key` off the meter and extends the
+   * combo; a wrong one adds this stage's smudge and breaks it. Only a *full*
+   * meter costs a heart, which is the whole of
+   * docs/decisions/0005-smudge-meter-over-per-typo-damage.md and the reason a
+   * beginner erring on one key in ten is not killed four times a verse.
+   */
+  function scoreKeystroke(before: TypingState, after: TypingState): void {
+    if (after.correct > before.correct) {
+      damage = applyCorrect(damage, tuning);
+      correctThisFrame = true;
+      return;
+    }
+    if (after.keystrokes === before.keystrokes) return;
+    const result = applyError(damage, level.stage, tuning);
+    damage = result.damage;
+    cues.push('error');
+    if (result.heartsLost > 0) cues.push('smudge_full', 'heart_lost');
+    if (isDead(damage)) die();
+  }
+
+  /**
+   * Out of hearts.
+   *
+   * Back to the candle at the start of this part with a full set, exactly as
+   * `damage.respawn` specifies: what death costs is the verse or two since the
+   * checkpoint, and hearts are restored rather than carried, because respawning
+   * on one heart into the passage that took the other two is how a checkpoint
+   * becomes a wall.
+   */
+  function die(): void {
+    damage = createDamage(tuning, maxHearts(tuning));
+    cloud = createCloud();
+    goTo({ book: level.bookTitle, chapter: level.chapter, unit: level.chunk.first }, () => {
+      /* the part we are standing in is definitionally reachable */
+    });
+  }
+
+  // --- the only threat in the game -----------------------------------------
+
+  /** Set by `scoreKeystroke`, read and cleared by `stepThreat`. */
+  let correctThisFrame = false;
+
+  /**
+   * Advance the blot-cloud.
+   *
+   * It watches one number: how long since the last *correct* keystroke. A wrong
+   * key does not drive it back -- mashing while hunting for a key is the
+   * behaviour it exists to punish. There is no other time-based failure anywhere
+   * in this program, and none may be added.
+   * See docs/decisions/0004-idle-threat-not-speed-timer.md.
+   */
+  function stepThreat(dtMs: number): void {
+    const wasStriking = cloud.strikes;
+    const telegraphing = cloud.phase !== 'absent';
+    const step = stepCloud(
+      cloud,
+      { stage: level.stage, correctKey: correctThisFrame, enabled: true },
+      dtMs,
+      tuning,
+    );
+    correctThisFrame = false;
+    cloud = step.cloud;
+    if (!telegraphing && cloud.phase === 'approaching') cues.push('cloud');
+    if (step.smudge > 0) {
+      const hit = applyCloudStrike(damage, step.smudge, tuning);
+      damage = hit.damage;
+      if (cloud.strikes > wasStriking) cues.push('cloud');
+      if (hit.heartsLost > 0) cues.push('smudge_full', 'heart_lost');
+      if (isDead(damage)) die();
+    }
+  }
+
+  // --- sound ---------------------------------------------------------------
+
+  /**
+   * One frame of sound.
+   *
+   * `stepSound` is asked on every frame whether the sound is on or not, because
+   * it is the thing that holds the needle: skipping it while muted would leave
+   * the sequencer at whatever tick it was stopped at and restart the hymn
+   * mid-phrase. Muted, it simply returns no events.
+   */
+  function stepAudio(dtMs: number): void {
+    const step = stepSound(
+      audio,
+      songbook,
+      { theme: level.theme, combo: damage.combo, cues },
+      dtMs,
+      tuning,
+    );
+    audio = step.state;
+    cues = [];
+    webAudio.play(step.events);
+  }
+
   attachTyping();
+  overlay.showAudio(audio.on);
   window.addEventListener('resize', () => {
     renderer.resize();
   });
@@ -594,12 +1011,27 @@ async function boot(): Promise<void> {
     const dtMs = Math.min(MAX_FRAME_MS, now - previous);
     previous = now;
 
-    if (!level.reporting && level.started && !overlay.isOpen()) {
+    // Nothing in the world runs while a panel is up or the report card is
+    // showing. In particular the cloud does not: opening the menu must never
+    // cost the player a heart.
+    const live = !level.reporting && level.started && !overlay.isOpen();
+    if (live) {
       level.typing = tick(level.typing, dtMs);
+      level.animMs += dtMs;
+      level.monsters = stepEntities(level.monsters, dtMs);
+      level.scribe = stepEntities([level.scribe], dtMs)[0] ?? level.scribe;
+      stepThreat(dtMs);
+      // Word-driven, and only word-driven: the target is a function of how many
+      // words are behind the cursor, and this only eases toward it.
+      const camera = cameraTarget(level);
+      const delta = camera - level.cameraX;
+      level.cameraX = Math.abs(delta) < 1 ? camera : level.cameraX + delta * CAMERA_LERP;
     }
+
     const target = layoutRail(level.glyphs, level.typing.cursor, VIRTUAL_W, tuning).offset;
     level.rail = stepRail(level.rail, target, tuning);
-    renderer.render(drawFrame(frameFor(level, tuning), level.rail, tuning));
+    renderer.render(drawFrame(frameFor(level, damage, cloud, tuning), level.rail, tuning));
+    stepAudio(live ? dtMs : 0);
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);

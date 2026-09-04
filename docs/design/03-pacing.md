@@ -87,6 +87,18 @@ visibly lighting as the player passes it. Then the metaphor explains itself and 
 glossary. Introducing thematic vocabulary before the thing it names is on screen is how
 a game ends up with a private language its player does not speak.
 
+**That condition is now met, and the copy still says "part."** `core/draw.ts` draws a
+candle at each end of the part the player is in: the one behind him is lit — it is the
+checkpoint he is standing on — and the one ahead stands dim until he reaches it, when it
+lights. So the metaphor is on screen and could carry the word.
+
+Whether it *should* is the owner's call, not the implementer's, because the evidence that
+started this was a real player and only he can retire it. Two things argue for waiting: the
+candle ahead is only in shot for the last few words of a part, so a player who has not yet
+finished one has still never seen the thing named; and "part 1/11" is legible to someone
+who has seen neither. If the word comes back, it comes back everywhere at once — the HUD,
+the report card footer, and the menu — or the interface is speaking two languages.
+
 Candles matter more than they look: they make death cost a verse rather than a chapter.
 A beginner needs 20+ minutes for a chapter, and losing that would end the session and
 possibly the habit.

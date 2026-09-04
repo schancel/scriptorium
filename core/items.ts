@@ -26,43 +26,23 @@
  * per docs/architecture/core-purity.md.
  */
 
-import { maxHearts, restoreHeart, type Checkpoint, lightCandle } from './damage.js';
+import { maxHearts, restoreHeart, lightCandle } from './damage.js';
+import { splitmix32 } from './rng.js';
+import type { Random, RngDraw } from './rng.js';
+import type { DamageState, PlayerState, Tuning, Upgrades } from './types.js';
 import { tuningValue } from './tuning.js';
-import type { DamageState, Tuning } from './types.js';
 
 // --- the seeded PRNG --------------------------------------------------------
 
-/** One draw: a value in [0, 1) and the state to draw from next. */
-export interface RngDraw {
-  readonly value: number;
-  readonly state: number;
-}
-
 /**
- * A pure PRNG: state in, value and next state out.
- *
- * A function rather than an object with a cursor, so a caller can replay a run
- * by replaying its states, and a test can hand in a fixed sequence instead of a
- * generator.
+ * The generator now lives in `core/rng.ts`, so that every core module draws
+ * from the same stream. It is re-exported here because this module's callers
+ * and tests have always got it from this file, and because an item roll and a
+ * scene placement drawing from two different generators would be the exact bug
+ * a single injected seam exists to prevent.
  */
-export type Random = (state: number) => RngDraw;
-
-/**
- * splitmix32. Deterministic, seedable, and fast enough that nothing in the game
- * will ever notice it.
- *
- * It lives here rather than in a module of its own only because this pass may
- * not add one; when `core/sim.ts` needs the same generator, this is the function
- * to lift out.
- */
-export const splitmix32: Random = (state: number): RngDraw => {
-  const next = (state + 0x9e3779b9) | 0;             // tuning-exempt: PRNG constant
-  let z = next;
-  z = Math.imul(z ^ (z >>> 16), 0x21f0aaad);         // tuning-exempt: PRNG constant
-  z = Math.imul(z ^ (z >>> 15), 0x735a2d97);         // tuning-exempt: PRNG constant
-  const bits = (z ^ (z >>> 15)) >>> 0;               // tuning-exempt: PRNG constant
-  return { value: bits / 0x100000000, state: next };
-};
+export { splitmix32 } from './rng.js';
+export type { Random, RngDraw } from './rng.js';
 
 // --- the items --------------------------------------------------------------
 
@@ -122,32 +102,20 @@ export type QuillUpgrade = 'heart' | 'cloud' | 'smudge';
 
 export const QUILL_UPGRADES: readonly QuillUpgrade[] = ['heart', 'cloud', 'smudge'];
 
-/** Nibs spent, by kind. Every consumer reads these as "stages given back". */
-export interface Upgrades {
-  readonly heart: number;
-  readonly cloud: number;
-  readonly smudge: number;
-}
+/**
+ * `Upgrades` and `PlayerState` are now declared in `core/types.ts` and
+ * re-exported here.
+ *
+ * They were written locally because the pass that needed them could not edit
+ * the shared types, and `GameState` carried `inventory: string[]` instead --
+ * a list that can name a quill nib but cannot say that the nib bought a stage
+ * of cloud patience, that gold leaf is a multiplier, or that a wax seal is a
+ * chapter reference. `GameState` now holds a `PlayerState`, and this is the
+ * same type it holds.
+ */
+export type { PlayerState, Upgrades } from './types.js';
 
 export const NO_UPGRADES: Upgrades = Object.freeze({ heart: 0, cloud: 0, smudge: 0 });
-
-/**
- * Everything an item can touch.
- *
- * A projection of `GameState` rather than the thing itself, so item logic can be
- * tested without a passage, a rail or a keyboard.
- */
-export interface PlayerState {
-  readonly damage: DamageState;
-  readonly upgrades: Upgrades;
-  /** Multiplies score for the rest of the level. Starts at 1. */
-  readonly scoreMultiplier: number;
-  /** Chapters sealed, by reference. Unlocks routes and cosmetics. */
-  readonly seals: readonly string[];
-  readonly checkpoint: Checkpoint | null;
-  /** The seeded PRNG's state; never ambient. */
-  readonly rngState: number;
-}
 
 /** A fresh player, holding nothing. */
 export function createPlayer(damage: DamageState, rngState = 0): PlayerState {

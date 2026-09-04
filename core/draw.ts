@@ -9,13 +9,31 @@
  * business, and fonts are named by `style` for the same reason -- a core module
  * that knew a pixel size in a real font would have to be rewritten for every port.
  *
- * The frame has three bands, top to bottom: the HUD, the reading rail, and the
- * keyboard overlay. The rail is the one that matters; the other two are placed
- * away from it on purpose, because a WPM counter beside the text pulls the eye off
- * the focal point, which is the one thing the rail exists to hold still.
+ * The frame has four bands, top to bottom: the HUD, the scenery, the reading
+ * rail, and the keyboard overlay. The rail is the one that matters; the others
+ * are placed away from it on purpose, because a WPM counter beside the text
+ * pulls the eye off the focal point, which is the one thing the rail exists to
+ * hold still.
+ *
+ * ## Two palettes, and why they stay apart
+ *
+ * `PALETTE_ORDER` below names *interface* slots -- `hud`, `rule`, `error`. The
+ * roles in `core/sprites.ts` name *art* -- `robe`, `flame`, `groundTop` -- and a
+ * theme in `core/worlds.ts` supplies one colour per role. They are different
+ * vocabularies for different pictures, and merging them would give the HUD an
+ * opinion about the colour of a bat.
+ *
+ * A command chooses which vocabulary it speaks by carrying a `theme` or not: a
+ * `rect`, `tile` or `sprite` with a `theme` has its colours resolved through that
+ * theme's art palette, and everything else through the interface palette. One
+ * rule, stated once, and the renderer never has to guess.
  */
 
 import { CELL_W, focalX, visibleRange } from './rail.js';
+import { smudgeFraction } from './damage.js';
+import { cloudBob, cloudPose, frameAt, poseOf, type Entity } from './entities.js';
+import { SPRITE_SIZE } from './sprites.js';
+import { roleIndex, worldFor, type ParallaxLayer, type World } from './worlds.js';
 import {
   DEFAULT_SPACE_THUMB,
   FINGER_LABELS,
@@ -29,6 +47,8 @@ import {
 } from './keyboard.js';
 import { tuningValue } from './tuning.js';
 import type {
+  BlotCloud,
+  DamageState,
   DrawCmd,
   Finger,
   Glyph,
@@ -113,6 +133,40 @@ const M = {
 export const VIRTUAL_W = M.vw;
 export const VIRTUAL_H = M.vh;
 
+/**
+ * The scenery band: the strip between the HUD and the rail, and the few pieces
+ * of HUD furniture the game layer adds to it.
+ *
+ * Its top and height are *derived* from `M` rather than restated, so the band
+ * cannot drift away from the two things it sits between. Everything else is
+ * `tuning-exempt` on the same grounds as `M`: it composes the picture, and
+ * nothing a player could win or lose by lives here.
+ *
+ * The band is deliberately quiet. It is above the rail, it never flashes, and
+ * the parallax layers recede on their own authored depth -- because the rail is
+ * the point of the game and the scenery serves it. See docs/design/02-rail.md.
+ */
+const SCENE = {
+  top: M.hudH,
+  height: M.bandTop - M.hudH,
+  heartY: 3,            // tuning-exempt: band composition
+  heartStep: 13,        // tuning-exempt: band composition -- hearts sit close so five fit
+  meterW: 56,           // tuning-exempt: band composition
+  meterH: 6,            // tuning-exempt: band composition
+  meterY: 8,            // tuning-exempt: band composition
+  stageW: 54,           // tuning-exempt: band composition -- reserved for the STAGE label
+  cloudTravel: 190,     // tuning-exempt: art -- how far off the cloud drifts in from
+  cloudY: 26,           // tuning-exempt: band composition
+  candleFlickerMs: 220, // tuning-exempt: animation cadence, art not difficulty
+  candleFrames: 2,      // tuning-exempt: frame count of the art in core/sprites.ts
+  unlitAlpha: 0.4,      // tuning-exempt: art -- a candle the scribe has not reached
+  layerAlphaBase: 0.45, // tuning-exempt: art -- how far the furthest layer recedes
+  layerAlphaSpan: 0.55, // tuning-exempt: art -- and how much nearer depth closes it up
+} as const;
+
+/** The art role the sky behind the parallax takes; every theme supplies one. */
+const SKY_ROLE = 'shade';
+
 const PERCENT = 100;         // tuning-exempt: fraction -> percent, a unit, not a knob
 const CARET_W = 2;
 const DIM_ALPHA = 0.35;      // tuning-exempt: how far an untaught key recedes
@@ -151,6 +205,67 @@ export interface FrameState {
    * column for the thumb this player never uses.
    */
   readonly spaceThumb?: Thumb;
+  /**
+   * The world between the HUD and the rail: theme, scribe, monsters, cloud and
+   * hearts.
+   *
+   * Optional, and for the same reason `spaceThumb` is: the tutor drew verses
+   * long before there was a platformer to put behind them, and a display list
+   * that could not be produced without a blot-cloud would make the rail's own
+   * tests depend on the game layer. Absent, the band is simply empty and every
+   * existing frame is byte-for-byte what it was.
+   */
+  readonly scene?: SceneState;
+}
+
+/**
+ * The level, as the frame needs it.
+ *
+ * The one thing to understand here is `cameraX`: it is **word-driven**. The
+ * platform advances it as words are completed, not on a clock, and everything
+ * that appears to move -- the parallax, the monsters sliding past, the candle
+ * coming up -- is a function of it. Nothing in this file, and nothing in
+ * `core/entities.ts`, can move the world without the player having typed. That
+ * is the premise, not a difficulty setting.
+ * See docs/decisions/0004-idle-threat-not-speed-timer.md.
+ */
+/**
+ * A candle standing in the world.
+ *
+ * Whether it is lit is decided by the game layer and carried here, rather than
+ * inferred from `cameraX`: "has the player reached this checkpoint" is a rule
+ * about the player's progress, and a display list that worked it out from a
+ * pixel position would be the second, quietly different, copy of that rule.
+ */
+export interface SceneCandle {
+  /** World x, in the same space as `cameraX`. */
+  readonly x: number;
+  readonly lit: boolean;
+}
+
+export interface SceneState {
+  /** A theme id in `core/worlds.ts`; unknown ids resolve to the abbey. */
+  readonly theme: string;
+  /** Virtual px the world has travelled. Word-driven; never a clock. */
+  readonly cameraX: number;
+  /** True while the world is still moving, so the scribe walks rather than idles. */
+  readonly walking: boolean;
+  /** Accumulated animation time, for the art that flickers rather than moves. */
+  readonly animMs: number;
+  /**
+   * The scribe. His `x` is a *screen* position and does not move: the world
+   * scrolls past him, which is how a side-scroller has always conveyed travel
+   * and is the same trick the rail plays with the text.
+   */
+  readonly scribe: Entity;
+  /** Monsters. Their `x` is a *world* position, and it never changes. */
+  readonly entities: readonly Entity[];
+  readonly cloud: BlotCloud;
+  readonly damage: DamageState;
+  /** Hearts of capacity, so the ones already lost can be drawn hollow. */
+  readonly heartsMax: number;
+  /** The checkpoint candles standing in this stretch of world. */
+  readonly candles: readonly SceneCandle[];
 }
 
 // --- the report card --------------------------------------------------------
@@ -259,13 +374,198 @@ function topConfusion(stat: KeyStat): string {
   return best;
 }
 
+// --- the scenery band -------------------------------------------------------
+
+/**
+ * Where the pieces of the scenery band land.
+ *
+ * The platform needs this too -- it has to place a bat somewhere, and a bat's
+ * feet belong on the same ground the scribe stands on -- so the composition is
+ * computed here, once, and handed out. A platform that worked the ground line
+ * out for itself would be a second copy of this arithmetic, drifting.
+ */
+export interface SceneLayout {
+  readonly top: number;
+  readonly height: number;
+  /** The ground's surface. Anything standing has its feet here. */
+  readonly groundY: number;
+  /**
+   * The scribe's screen x. He stands directly over the focal point, which is
+   * both the cheapest way to keep him out of the rail's way and the truest: the
+   * character and the cursor are the same place in the fiction.
+   */
+  readonly scribeX: number;
+}
+
+/**
+ * The vertical span the theme's own parallax bands occupy, so they can be
+ * projected into the strip this frame actually has for them.
+ *
+ * `core/worlds.ts` composes its layers for a full-height platformer -- its
+ * ground sits at y 296 of 360, which here is under the keyboard overlay. Rather
+ * than restate those numbers, or edit a module this pass consumes, the authored
+ * band is normalised into the scenery strip. The relative depth, order and
+ * thickness the theme chose all survive; only the absolute height changes, which
+ * is exactly what "coordinates are virtual" already promises.
+ */
+interface Projection {
+  readonly from: number;
+  readonly span: number;
+}
+
+function projectionOf(layers: readonly ParallaxLayer[]): Projection {
+  let from = Infinity;
+  let to = -Infinity;
+  for (const layer of layers) {
+    from = Math.min(from, layer.y);
+    to = Math.max(to, layer.y + layer.h);
+  }
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return { from: 0, span: 1 };
+  return { from, span: Math.max(1, to - from) };
+}
+
+function projY(projection: Projection, y: number): number {
+  return SCENE.top + ((y - projection.from) / projection.span) * SCENE.height;
+}
+
+function projH(projection: Projection, h: number): number {
+  return (h / projection.span) * SCENE.height;
+}
+
+/** The nearest layer: the one the scribe stands on. */
+function groundLayer(world: World): ParallaxLayer | undefined {
+  return world.parallax[world.parallax.length - 1];
+}
+
+function layoutIn(world: World, scribeX: number): SceneLayout {
+  const ground = groundLayer(world);
+  return {
+    top: SCENE.top,
+    height: SCENE.height,
+    groundY: ground === undefined
+      ? SCENE.top + SCENE.height
+      : px(projY(projectionOf(world.parallax), ground.y)),
+    scribeX,
+  };
+}
+
+/** Where everything in the band sits, for a theme. */
+export function sceneLayout(theme: string, tuning: Tuning): SceneLayout {
+  return layoutIn(worldFor(theme), px(focalX(M.vw, tuning) - SPRITE_SIZE / 2));
+}
+
+/**
+ * Round to a whole virtual pixel.
+ *
+ * It also normalises negative zero, which is a real and distinct value in
+ * JavaScript and does *not* survive `JSON.stringify`. A display list has to
+ * round-trip through JSON by contract -- docs/architecture/display-list.md --
+ * so a `-0` in a coordinate is a command that is not quite data.
+ */
+function px(value: number): number {
+  const rounded = Math.round(value);
+  return rounded === 0 ? 0 : rounded;
+}
+
+/** A scroll offset folded back into one tile, so the tiling never runs out. */
+function wrapToTile(value: number): number {
+  const wrapped = value % SPRITE_SIZE;
+  return wrapped < 0 ? wrapped + SPRITE_SIZE : wrapped;
+}
+
+/** True when a 16px sprite at this x has any part on screen. */
+function onScreen(x: number): boolean {
+  return x > -SPRITE_SIZE && x < M.vw;
+}
+
+/**
+ * The band between the HUD and the rail: sky, parallax, candles, monsters, the
+ * scribe, and the cloud over the top of him.
+ *
+ * Back to front, and nothing here is allowed below `M.bandTop`. The rail is what
+ * the player is looking at; the scenery says where he is and then stays out of
+ * the way.
+ */
+function pushScene(cmds: DrawCmd[], scene: SceneState): void {
+  const world = worldFor(scene.theme);
+  const theme = world.id;
+  const projection = projectionOf(world.parallax);
+  const layout = layoutIn(world, scene.scribe.x);
+
+  // The sky. A themed `rect`, which is what the `theme` field buys: the same
+  // command shape, resolved through the art palette instead of the interface one.
+  cmds.push({
+    op: 'rect', x: 0, y: SCENE.top, w: M.vw, h: SCENE.height,
+    color: roleIndex(SKY_ROLE), theme,
+  });
+
+  for (const layer of world.parallax) {
+    const y = px(projY(projection, layer.y));
+    const h = Math.max(1, Math.round(projH(projection, layer.h)));
+    // A layer lags the camera by its own depth; the ground alone keeps up.
+    const shift = wrapToTile(scene.cameraX * layer.factor);
+    cmds.push({
+      op: 'tile', id: layer.tileId, x: px(-shift), y, w: M.vw + SPRITE_SIZE, h,
+      alpha: SCENE.layerAlphaBase + SCENE.layerAlphaSpan * layer.factor,
+      theme,
+    });
+  }
+
+  const standY = layout.groundY - SPRITE_SIZE;
+
+  for (const candle of scene.candles) {
+    const x = px(candle.x - scene.cameraX);
+    if (!onScreen(x)) continue;
+    // An unlit candle is the same art, dimmed: the flame is drawn into every
+    // frame of it, and a checkpoint the player has not reached yet should read
+    // as "there, and not yet yours" rather than as a different object.
+    cmds.push({
+      op: 'sprite', id: 'candle', x, y: standY,
+      frame: candle.lit ? frameAt(scene.animMs, SCENE.candleFlickerMs, SCENE.candleFrames) : 0,
+      alpha: candle.lit ? 1 : SCENE.unlitAlpha,
+      theme,
+    });
+  }
+
+  for (const entity of scene.entities) {
+    const pose = poseOf(entity);
+    const x = px(pose.x - scene.cameraX);
+    if (!onScreen(x)) continue;
+    cmds.push({
+      op: 'sprite', id: pose.spriteId, x, y: px(pose.y), frame: pose.frame,
+      flip: pose.flip, theme,
+    });
+  }
+
+  const scribe = poseOf(scene.scribe, scene.walking);
+  cmds.push({
+    op: 'sprite', id: scribe.spriteId, x: px(scribe.x), y: px(scribe.y),
+    frame: scribe.frame, flip: scribe.flip, theme,
+  });
+
+  // The cloud, in front of everything, drifting in from the right as the
+  // telegraph runs. `cloud.x` is an approach fraction, not pixels -- see
+  // `CloudState` in core/types.ts -- so the span it crosses is chosen here.
+  const cloud = cloudPose(scene.cloud);
+  if (cloud !== null) {
+    cmds.push({
+      op: 'sprite', id: cloud.spriteId,
+      x: px(layout.scribeX + (1 - cloud.x) * SCENE.cloudTravel),
+      y: px(SCENE.cloudY + cloudBob(scene.cloud.phaseMs)),
+      frame: cloud.frame,
+      theme,
+    });
+  }
+}
+
 // --- the frame --------------------------------------------------------------
 
 /** The whole frame, back to front. */
 export function drawFrame(state: FrameState, rail: RailState, tuning: Tuning): DrawCmd[] {
   const cmds: DrawCmd[] = [];
   cmds.push({ op: 'rect', x: 0, y: 0, w: M.vw, h: M.vh, color: pal('bg') });
-  pushHud(cmds, state);
+  if (state.scene !== undefined) pushScene(cmds, state.scene);
+  pushHud(cmds, state, tuning);
   pushRail(cmds, state, rail, tuning);
   pushKeyboard(cmds, state, tuning);
   if (state.mode === 'report') pushReport(cmds, state);
@@ -276,10 +576,58 @@ function pct(fraction: number): number {
   return Math.round(fraction * PERCENT);
 }
 
-function pushHud(cmds: DrawCmd[], state: FrameState): void {
-  cmds.push({ op: 'rect', x: 0, y: 0, w: M.vw, h: M.hudH, color: pal('band') });
+/**
+ * Hearts, on the left of the HUD.
+ *
+ * A lost heart is drawn as the *outline* of a heart rather than removed. Five
+ * slots that empty say "you have lost two"; three hearts that become two say
+ * only "there are two hearts", and the difference matters most to the player who
+ * has just been hit and is trying to work out how much trouble he is in.
+ *
+ * Returns the x the rest of the HUD may start at.
+ */
+function pushHearts(cmds: DrawCmd[], scene: SceneState): number {
+  const theme = worldFor(scene.theme).id;
+  for (let i = 0; i < scene.heartsMax; i++) {
+    cmds.push({
+      op: 'sprite',
+      id: i < scene.damage.hearts ? 'heart_full' : 'heart_empty',
+      x: M.hudPad + i * SCENE.heartStep,
+      y: SCENE.heartY,
+      theme,
+    });
+  }
+  return M.hudPad + scene.heartsMax * SCENE.heartStep + M.hudPad;
+}
+
+/**
+ * The smudge meter, on the right, immediately left of the stage label.
+ *
+ * It is a bar and not a number because it is not a score: what the player needs
+ * off it at a glance is "how close is the page to costing me a heart", and a bar
+ * answers that without being read. Errors fill it and clean typing drains it --
+ * docs/decisions/0005-smudge-meter-over-per-typo-damage.md.
+ */
+function pushSmudgeMeter(cmds: DrawCmd[], scene: SceneState, tuning: Tuning): void {
+  const x = M.vw - M.hudPad - SCENE.stageW - SCENE.meterW;
   cmds.push({
-    op: 'text', value: state.ref, x: M.hudPad, y: M.hudTextY,
+    op: 'rect', x, y: SCENE.meterY, w: SCENE.meterW, h: SCENE.meterH,
+    color: pal('rule'), alpha: DIM_ALPHA,
+  });
+  const filled = Math.round(SCENE.meterW * smudgeFraction(scene.damage, tuning));
+  if (filled > 0) {
+    cmds.push({
+      op: 'rect', x, y: SCENE.meterY, w: filled, h: SCENE.meterH, color: pal('error'),
+    });
+  }
+}
+
+function pushHud(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
+  cmds.push({ op: 'rect', x: 0, y: 0, w: M.vw, h: M.hudH, color: pal('band') });
+  const scene = state.scene;
+  const refX = scene === undefined ? M.hudPad : pushHearts(cmds, scene);
+  cmds.push({
+    op: 'text', value: state.ref, x: refX, y: M.hudTextY,
     style: 'hud', color: pal('hud'),
   });
   cmds.push({
@@ -287,6 +635,7 @@ function pushHud(cmds: DrawCmd[], state: FrameState): void {
     value: `WPM ${Math.round(state.score.wpm)}    ACC ${pct(state.score.accuracy)}%`,
     x: M.vw / 2, y: M.hudTextY, style: 'hud-center', color: pal('gold'),
   });
+  if (scene !== undefined) pushSmudgeMeter(cmds, scene, tuning);
   cmds.push({
     op: 'text', value: `STAGE ${state.stage}`, x: M.vw - M.hudPad, y: M.hudTextY,
     style: 'hud-right', color: pal('hud'),

@@ -26,7 +26,7 @@
 
 import { chunkIndexFor, chunksFor } from './corpus.js';
 import { tuningValue } from './tuning.js';
-import type { DamageState, Tuning } from './types.js';
+import type { Checkpoint, DamageState, Tuning } from './types.js';
 
 // --- the meter --------------------------------------------------------------
 
@@ -154,20 +154,14 @@ export function smudgeFraction(damage: DamageState, tuning: Tuning): number {
 // --- candles ----------------------------------------------------------------
 
 /**
- * A checkpoint: where death sends the player back to, and where the progress
- * record is written. The same place, deliberately -- closing the tab must cost
- * the same verse or two that dying does, or one of the two is a trap.
+ * `Checkpoint` is declared in `core/types.ts` and re-exported here.
+ *
+ * It was written locally because the pass that needed it could not edit the
+ * shared types. It belongs there: `GameState` has to be able to name where the
+ * player respawns, and a type that only this module could see meant the save
+ * record and the respawn point were describable in two different vocabularies.
  */
-export interface Checkpoint {
-  /** The chapter, e.g. "Genesis 1". */
-  readonly ref: string;
-  /** 1-based verse the player resumes on. */
-  readonly unit: number;
-  /** Index into `chunksFor`, so the candle and the save agree by construction. */
-  readonly chunkIndex: number;
-  /** Hearts and meter as they were when the candle was lit. */
-  readonly damage: DamageState;
-}
+export type { Checkpoint } from './types.js';
 
 /**
  * The verses a candle stands at: the first verse of every candle-spaced chunk.

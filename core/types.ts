@@ -152,10 +152,45 @@ export interface GateResult {
 
 export type Mode = 'title' | 'level' | 'flashback' | 'report' | 'map' | 'lectio';
 
+/**
+ * The blot-cloud, reduced to what a caller who only wants to draw it needs.
+ *
+ * `x` is the settled question: it is an **approach fraction, 0..1**, not a
+ * virtual-pixel position. Zero is fully retreated and one is directly overhead.
+ * `core/entities.ts` has always produced it that way -- `approachFraction`
+ * returns `phaseMs / cloud_approach_ms` clamped to one -- and a field that was a
+ * fraction in the machine and pixels in the type would have been read as pixels
+ * by the first person to draw it, putting the cloud one pixel from the left edge
+ * for the whole telegraph. The platform maps the fraction onto whatever span of
+ * its own scenery band it wants the cloud to cross.
+ */
 export interface CloudState {
   readonly phase: 'absent' | 'approaching' | 'striking';
   readonly phaseMs: number;
+  /** Approach fraction, 0..1. Not pixels; see above. */
   readonly x: number;
+}
+
+/**
+ * The cloud as the state machine in `core/entities.ts` actually runs it.
+ *
+ * `CloudState` is the projection; this is the thing. The extra two fields are
+ * not decoration:
+ *
+ *  - `idleMs` is the entire mechanic in one number. The cloud watches how long
+ *    it has been since the last *correct* keystroke and nothing else, so a state
+ *    without it cannot be stepped -- it would have to be recovered from a clock
+ *    somewhere else, which is how the "threat is idleness" rule quietly becomes
+ *    a threat about elapsed time. See
+ *    docs/decisions/0004-idle-threat-not-speed-timer.md.
+ *  - `strikes` is how many times it has dripped this passage, which the HUD and
+ *    the sound cues both read.
+ */
+export interface BlotCloud extends CloudState {
+  /** Time since the last correct keystroke. The whole mechanic, in one number. */
+  readonly idleMs: number;
+  /** How many times it has dripped this passage; for the sound and the HUD. */
+  readonly strikes: number;
 }
 
 export interface DamageState {
@@ -179,20 +214,74 @@ export interface ReturnFrame {
   readonly damage: DamageState;
 }
 
+// --- the player -------------------------------------------------------------
+
+/**
+ * A checkpoint: where death sends the player back to, and where the progress
+ * record is written. The same place, deliberately -- closing the tab must cost
+ * the same verse or two that dying does, or one of the two is a trap.
+ *
+ * See docs/design/03-pacing.md#items. `core/damage.ts` builds these from the
+ * chunk boundaries `core/corpus.ts` already cuts, so the candle and the save
+ * cannot drift apart.
+ */
+export interface Checkpoint {
+  /** The chapter, e.g. "Genesis 1". */
+  readonly ref: string;
+  /** 1-based verse the player resumes on. */
+  readonly unit: number;
+  /** Index into `chunksFor`, so the candle and the save agree by construction. */
+  readonly chunkIndex: number;
+  /** Hearts and meter as they were when the candle was lit. */
+  readonly damage: DamageState;
+}
+
+/**
+ * Quill nibs spent, by kind. Every consumer reads these as "stages given back":
+ * one cloud nib is one `idle_step_ms`, one smudge nib is one
+ * `smudge_per_error_step`. See docs/design/03-pacing.md#items.
+ */
+export interface Upgrades {
+  readonly heart: number;
+  readonly cloud: number;
+  readonly smudge: number;
+}
+
+/**
+ * Everything the player is carrying.
+ *
+ * This replaces the `inventory: string[]` this interface used to hold, which
+ * could name an item but could not express any of what the items actually *do*.
+ * A quill nib is not "a quill nib" in a list -- it is one stage of cloud
+ * patience, or one of smudge tolerance, or a heart of capacity, permanently.
+ * Gold leaf is a multiplier and a wax seal is a chapter reference. None of the
+ * three survives being flattened to a string, and `core/items.ts` had to define
+ * this shape locally to say so.
+ */
+export interface PlayerState {
+  readonly damage: DamageState;
+  readonly upgrades: Upgrades;
+  /** Multiplies score for the rest of the level. Starts at 1. */
+  readonly scoreMultiplier: number;
+  /** Chapters sealed, by reference. Unlocks routes and cosmetics. */
+  readonly seals: readonly string[];
+  readonly checkpoint: Checkpoint | null;
+  /** The seeded PRNG's state; never ambient. */
+  readonly rngState: number;
+}
+
 /** The whole simulation. `sim.step` is a pure function of this plus inputs. */
 export interface GameState {
   readonly mode: Mode;
   readonly stage: number;
   readonly passage: Passage;
   readonly typing: TypingState;
-  readonly damage: DamageState;
-  readonly cloud: CloudState;
+  /** Hearts, meter, upgrades, seals and the PRNG state, in one record. */
+  readonly player: PlayerState;
+  readonly cloud: BlotCloud;
   readonly rail: RailState;
   readonly returnStack: readonly ReturnFrame[];
-  readonly inventory: readonly string[];
   readonly theme: string;
-  /** The seeded PRNG's state; never ambient. */
-  readonly rngState: number;
   readonly elapsedMs: number;
 }
 
@@ -213,12 +302,22 @@ export type Tuning = Readonly<Record<string, number>>;
  * A frame, as data. The core never draws; the platform executes these in order.
  * Every command must survive JSON round-tripping -- no closures, no references.
  * See docs/architecture/display-list.md.
+ *
+ * `theme` names which palette the command's colours are indices into. Absent, a
+ * command speaks the interface palette in `core/draw.ts` (`PALETTE_ORDER`);
+ * present, it speaks that theme's art palette in `core/worlds.ts`
+ * (`PALETTE_ROLES`). Two vocabularies, kept apart, chosen per command so the
+ * renderer holds no mode and a single command can be executed on its own.
+ *
+ * `sprite` and `tile` name pixels that are already role indices, so `theme` only
+ * says which sixteen colours to resolve them through. On a `rect` it also
+ * re-reads `color` as a role index rather than an interface slot.
  */
 export type DrawCmd =
-  | { op: 'sprite'; id: string; x: number; y: number; frame?: number; flip?: boolean; tint?: number; alpha?: number }
-  | { op: 'tile'; id: string; x: number; y: number; w: number; h: number; alpha?: number }
+  | { op: 'sprite'; id: string; x: number; y: number; frame?: number; flip?: boolean; tint?: number; alpha?: number; theme?: string }
+  | { op: 'tile'; id: string; x: number; y: number; w: number; h: number; alpha?: number; theme?: string }
   | { op: 'text'; value: string; x: number; y: number; style: string; color: number; alpha?: number }
-  | { op: 'rect'; x: number; y: number; w: number; h: number; color: number; alpha?: number }
+  | { op: 'rect'; x: number; y: number; w: number; h: number; color: number; alpha?: number; theme?: string }
   | { op: 'line'; x1: number; y1: number; x2: number; y2: number; color: number; width?: number };
 
 export type SoundEvent =

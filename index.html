@@ -69,15 +69,22 @@
   /* --- the way out ------------------------------------------------------- *
      A saved position with no exit is a trap. This is always visible, and it is
      the only chrome outside the canvas during play. */
-  #menu-open {
+  #menu-open, #audio-toggle {
     position: fixed;
-    right: .75rem;
     bottom: .75rem;
     opacity: .55;
     font-size: .8rem;
   }
-  #menu-open:hover, #menu-open:focus-visible { opacity: 1; }
-  body:not(.ready) #menu-open { display: none; }
+  #menu-open { right: .75rem; }
+  /* The mute control sits beside the way out, because both are the same kind of
+     thing: chrome the player must be able to find without being told. Audio
+     starts off (`audio_default_on`), so this is the only way it ever comes on
+     -- a hidden one would leave the music undiscoverable. */
+  #audio-toggle { right: 7.5rem; }
+  #menu-open:hover, #menu-open:focus-visible,
+  #audio-toggle:hover, #audio-toggle:focus-visible { opacity: 1; }
+  #audio-toggle[aria-pressed="true"] { opacity: 1; border-color: var(--gold); color: var(--gold); }
+  body:not(.ready) #menu-open, body:not(.ready) #audio-toggle { display: none; }
 
   /* --- overlays ---------------------------------------------------------- */
   #overlay {
@@ -128,6 +135,7 @@
 
 <canvas id="stage"></canvas>
 
+<button id="audio-toggle" type="button" aria-pressed="false">&#9834; sound: off</button>
 <button id="menu-open" type="button">menu &middot; esc</button>
 
 <div id="overlay" hidden>

@@ -29,7 +29,7 @@
  */
 
 import { tuningValue } from './tuning.js';
-import type { CloudState, Tuning } from './types.js';
+import type { BlotCloud, CloudState, Tuning } from './types.js';
 
 // --- animation cadence ------------------------------------------------------
 
@@ -206,25 +206,15 @@ export function poseOf(entity: Entity, moving = false): EntityPose {
 export type CloudPhase = CloudState['phase'];
 
 /**
- * The cloud's state.
+ * The cloud's state now lives in `core/types.ts`, where `GameState` can hold it
+ * whole, and is re-exported here because this module is where it is stepped.
  *
- * A superset of `CloudState` in `core/types.ts`, which has no room for the idle
- * clock the machine actually runs on. `toCloudState` projects it back down for
- * `GameState`. If `CloudState` ever gains `idleMs` and `strikes` this type
- * collapses into it; until then the extra fields live here rather than in a
- * module this pass is not allowed to touch.
+ * It was declared locally because the pass that wrote this machine could not
+ * edit the shared types, and `CloudState` had no room for `idleMs` -- the one
+ * number the whole mechanic is. `GameState.cloud` is a `BlotCloud` now;
+ * `toCloudState` still projects it down for anything that only wants to draw it.
  */
-export interface BlotCloud {
-  readonly phase: CloudPhase;
-  /** Time in the current phase. */
-  readonly phaseMs: number;
-  /** Time since the last correct keystroke. The whole mechanic, in one number. */
-  readonly idleMs: number;
-  /** 0 = fully retreated, 1 = overhead. Virtual-resolution-free on purpose. */
-  readonly x: number;
-  /** How many times it has dripped this passage; for the sound and the HUD. */
-  readonly strikes: number;
-}
+export type { BlotCloud } from './types.js';
 
 /** Everything the cloud reacts to in one step. */
 export interface CloudInput {
