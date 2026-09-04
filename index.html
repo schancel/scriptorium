@@ -107,6 +107,21 @@
     padding: 1.25rem 1.5rem 1.5rem;
   }
   .panel[hidden] { display: none; }
+  /* The way out must never be the thing you have to scroll to find. The hint
+     sticks to the top, the Resume row to the bottom, so both survive a short
+     window and a long history list. */
+  .panel-hint {
+    position: sticky; top: -1.25rem; z-index: 2;
+    margin: -1.25rem -1.5rem .5rem; padding: .6rem 1.5rem;
+    background: var(--band); border-bottom: 1px solid rgba(122, 107, 80, .35);
+    color: var(--dim); font-size: .85rem;
+  }
+  .panel-hint b { color: var(--bright); font-weight: 600; }
+  .row-pinned {
+    position: sticky; bottom: -1.5rem; z-index: 2;
+    margin: 0 -1.5rem; padding: .75rem 1.5rem 1.5rem;
+    background: var(--band); border-top: 1px solid rgba(122, 107, 80, .35);
+  }
   .panel h2 { margin: 0 0 .25rem; font-size: 1.35rem; color: var(--gold); letter-spacing: .03em; }
   .panel h3 { margin: 1.4rem 0 .35rem; font-size: .8rem; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
   .panel p { margin: .4rem 0; }
@@ -157,6 +172,7 @@
 
   <!-- The menu: where you are, where else you could be, and the way out. -->
   <div class="panel" id="panel-menu" hidden>
+    <p class="panel-hint"><b>Esc</b> closes this and picks up where you left off &middot; changes save as you make them</p>
     <h2>Scriptorium</h2>
     <p class="lead" id="menu-where"></p>
     <p class="dim" id="menu-stage"></p>
@@ -196,7 +212,7 @@
     </p>
 
     <h3>This passage</h3>
-    <div class="row">
+    <div class="row row-pinned">
       <button id="menu-resume" class="primary" type="button">Resume</button>
       <button id="menu-restart" type="button">Type this passage again</button>
     </div>
