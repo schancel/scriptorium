@@ -77,6 +77,11 @@ const CUES: Readonly<Record<string, Cue>> = {
   heart_lost: { ch: 'pulse2', midi: 55, ms: 380, duty: 0.5, arp: [0, -5, -12], arpHz: 12 },
   cloud: { ch: 'noise', midi: 42, ms: 140 },
   candle: { ch: 'pulse1', midi: 76, ms: 260, duty: 0.125, arp: [0, 5, 9], arpHz: 14 },
+  // A monster felled: short, bright, rising, and over before the next word. It
+  // shares the candle's channel and is a fifth below it, so a defeat and a
+  // checkpoint are plainly the same family of good news at different weights --
+  // and the core scales its velocity by the combo, so a long run hits harder.
+  defeat: { ch: 'pulse1', midi: 64, ms: 190, duty: 0.25, arp: [0, 7, 12, 16], arpHz: 22 },
   promotion: { ch: 'pulse1', midi: 72, ms: 620, duty: 0.25, arp: [0, 4, 7, 12], arpHz: 11 },
   warp: { ch: 'pulse2', midi: 60, ms: 700, duty: 0.5, arp: [0, 6, 12, 18], arpHz: 18 },
 };

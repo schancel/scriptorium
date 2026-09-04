@@ -14,6 +14,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  BURST_FRAMES,
+  CANDLE_UNLIT_FRAME,
   INK_CHARS,
   NONE,
   PALETTE_ROLES,
@@ -29,7 +31,7 @@ import {
 
 /** Everything the game names. A missing id is a sprite that cannot be drawn. */
 const REQUIRED: readonly string[] = [
-  'scribe_idle', 'scribe_walk', 'bat', 'skeleton', 'blot_cloud',
+  'scribe_idle', 'scribe_walk', 'scribe_strike', 'bat', 'skeleton', 'burst', 'blot_cloud',
   'candle', 'ink_pot', 'heart_full', 'heart_empty',
   'tile_stone', 'tile_grass', 'tile_sand',
 ];
@@ -222,4 +224,143 @@ test('frame indices wrap rather than running off the end of the sheet', () => {
 test('an unknown sprite id is null, not a throw', () => {
   assert.equal(spriteFor('no_such_sprite'), null);
   assert.ok(SPRITES.size >= REQUIRED.length);
+});
+
+// --- the pictures the combat loop is made of --------------------------------
+
+test('the burst goes flash, expand, scatter -- and never plays backwards', () => {
+  assert.equal(art('burst').frames.length, BURST_FRAMES);
+
+  // The whole design of the animation is its silhouette over time. A tight
+  // flash, a wide star, then nothing but flecks: if the middle frame is not the
+  // biggest, the explosion implodes.
+  const flash = inked('burst', 0);
+  const wide = inked('burst', 1);
+  const flecks = inked('burst', 2);
+  assert.ok(flash < wide, 'the flash must be tighter than the star it opens into');
+  assert.ok(flecks < flash, 'the last frame must be sparser than the first, or it does not disperse');
+
+  // And the star has to reach the edges, or it reads as a small bright thing
+  // rather than as a monster coming apart.
+  const star = toSilhouette(art('burst'), 1).split('\n');
+  assert.ok((star[0] ?? '').includes('K'), 'the star never reaches the top of the cell');
+  assert.ok((star[SPRITE_SIZE - 1] ?? '').includes('K'), 'the star never reaches the bottom');
+
+  assert.equal(toAscii(art('burst'), 0), [
+    '................',
+    '................',
+    '................',
+    '.......KK.......',
+    '.......WW.......',
+    '....K..WW..K....',
+    '.....KKWWKK.....',
+    '...KWWWWWWWWK...',
+    '...KWWWWWWWWK...',
+    '.....KKWWKK.....',
+    '....K..WW..K....',
+    '.......WW.......',
+    '.......KK.......',
+    '................',
+    '................',
+    '................',
+  ].join('\n'));
+
+  assert.equal(toAscii(art('burst'), 1), [
+    '.......KK.......',
+    '......K..K......',
+    '...K..LLLL..K...',
+    '....K.LWWL.K....',
+    '.....LLWWLL.....',
+    '..K..LWAAWL..K..',
+    '...LLWAAAAWLL...',
+    '.KLWWAAAAAAWWLK.',
+    '.KLWWAAAAAAWWLK.',
+    '...LLWAAAAWLL...',
+    '..K..LWAAWL..K..',
+    '.....LLWWLL.....',
+    '....K.LWWL.K....',
+    '...K..LLLL..K...',
+    '......K..K......',
+    '.......KK.......',
+  ].join('\n'));
+
+  assert.equal(toAscii(art('burst'), 2), [
+    '.K............K.',
+    '................',
+    '...L........L...',
+    '................',
+    '.K...A....A...K.',
+    '................',
+    '....L......L....',
+    '................',
+    '................',
+    '....L......L....',
+    '................',
+    '.K...A....A...K.',
+    '................',
+    '...L........L...',
+    '................',
+    '.K............K.',
+  ].join('\n'));
+});
+
+test('the strike is the idle scribe with the quill thrown forward', () => {
+  // Only the arm may move. At this size a figure that redraws itself between
+  // frames reads as two figures rather than as one doing something, so the
+  // body below the waist is pixel-identical to the idle pose.
+  const waistDown = (id: string, frame: number): string =>
+    toAscii(art(id), frame).split('\n').slice(10).join('\n');   // tuning-exempt: below the hand, where only the robe is
+  assert.equal(waistDown('scribe_strike', 0), waistDown('scribe_idle', 0));
+  assert.equal(waistDown('scribe_strike', 1), waistDown('scribe_idle', 0));
+
+  // The wind-up puts the quill behind him and the follow-through puts it in
+  // front, so the two frames read as one motion rather than as a twitch.
+  const back = toSilhouette(art('scribe_strike'), 0).split('\n');
+  const forward = toSilhouette(art('scribe_strike'), 1).split('\n');
+  assert.notEqual(back.join('\n'), forward.join('\n'));
+
+  // The nib has to leave the silhouette on the follow-through, or the pose
+  // reads as a shrug. Nothing of the idle figure reaches the last column.
+  const reachesEdge = (rows: readonly string[]): boolean =>
+    rows.some((row) => row.charAt(SPRITE_SIZE - 1) !== '.');
+  assert.ok(reachesEdge(forward), 'the strike does not reach past the scribe');
+  assert.ok(!reachesEdge(toSilhouette(art('scribe_idle'), 0).split('\n')));
+
+  assert.equal(toAscii(art('scribe_strike'), 1), [
+    '................',
+    '.....KKKKK......',
+    '....KrrrrrKK....',
+    '....KrrrrrrK....',
+    '....KrSSSSrK....',
+    '....KrSKSKrK....',
+    '....KrSSSSrKW...',
+    '.....KSSSSKLWA..',
+    '....KKRRRRKKLLWA',
+    '...KRRRRRRRRK.A.',
+    '..KRRRRRRRRRRK..',
+    '..KRRRRRRRRRRK..',
+    '..KRRRRRRRRRRK..',
+    '...KRRRRRRRRK...',
+    '...KKKK..KKKK...',
+    '................',
+  ].join('\n'));
+});
+
+test('an unlit candle is a candle that is out, not a dimmed flame', () => {
+  const flame = INK_CHARS.charAt(INK_CHARS.indexOf('F'));
+  const unlit = toAscii(art('candle'), CANDLE_UNLIT_FRAME);
+  assert.ok(!unlit.includes(flame), 'the unlit candle still has a flame in it');
+
+  // Nothing at all above the wick: a checkpoint the player has not reached is
+  // dark, so lighting it has something to be a change from.
+  for (const row of unlit.split('\n').slice(0, 5)) {   // tuning-exempt: the rows the flame occupies
+    assert.equal(row, '.'.repeat(SPRITE_SIZE), 'something is still burning on the unlit candle');
+  }
+
+  // And it is the same object: stick, holder and wick are pixel-identical to
+  // both lit frames, so lighting it changes exactly the flame.
+  const held = (frame: number): string => toAscii(art('candle'), frame).split('\n').slice(5).join('\n');   // tuning-exempt: the wick row down
+  assert.equal(held(CANDLE_UNLIT_FRAME), held(0));
+  assert.equal(held(CANDLE_UNLIT_FRAME), held(1));
+  assert.ok(inked('candle', CANDLE_UNLIT_FRAME) < inked('candle', 0));
 });

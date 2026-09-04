@@ -21,13 +21,17 @@
  * so entering the tomb starts the Passion Chorale at its beginning rather than
  * wherever the desert happened to have got to.
  *
- * **The combo drives the tempo, and nothing else does.** The music accelerating
- * under a clean run is the whole reward mechanism -- see the design doc -- and
- * `comboTempoRatio` bounds it at `combo_tempo_max`.
+ * **The combo drives the tempo.** The music accelerating under a clean run is
+ * the whole reward mechanism -- see the design doc -- and `comboTempoRatio`
+ * bounds it at `combo_tempo_max`. It also decides how hard the `defeat` cue is
+ * struck, which is the only other thing in the audio the combo touches: felling
+ * a monster on a long clean run should sound like it. Both are bounded, and
+ * breaking a combo only ever returns them to base.
  */
 
 import {
   advanceSequencer,
+  comboForFullTempo,
   comboTempoRatio,
   createSequencer,
   rewindSequencer,
@@ -56,6 +60,7 @@ export type Cue =
   | 'heart_lost'
   | 'cloud'
   | 'candle'
+  | 'defeat'
   | 'promotion'
   | 'warp';
 
@@ -71,9 +76,24 @@ const CUE_VELOCITY: Readonly<Record<Cue, number>> = {
   heart_lost: 110, // tuning-exempt: cue mix
   cloud: 60,       // tuning-exempt: cue mix
   candle: 84,      // tuning-exempt: cue mix
+  defeat: 82,      // tuning-exempt: cue mix
   promotion: 112,  // tuning-exempt: cue mix
   warp: 90,        // tuning-exempt: cue mix
 };
+
+/**
+ * How hard the defeat cue rings at a full combo.
+ *
+ * The one cue whose weight is not fixed, and the only place the combo shows up
+ * in the audio besides the tempo. A run of clean typing should be *audible* when
+ * it lands a blow, and velocity is the cheapest honest way to say so: the same
+ * voice, played harder. It never falls below `CUE_VELOCITY.defeat`, so losing a
+ * combo quietens nothing that was already sounding.
+ *
+ * Cue mix, like the table above: voice design rather than a difficulty knob, and
+ * the one number a player would want to turn is `master_volume`.
+ */
+const DEFEAT_VELOCITY_FULL = 118; // tuning-exempt: cue mix
 
 // --- state ------------------------------------------------------------------
 
@@ -132,8 +152,23 @@ export function masterGain(tuning: Tuning): number {
 
 // --- the step ---------------------------------------------------------------
 
-function cueEvents(cues: readonly Cue[]): SoundEvent[] {
-  return cues.map((cue): SoundEvent => ({ type: 'sfx', id: cue, vel: CUE_VELOCITY[cue] }));
+/**
+ * How hard one cue is struck this frame.
+ *
+ * Every cue but `defeat` is a fixed weight. `defeat` is scaled by the combo,
+ * between its own row and `DEFEAT_VELOCITY_FULL`, at `comboForFullTempo` -- the
+ * same milestone the tempo uses, so "a full combo" is one thing in this game.
+ */
+function cueVelocity(cue: Cue, combo: number, tuning: Tuning): number {
+  const base = CUE_VELOCITY[cue];
+  if (cue !== 'defeat') return base;
+  const full = comboForFullTempo(tuning);
+  const fraction = full > 0 ? Math.min(1, Math.max(0, combo / full)) : 1;
+  return Math.round(base + fraction * (DEFEAT_VELOCITY_FULL - base));
+}
+
+function cueEvents(cues: readonly Cue[], combo: number, tuning: Tuning): SoundEvent[] {
+  return cues.map((cue): SoundEvent => ({ type: 'sfx', id: cue, vel: cueVelocity(cue, combo, tuning) }));
 }
 
 /**
@@ -168,6 +203,6 @@ export function stepSound(
   if (ratio !== base.seq.tempoRatio) events.push({ type: 'tempo', ratio });
 
   const step = advanceSequencer(startSequencer(base.seq), tune, dtMs, ratio);
-  events.push(...step.events, ...cueEvents(frame.cues));
+  events.push(...step.events, ...cueEvents(frame.cues, frame.combo, tuning));
   return { state: { ...base, seq: step.state }, events };
 }

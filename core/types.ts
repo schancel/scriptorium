@@ -312,9 +312,14 @@ export type Tuning = Readonly<Record<string, number>>;
  * `sprite` and `tile` name pixels that are already role indices, so `theme` only
  * says which sixteen colours to resolve them through. On a `rect` it also
  * re-reads `color` as a role index rather than an interface slot.
+ *
+ * Every field below is one a renderer executes. `sprite` carried a `tint` for a
+ * while that no backend read, so setting it did nothing and left nothing to
+ * debug; it is gone, and nothing may be added here that the renderer ignores.
+ * Recolouring is what `theme` is for.
  */
 export type DrawCmd =
-  | { op: 'sprite'; id: string; x: number; y: number; frame?: number; flip?: boolean; tint?: number; alpha?: number; theme?: string }
+  | { op: 'sprite'; id: string; x: number; y: number; frame?: number; flip?: boolean; alpha?: number; theme?: string }
   | { op: 'tile'; id: string; x: number; y: number; w: number; h: number; alpha?: number; theme?: string }
   | { op: 'text'; value: string; x: number; y: number; style: string; color: number; alpha?: number }
   | { op: 'rect'; x: number; y: number; w: number; h: number; color: number; alpha?: number; theme?: string }

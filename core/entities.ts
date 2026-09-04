@@ -26,9 +26,21 @@
  * A wrong keystroke does not drive the cloud back. That is not an oversight
  * either: mashing keys while hunting for the right one is the behaviour, and a
  * cloud that a wrong key placated would reward it.
+ *
+ * **A monster is a word.** Every monster carries the index of the word that
+ * fells it, and nothing else can. Completing that word starts its burst; the
+ * burst runs for `monster_burst_ms` and then the monster is swept from the
+ * level. There is no health, no contact, no failure and no way to lose a fight,
+ * because a fight the player could lose would be a fight he could lose by being
+ * slow -- see docs/design/03-pacing.md#a-monster-is-a-word. `strikeWord` is the
+ * only function in this file that can change a monster's fate, it takes a word
+ * index rather than a duration, and the two functions that do take milliseconds
+ * (`burstPose`, `strikePose`) are drawing an animation that a keystroke already
+ * started.
  */
 
 import { tuningValue } from './tuning.js';
+import { BURST_FRAMES } from './sprites.js';
 import type { BlotCloud, CloudState, Tuning } from './types.js';
 
 // --- animation cadence ------------------------------------------------------
@@ -84,6 +96,27 @@ export interface Entity {
   readonly phaseMs: number;
   /** -1 faces left, 1 faces right. Fixed at placement. */
   readonly facing: number;
+  /**
+   * The word whose completion fells this monster; null for anything that is not
+   * fought, which is the scribe and any pure decoration.
+   *
+   * A word index and not a distance, a timer or a hit box. That choice is the
+   * whole no-failure guarantee expressed as a type: there is nowhere in this
+   * record to write "and it gets you in four seconds", so nothing downstream can
+   * read one.
+   */
+  readonly word: number | null;
+  /**
+   * Milliseconds since the strike landed, or null while the monster stands.
+   *
+   * Only `strikeWord` may turn this from null into a number, and `strikeWord`
+   * only ever runs on a completed word. Once it is a number the clock does move
+   * it -- an animation has to run -- but nothing is at stake while it does, and
+   * the entity is swept away at the end of it.
+   */
+  readonly burstMs: number | null;
+  /** True when this monster's burst leaves an ink pot. Rolled once, at the strike. */
+  readonly drop: boolean;
 }
 
 /**
@@ -93,6 +126,9 @@ export interface Entity {
  * an authored offset rather than a random one, because randomness in `core/`
  * must come from the injected PRNG and a level's decoration does not deserve a
  * draw from it -- see docs/architecture/core-purity.md.
+ *
+ * `word` is what makes a monster fightable. Left out, the entity is scenery that
+ * bobs for ever and nothing can ever happen to it.
  */
 export function createEntity(
   id: string,
@@ -101,8 +137,9 @@ export function createEntity(
   y: number,
   phaseOffsetMs = 0,
   facing = 1,
+  word: number | null = null,
 ): Entity {
-  return { id, kind, x, y, phaseMs: phaseOffsetMs, facing };
+  return { id, kind, x, y, phaseMs: phaseOffsetMs, facing, word, burstMs: null, drop: false };
 }
 
 /**
@@ -110,15 +147,101 @@ export function createEntity(
  *
  * Note what is *not* here: no movement, no pursuit, no timer that eventually
  * costs the player something. An entity's position is exactly where it was
- * placed, for ever.
+ * placed, for ever. The one clock that does run is a burst already begun, and a
+ * burst is a thing that has finished happening rather than a thing about to.
  */
 export function stepEntity(entity: Entity, dtMs: number): Entity {
-  return { ...entity, phaseMs: entity.phaseMs + dtMs };
+  const phaseMs = entity.phaseMs + dtMs;
+  if (entity.burstMs === null) return { ...entity, phaseMs };
+  return { ...entity, phaseMs, burstMs: entity.burstMs + dtMs };
 }
 
 /** Advance a whole level's worth. */
 export function stepEntities(entities: readonly Entity[], dtMs: number): Entity[] {
   return entities.map((e) => stepEntity(e, dtMs));
+}
+
+// --- felling a monster ------------------------------------------------------
+
+/** How long a struck monster takes to burst and leave the screen. */
+export function burstDurationMs(tuning: Tuning): number {
+  return tuningValue(tuning, 'monster_burst_ms');
+}
+
+/** How long the scribe holds the strike pose after felling something. */
+export function strikeDurationMs(tuning: Tuning): number {
+  return tuningValue(tuning, 'strike_pose_ms');
+}
+
+/** True while a monster is mid-burst: struck, and still on screen. */
+export function isBursting(entity: Entity): boolean {
+  return entity.burstMs !== null;
+}
+
+/** True once a burst has run its course and the entity should be swept away. */
+export function burstFinished(entity: Entity, tuning: Tuning): boolean {
+  return entity.burstMs !== null && entity.burstMs >= burstDurationMs(tuning);
+}
+
+/**
+ * The monsters anchored to a word and still standing.
+ *
+ * Asked *before* the strike, so a caller can roll each one's drop from the
+ * injected PRNG and hand the answers back to `strikeWord`. Splitting the query
+ * from the change is what keeps this module free of the generator: a monster's
+ * fate is decided here, and the coin that decides its loot is tossed by whoever
+ * owns the seed. See docs/architecture/core-purity.md.
+ */
+export function monstersAt(entities: readonly Entity[], word: number): Entity[] {
+  return entities.filter((e) => e.word === word && e.burstMs === null);
+}
+
+/** A strike's outcome: the level after it, and what was felled. */
+export interface StrikeResult {
+  readonly entities: Entity[];
+  /** The monsters this strike felled, already bursting. Usually none or one. */
+  readonly defeated: readonly Entity[];
+}
+
+/**
+ * The player has just completed `word`: whatever was anchored to it is felled.
+ *
+ * This is the entire combat system. It takes no duration, no damage and no
+ * distance, and there is no sibling function that hurts the player -- a monster
+ * can be defeated and it can be ignored, and those are the only two things that
+ * can ever happen to one. `drops` names the ids the caller's PRNG chose to leave
+ * an ink pot.
+ */
+export function strikeWord(
+  entities: readonly Entity[],
+  word: number,
+  drops: ReadonlySet<string> = new Set<string>(),
+): StrikeResult {
+  const defeated: Entity[] = [];
+  const next = entities.map((entity): Entity => {
+    if (entity.word !== word || entity.burstMs !== null) return entity;
+    const struck: Entity = { ...entity, burstMs: 0, drop: drops.has(entity.id) };
+    defeated.push(struck);
+    return struck;
+  });
+  return { entities: next, defeated };
+}
+
+/**
+ * Step a level's monsters and sweep away the ones whose burst has finished.
+ *
+ * Separate from `stepEntities` because sweeping needs the tuning table and the
+ * scribe does not: the scribe is stepped by the plain function and never leaves.
+ */
+export function stepMonsters(entities: readonly Entity[], dtMs: number, tuning: Tuning): Entity[] {
+  return stepEntities(entities, dtMs).filter((e) => !burstFinished(e, tuning));
+}
+
+/** How far through its burst a monster is, 0..1. Zero for one still standing. */
+export function burstFraction(entity: Entity, tuning: Tuning): number {
+  const span = burstDurationMs(tuning);
+  if (entity.burstMs === null || span <= 0) return 0;
+  return Math.min(1, Math.max(0, entity.burstMs / span));
 }
 
 /** What to draw for an entity this frame. A projection, never stored. */
@@ -153,6 +276,7 @@ export function bobOffset(elapsedMs: number, periodMs: number, amplitudePx: numb
 const FRAMES = {
   scribeIdle: 2,       // tuning-exempt: frame count of the art in core/sprites.ts
   scribeWalk: 4,       // tuning-exempt: frame count of the art in core/sprites.ts
+  scribeStrike: 2,     // tuning-exempt: frame count of the art in core/sprites.ts
   bat: 2,              // tuning-exempt: frame count of the art in core/sprites.ts
   skeleton: 2,         // tuning-exempt: frame count of the art in core/sprites.ts
 } as const;
@@ -198,6 +322,49 @@ export function poseOf(entity: Entity, moving = false): EntityPose {
     x: entity.x,
     y: entity.y + bobOffset(entity.phaseMs, ANIM.skeletonBobMs, 1),
     flip,
+  };
+}
+
+/**
+ * What to draw for a monster that has been struck, or null for one still
+ * standing.
+ *
+ * The frame is a *fraction of the burst*, not a cadence of its own, so
+ * `monster_burst_ms` is the only number that decides how long the animation
+ * lasts. A frame rate here as well would be a second duration quietly
+ * disagreeing with the documented one.
+ */
+export function burstPose(entity: Entity, tuning: Tuning): EntityPose | null {
+  if (entity.burstMs === null) return null;
+  const fraction = burstFraction(entity, tuning);
+  const last = BURST_FRAMES - 1;
+  return {
+    spriteId: 'burst',
+    frame: Math.min(last, Math.floor(fraction * BURST_FRAMES)),
+    x: entity.x,
+    y: entity.y,
+    flip: false,
+  };
+}
+
+/**
+ * The scribe in mid-strike, or null when he is not.
+ *
+ * `strikeMs` is milliseconds since he struck, which only a completed word can
+ * set to zero. The pose outranks walking and idling for its `strike_pose_ms`,
+ * because at the moment something is destroyed the player should be looking at
+ * the blow and not at a gait cycle.
+ */
+export function strikePose(scribe: Entity, strikeMs: number | null, tuning: Tuning): EntityPose | null {
+  const span = strikeDurationMs(tuning);
+  if (strikeMs === null || strikeMs >= span || span <= 0) return null;
+  const fraction = Math.min(1, Math.max(0, strikeMs / span));
+  return {
+    spriteId: 'scribe_strike',
+    frame: Math.min(FRAMES.scribeStrike - 1, Math.floor(fraction * FRAMES.scribeStrike)),
+    x: scribe.x,
+    y: scribe.y,
+    flip: scribe.facing < 0,
   };
 }
 

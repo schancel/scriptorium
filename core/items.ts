@@ -27,6 +27,7 @@
  */
 
 import { maxHearts, restoreHeart, lightCandle } from './damage.js';
+import { comboForFullTempo } from './sequencer.js';
 import { splitmix32 } from './rng.js';
 import type { Random, RngDraw } from './rng.js';
 import type { DamageState, PlayerState, Tuning, Upgrades } from './types.js';
@@ -209,6 +210,46 @@ export function applyItem(
 export function awardsInkPot(cleanVerseStreak: number, tuning: Tuning): boolean {
   const interval = Math.max(1, Math.trunc(tuningValue(tuning, 'candle_interval')));
   return cleanVerseStreak > 0 && cleanVerseStreak % interval === 0;
+}
+
+/**
+ * The chance a felled monster leaves an ink pot, at this combo.
+ *
+ * `monster_drop_chance` at no combo, rising linearly to that plus
+ * `combo_drop_bonus` at `comboForFullTempo` -- the same milestone the music
+ * accelerates to, reused rather than reinvented so "a full combo" means one
+ * thing in this game and not two.
+ *
+ * The combo only ever *adds*. Breaking it returns the chance to its base and
+ * takes nothing away, which is the whole of why a combo is allowed to matter
+ * here at all: a bonus that could be lost is a punishment wearing a reward's
+ * clothes, and this game has exactly one pressure and it is not this one.
+ * See docs/design/03-pacing.md#a-monster-is-a-word.
+ */
+export function inkPotChance(combo: number, tuning: Tuning): number {
+  const base = tuningValue(tuning, 'monster_drop_chance');
+  const bonus = tuningValue(tuning, 'combo_drop_bonus');
+  const full = comboForFullTempo(tuning);
+  const fraction = full > 0 ? Math.min(1, Math.max(0, combo / full)) : 1;
+  return Math.min(1, Math.max(0, base + fraction * bonus));
+}
+
+/**
+ * Roll one felled monster's drop.
+ *
+ * From the injected PRNG and the caller's state, never from an ambient
+ * generator: a passage replayed from the same seed with the same words typed in
+ * the same order must drop the same pots, or a recorded run is not a recording.
+ * See docs/architecture/core-purity.md.
+ */
+export function dropsInkPot(
+  rngState: number,
+  combo: number,
+  tuning: Tuning,
+  random: Random = splitmix32,
+): RngDraw & { dropped: boolean } {
+  const draw = random(rngState);
+  return { ...draw, dropped: draw.value < inkPotChance(combo, tuning) };
 }
 
 /**

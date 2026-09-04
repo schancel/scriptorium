@@ -31,15 +31,18 @@ import {
   type SceneState,
 } from './draw.js';
 import { createRail, focalX } from './rail.js';
-import { createCloud, createEntity, stepCloud, stepEntities, idleThresholdMs } from './entities.js';
+import {
+  burstDurationMs, createCloud, createEntity, idleThresholdMs, stepCloud, stepEntities,
+  stepMonsters, strikeDurationMs, strikeWord,
+} from './entities.js';
 import { createDamage } from './damage.js';
-import { PALETTE_ROLES, SPRITE_SIZE, spriteFor } from './sprites.js';
+import { CANDLE_UNLIT_FRAME, PALETTE_ROLES, SPRITE_SIZE, spriteFor } from './sprites.js';
 import { DEFAULT_THEME, WORLDS } from './worlds.js';
 import { classify } from './illumination.js';
 import type { BlotCloud, DamageState, DrawCmd, Glyph, Key, Score, Tuning } from './types.js';
 
 /** The rows data/tuning.json carries that any of this path reads. */
-const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20, smudge_max: 100, smudge_per_error_base: 12, smudge_per_error_step: 1, smudge_decay_per_key: 3, hearts_start: 3, hearts_max: 5, idle_base_ms: 8000, idle_step_ms: 400, idle_floor_ms: 3000, cloud_approach_ms: 2500, cloud_smudge: 25 }; // tuning-exempt: test fixture mirroring data/tuning.json
+const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20, smudge_max: 100, smudge_per_error_base: 12, smudge_per_error_step: 1, smudge_decay_per_key: 3, hearts_start: 3, hearts_max: 5, idle_base_ms: 8000, idle_step_ms: 400, idle_floor_ms: 3000, cloud_approach_ms: 2500, cloud_smudge: 25, monster_burst_ms: 320, strike_pose_ms: 200 }; // tuning-exempt: test fixture mirroring data/tuning.json
 
 const FRAME_MS = 16; // tuning-exempt: test fixture, a frame at 60Hz
 const HOUR_MS = 3600000; // tuning-exempt: the length of the simulated trace
@@ -77,6 +80,7 @@ function scene(over: Partial<SceneState> = {}): SceneState {
     damage,
     heartsMax: TUNING['hearts_max'] ?? 0,
     candles: [{ x: 0, lit: true }, { x: 900, lit: false }], // tuning-exempt: test fixture placement
+    strikeMs: null,
     ...over,
   };
 }
@@ -322,4 +326,113 @@ test('a candle the scribe has not reached is drawn dimmer than one he has', () =
   const [lit, unlit] = candles;
   assert.ok(lit !== undefined && unlit !== undefined);
   assert.ok((lit.alpha ?? 1) > (unlit.alpha ?? 1), 'an unreached candle is as bright as a lit one');
+});
+
+// --- felling a monster -------------------------------------------------------
+
+/** The monster the fixture anchors to word 4, felled and mid-burst. */
+const ANCHOR_WORD = 4; // tuning-exempt: test fixture, not a game tunable
+
+function anchored(drop = false): DrawCmd[] {
+  const monster = createEntity('skel-0', 'skeleton', 200, LAYOUT.groundY - SPRITE_SIZE, 0, -1, ANCHOR_WORD); // tuning-exempt: test fixture placement
+  const struck = strikeWord([monster], ANCHOR_WORD, drop ? new Set(['skel-0']) : new Set<string>());
+  return drawFrame(
+    frame(0, { scene: scene({ entities: struck.entities, cameraX: 0 }) }),
+    createRail(0),
+    TUNING,
+  );
+}
+
+test('a felled monster is drawn as its burst rather than as itself', () => {
+  const standing = drawFrame(frame(0), createRail(0), TUNING);
+  assert.ok(sprites(standing).some((c) => c.id === 'skeleton'));
+  assert.equal(sprites(standing).filter((c) => c.id === 'burst').length, 0);
+
+  const felled = anchored();
+  assert.equal(sprites(felled).filter((c) => c.id === 'skeleton').length, 0, 'the monster survived its own burst');
+  const burst = sprites(felled).filter((c) => c.id === 'burst');
+  assert.equal(burst.length, 1);
+  const only = burst[0];
+  assert.ok(only !== undefined && bottomOf(only) <= RAIL_TOP, 'the burst reaches into the rail');
+});
+
+test('the burst walks its frames and then leaves the level, on its tuning row', () => {
+  const monster = createEntity('skel-0', 'skeleton', 200, LAYOUT.groundY - SPRITE_SIZE, 0, -1, ANCHOR_WORD); // tuning-exempt: test fixture placement
+  let world = strikeWord([monster], ANCHOR_WORD).entities;
+  const span = burstDurationMs(TUNING);
+  const seen = new Set<number>();
+  for (let t = 0; t < span; t += FRAME_MS) {
+    const cmds = drawFrame(frame(0, { scene: scene({ entities: world }) }), createRail(0), TUNING);
+    const burst = sprites(cmds).find((c) => c.id === 'burst');
+    assert.ok(burst !== undefined, `nothing drawn at ${String(t)}ms of the burst`);
+    seen.add(burst.frame ?? 0);
+    world = stepMonsters(world, FRAME_MS, TUNING);
+  }
+  assert.deepEqual([...seen].sort((a, b) => a - b), [0, 1, 2]);
+  assert.equal(world.length, 0, 'the burst never ended');
+  const after = drawFrame(frame(0, { scene: scene({ entities: world }) }), createRail(0), TUNING);
+  assert.equal(sprites(after).filter((c) => c.id === 'burst').length, 0);
+  assert.equal(sprites(after).filter((c) => c.id === 'skeleton').length, 0);
+});
+
+test('a drop puts an ink pot in the burst, and no drop puts nothing there', () => {
+  assert.equal(sprites(anchored(false)).filter((c) => c.id === 'ink_pot').length, 0);
+  const pots = sprites(anchored(true)).filter((c) => c.id === 'ink_pot');
+  assert.equal(pots.length, 1);
+  const pot = pots[0];
+  assert.ok(pot !== undefined && bottomOf(pot) <= RAIL_TOP);
+});
+
+test('the scribe strikes when he strikes, and goes back to walking after', () => {
+  const striking = drawFrame(
+    frame(0, { scene: scene({ walking: true, strikeMs: 0 }) }),
+    createRail(0),
+    TUNING,
+  );
+  assert.ok(sprites(striking).some((c) => c.id === 'scribe_strike'));
+  assert.ok(!sprites(striking).some((c) => c.id.startsWith('scribe_walk')));
+
+  // The pose outranks walking for exactly its tuning row, and not a millisecond
+  // more: it is feedback on a keystroke, not a state to get stuck in.
+  const span = strikeDurationMs(TUNING);
+  const done = drawFrame(
+    frame(0, { scene: scene({ walking: true, strikeMs: span }) }),
+    createRail(0),
+    TUNING,
+  );
+  assert.ok(sprites(done).some((c) => c.id === 'scribe_walk'));
+  assert.ok(!sprites(done).some((c) => c.id === 'scribe_strike'));
+});
+
+test('nothing about the combat loop moves without a keystroke', () => {
+  // The property ADR 0004 exists to protect, asserted on the picture rather than
+  // on the state: ten seconds of silence over a level with a standing monster
+  // leaves every sprite in the band on the pixel it was on, none of them a
+  // burst, and the scribe not striking at anything.
+  let world = scene().entities;
+  const drawn = (entities: readonly ReturnType<typeof createEntity>[]): string =>
+    JSON.stringify(
+      sprites(drawFrame(frame(0, { scene: scene({ entities }) }), createRail(0), TUNING))
+        .filter((c) => c.id !== 'blot_cloud' && !c.id.startsWith('scribe_'))
+        .map((c) => ({ id: c.id, x: c.x })),
+    );
+  const before = drawn(world);
+  const tenSeconds = 10000; // tuning-exempt: the length of the simulated trace
+  for (let t = 0; t < tenSeconds; t += FRAME_MS) world = stepMonsters(world, FRAME_MS, TUNING);
+  assert.equal(drawn(world), before, 'the level changed while the player sat still');
+  assert.equal(world.length, scene().entities.length, 'a monster left during silence');
+});
+
+test('an unreached candle is drawn out, not drawn burning and faint', () => {
+  const cmds = drawFrame(
+    frame(0, { scene: scene({ candles: [{ x: 0, lit: true }, { x: 200, lit: false }] }) }), // tuning-exempt: test fixture placement
+    createRail(0),
+    TUNING,
+  );
+  const candles = sprites(cmds).filter((c) => c.id === 'candle');
+  assert.equal(candles.length, 2);
+  const [lit, unlit] = candles;
+  assert.ok(lit !== undefined && unlit !== undefined);
+  assert.equal(unlit.frame, CANDLE_UNLIT_FRAME, 'the unlit candle is still drawing a flame');
+  assert.notEqual(lit.frame, CANDLE_UNLIT_FRAME);
 });

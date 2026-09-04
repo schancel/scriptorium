@@ -21,6 +21,8 @@ import {
   awardsInkPot,
   awardsWaxSeal,
   createPlayer,
+  dropsInkPot,
+  inkPotChance,
   isItemId,
   loadItems,
   offersBonusWord,
@@ -206,4 +208,62 @@ test('the PRNG is uniform, deterministic and never leaves [0, 1)', () => {
   }
   assert.ok(Math.abs(sum / draws - 0.5) < 0.02, 'the PRNG is biased');   // tuning-exempt: test fixture, not a game tunable
   for (const count of buckets) assert.ok(Math.abs(count / draws - 0.25) < 0.02, 'the PRNG is lumpy');   // tuning-exempt: test fixture, not a game tunable
+});
+
+// --- what a felled monster leaves -------------------------------------------
+
+test('a drop is a seeded draw, so a passage replays identically', () => {
+  // The property the whole injected-PRNG seam exists for: same seed, same
+  // sequence of felled monsters, same pots. If this can vary, a recorded run is
+  // not a recording. See docs/architecture/core-purity.md.
+  const runOnce = (seed: number): boolean[] => {
+    const out: boolean[] = [];
+    let state = seed;
+    for (let i = 0; i < 200; i += 1) {   // tuning-exempt: test fixture, not a game tunable
+      const roll = dropsInkPot(state, 0, TUNING);
+      state = roll.state;
+      out.push(roll.dropped);
+    }
+    return out;
+  };
+  assert.deepEqual(runOnce(12345), runOnce(12345));   // tuning-exempt: test fixture, an arbitrary seed
+  assert.notDeepEqual(runOnce(12345), runOnce(999));  // tuning-exempt: test fixture, a different seed
+
+  // And it lands near the documented rate, which is what makes "occasional"
+  // a number rather than a feeling.
+  const rate = runOnce(7).filter(Boolean).length / 200;   // tuning-exempt: test fixture, an arbitrary seed
+  const expected = tuningValue(TUNING, 'monster_drop_chance');
+  assert.ok(Math.abs(rate - expected) < 0.1, `dropped ${String(rate)}, expected about ${String(expected)}`);   // tuning-exempt: test fixture, sampling slack
+});
+
+test('the combo raises the drop chance and can never lower it', () => {
+  const base = tuningValue(TUNING, 'monster_drop_chance');
+  const bonus = tuningValue(TUNING, 'combo_drop_bonus');
+  assert.equal(inkPotChance(0, TUNING), base);
+
+  // Monotonic, bounded, and never below the base -- so losing a combo returns
+  // the player to where he started and takes nothing away from him. A bonus
+  // that could be lost is a punishment in a reward's clothes, and the game has
+  // exactly one pressure and it is the blot-cloud.
+  let previous = base;
+  for (let combo = 0; combo < 500; combo += 7) {   // tuning-exempt: test fixture, not a game tunable
+    const chance = inkPotChance(combo, TUNING);
+    assert.ok(chance >= previous, 'a longer combo dropped the chance');
+    assert.ok(chance >= base && chance <= Math.min(1, base + bonus), 'the bonus ran past its bound');
+    previous = chance;
+  }
+  assert.equal(inkPotChance(500, TUNING), Math.min(1, base + bonus));   // tuning-exempt: test fixture, well past a full combo
+  // A negative combo cannot exist, but if one arrived it would still be the base.
+  assert.equal(inkPotChance(-10, TUNING), base);   // tuning-exempt: test fixture, not a game tunable
+});
+
+test('a drop roll takes its randomness from the caller, never from ambient', () => {
+  // Handed a generator that always says zero, every monster drops; handed one
+  // that always says one, none does. Nothing else can decide it.
+  const always: Random = (state: number) => ({ value: 0, state: state + 1 });
+  const never: Random = (state: number) => ({ value: 1, state: state + 1 });
+  assert.equal(dropsInkPot(0, 0, TUNING, always).dropped, true);
+  assert.equal(dropsInkPot(0, 0, TUNING, never).dropped, false);
+  // The advanced state comes back so the caller can thread the stream on.
+  assert.equal(dropsInkPot(41, 0, TUNING, always).state, 42);   // tuning-exempt: test fixture, not a game tunable
 });

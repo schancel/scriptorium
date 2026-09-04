@@ -211,6 +211,26 @@
       a row for the thumb you actually use.
     </p>
 
+    <!-- The one pressure in the game, and the switch that turns it off.
+         ADR 0004 requires this switch to exist: the ink cloud is meant to
+         motivate, and if it stresses instead, the game has to still be
+         playable. It was implemented in core and reachable from nowhere. -->
+    <h3>The ink cloud</h3>
+    <div class="row">
+      <label>Ink cloud
+        <select id="menu-cloud">
+          <option value="on">On</option>
+          <option value="off">Off</option>
+        </select>
+      </label>
+    </div>
+    <p class="dim">
+      Stop typing altogether and a cloud of ink drifts in and smudges finished
+      work. Taking a long time over a single key never brings it — only stopping
+      does. Turn it off if it nags rather than nudges; nothing else changes, and
+      the game is fully playable without it.
+    </p>
+
     <h3>This passage</h3>
     <div class="row row-pinned">
       <button id="menu-resume" class="primary" type="button">Resume</button>

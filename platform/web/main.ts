@@ -42,10 +42,13 @@ import {
 } from '../../core/draw.js';
 import { SPRITE_SIZE } from '../../core/sprites.js';
 import {
-  createCloud, createEntity, stepCloud, stepEntities, type Entity,
+  createCloud, createEntity, monstersAt, stepCloud, stepEntities, stepMonsters,
+  strikeDurationMs, strikeWord, type Entity,
 } from '../../core/entities.js';
+import { dropsInkPot } from '../../core/items.js';
 import {
   applyCloudStrike, applyCorrect, applyError, createDamage, isDead, maxHearts,
+  restoreHeart,
 } from '../../core/damage.js';
 import { draws, seedFrom } from '../../core/rng.js';
 import { DEFAULT_THEME } from '../../core/worlds.js';
@@ -131,6 +134,8 @@ const FALLBACK_TUNING = {
     rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, warp_phase_ms: 1400,
     warp_echo_hold_ms: 900, lectio_start_wpm: 180, lectio_ramp_wpm: 20, lectio_max_wpm: 700,
     candle_interval: 3, bonus_word_chance: 0.15, master_volume: 0.35, audio_default_on: 0,
+    monster_burst_ms: 320, strike_pose_ms: 200, monster_drop_chance: 0.2, combo_drop_bonus: 0.2,
+    gild_score_per_char: 2, gild_page_bonus: 50,
     wpm_chars_per_word: 5, history_max_sessions: 500,
   },
 };
@@ -239,6 +244,23 @@ function wordBreaks(glyphs: readonly Glyph[]): number[] {
 }
 
 /**
+ * How many words are wholly behind the cursor.
+ *
+ * The single definition of "finished a word" in the program. The camera reads
+ * it, and so does combat: a monster is felled when this number passes its
+ * anchor, on the same keystroke that moves the world. Two counts that disagreed
+ * would put the blow a word away from the thing it lands on.
+ */
+function wordsDone(breaks: readonly number[], cursor: number): number {
+  let done = 0;
+  for (const at of breaks) {
+    if (at >= cursor) break;
+    done += 1;
+  }
+  return done;
+}
+
+/**
  * Progress through the ribbon, in words, including the fraction of the word
  * currently under the cursor.
  *
@@ -247,45 +269,57 @@ function wordBreaks(glyphs: readonly Glyph[]): number[] {
  * is worth exactly one stride however many letters it has.
  */
 function wordProgress(breaks: readonly number[], cursor: number, count: number): number {
-  let done = 0;
-  let start = 0;
-  let end = count;
-  for (const at of breaks) {
-    if (at < cursor) {
-      done += 1;
-      start = at + 1;
-    } else {
-      end = at;
-      break;
-    }
-  }
+  const done = wordsDone(breaks, cursor);
+  const start = done === 0 ? 0 : (breaks[done - 1] ?? -1) + 1;
+  const end = breaks[done] ?? count;
   const span = end - start;
   const fraction = span > 0 ? Math.min(1, Math.max(0, (cursor - start) / span)) : 0;
   return done + fraction;
 }
 
+/** Words between one monster and the next: the spacing above, in strides. */
+const WORDS_PER_MONSTER = Math.max(1, Math.round(MONSTER_SPACING / WORLD_STRIDE));
+
 /**
- * The idling monsters standing in one stretch of world.
+ * The idling monsters standing in one stretch of world, each anchored to the
+ * word that fells it.
  *
- * Their positions come from the seeded generator in `core/rng.ts`, keyed on the
- * passage, so the same part is decorated the same way on every reload without a
- * byte being stored -- and never from `Math.random`, which would make a replay
- * of a recorded run a different level.
+ * Their anchors and kinds come from the seeded generator in `core/rng.ts`, keyed
+ * on the passage, so the same part is decorated the same way on every reload
+ * without a byte being stored -- and never from `Math.random`, which would make
+ * a replay of a recorded run a different level.
+ *
+ * A monster's world x is *derived* from its word rather than chosen: it stands
+ * at the position the camera will have reached when that word is finished, plus
+ * the scribe's own screen x, so it is directly in front of him at the moment the
+ * blow lands. Position and anchor are therefore the same fact, and a monster
+ * cannot end up being struck from across the room.
  *
  * They face left, toward the oncoming scribe, and they never move. The scribe
  * arrives at them because he typed; they never arrive at him.
  */
-function placeMonsters(seed: number, span: number, groundY: number): Entity[] {
-  const count = Math.max(1, Math.round(span / MONSTER_SPACING));
-  const rolls = draws(seed, count * DRAWS_PER_MONSTER);
+function placeMonsters(
+  seed: number,
+  wordCount: number,
+  groundY: number,
+  scribeX: number,
+): Entity[] {
+  const count = wordCount === 0 ? 0 : Math.max(1, Math.floor(wordCount / WORDS_PER_MONSTER));
+  const rolls = draws(seed, Math.max(1, count) * DRAWS_PER_MONSTER);
   const out: Entity[] = [];
   for (let i = 0; i < count; i += 1) {
     const jitter = rolls[i * DRAWS_PER_MONSTER] ?? 0;
     const kind = (rolls[i * DRAWS_PER_MONSTER + 1] ?? 0) < 0.5 ? 'bat' : 'skeleton';
     const phase = rolls[i * DRAWS_PER_MONSTER + 2] ?? 0;
-    const x = Math.round((i + 0.4 + jitter * 0.4) * MONSTER_SPACING);
+    // Somewhere inside this monster's own block of words, never in the next
+    // one's, so two monsters can never share an anchor.
+    const word = Math.min(
+      wordCount - 1,
+      i * WORDS_PER_MONSTER + Math.floor(jitter * WORDS_PER_MONSTER),
+    );
+    const x = Math.round((word + 1) * WORLD_STRIDE + scribeX);
     const y = groundY - SPRITE_SIZE - (kind === 'bat' ? BAT_LIFT : 0);
-    out.push(createEntity(`${kind}-${String(i)}`, kind, x, y, phase * PHASE_SPREAD_MS, -1));
+    out.push(createEntity(`${kind}-${String(i)}`, kind, x, y, phase * PHASE_SPREAD_MS, -1, word));
   }
   return out;
 }
@@ -414,9 +448,28 @@ interface Level {
   readonly span: number;
   /** The two checkpoints bounding this part, in world x. */
   readonly candleXs: readonly number[];
-  /** Standing scenery. Placed once, and never moved. */
+  /**
+   * The monsters in this part. Placed once, never moved, and removed only by
+   * being defeated -- see `resolveDefeats`.
+   */
   monsters: Entity[];
   scribe: Entity;
+  /**
+   * Milliseconds since the scribe last struck, or null when he is not striking.
+   *
+   * Set to zero by a completed word and by nothing else. The loop runs it out
+   * so the pose ends; nothing depends on it having ended.
+   */
+  strikeMs: number | null;
+  /**
+   * The PRNG state the drop rolls draw from.
+   *
+   * Its own stream, seeded from the passage, so which monsters leave an ink pot
+   * is fixed by the seed and the order the words were finished in -- and so that
+   * adding or removing a draw here can never shift the monster *placement*
+   * stream and redecorate the level.
+   */
+  dropRng: number;
   /** Where the world has got to. A pure function of words completed, eased. */
   cameraX: number;
   /** Accumulated animation time, for art that flickers rather than moves. */
@@ -457,6 +510,7 @@ function sceneFor(
     damage,
     heartsMax: maxHearts(tuning),
     candles: candlesOf(level),
+    strikeMs: level.strikeMs,
   };
 }
 
@@ -548,6 +602,17 @@ async function boot(): Promise<void> {
   // not the passage's: finishing a part must not quietly hand back a heart.
   let damage: DamageState = createDamage(tuning);
   let cloud: BlotCloud = createCloud();
+  /**
+   * Whether the blot-cloud is armed.
+   *
+   * ADR 0004 requires this switch to exist and to stay, and `stepCloud` has
+   * always taken it -- but it was hard-wired true here, so the switch the ADR
+   * describes was reachable from nowhere. It is a menu control now. It lives for
+   * the session rather than in the progress record, because persisting it means
+   * a field in `core/progress.ts` and a migration, and the ADR asks for a way to
+   * turn the threat off rather than for a remembered preference.
+   */
+  let cloudEnabled = true;
 
   function keySetAt(stage: number): ReadonlySet<Key> {
     return stages.length === 0 ? new Set(FALLBACK_KEY_SET) : keySetFor(stages, stage);
@@ -597,7 +662,8 @@ async function boot(): Promise<void> {
     const breaks = wordBreaks(glyphs);
     // One stride per word, and the part's far candle stands at the end of them.
     const span = (breaks.length + 1) * WORLD_STRIDE;
-    const seed = seedFrom(`${book.title} ${String(chapter)} ${String(chunkIndex)}`);
+    const where = `${book.title} ${String(chapter)} ${String(chunkIndex)}`;
+    const seed = seedFrom(where);
 
     return {
       book,
@@ -623,8 +689,14 @@ async function boot(): Promise<void> {
       // The candle behind him is the checkpoint he is standing on; the one ahead
       // is the next, and it lights as he reaches it.
       candleXs: [0, span],
-      monsters: placeMonsters(seed, span, layout.groundY),
+      // Resuming mid-part, the monsters whose words are already behind the
+      // cursor are gone: he beat them before he closed the tab, and re-fighting
+      // them would make a checkpoint cost something it is not supposed to cost.
+      monsters: placeMonsters(seed, breaks.length, layout.groundY, layout.scribeX)
+        .filter((m) => m.word === null || m.word >= wordsDone(breaks, typing.cursor)),
       scribe: createEntity('scribe', 'scribe', layout.scribeX, layout.groundY - SPRITE_SIZE),
+      strikeMs: null,
+      dropRng: seedFrom(`${where} drops`),
       // The camera opens where the cursor already is, so resuming mid-part does
       // not scroll the whole passage past the player before it settles.
       cameraX: wordProgress(breaks, typing.cursor, glyphs.length) * WORLD_STRIDE,
@@ -782,6 +854,7 @@ async function boot(): Promise<void> {
       chapter: level.chapter,
       layout: progress.layout,
       spaceThumb: progress.spaceThumb,
+      cloudEnabled,
       history: progress.history,
     };
   }
@@ -825,6 +898,13 @@ async function boot(): Promise<void> {
         false,
       );
       overlay.openMenu(menuView());
+    },
+    setCloud: (enabled) => {
+      cloudEnabled = enabled;
+      // Disarmed mid-telegraph, it goes away at once rather than finishing the
+      // approach it was already making. A switch that let one last strike
+      // through would read as not having worked.
+      if (!enabled) cloud = createCloud();
     },
     startOver: () => {
       clearProgress();
@@ -906,8 +986,48 @@ async function boot(): Promise<void> {
     const before = level.typing;
     level.typing = applyKey(level.typing, event.value, tuning);
     scoreKeystroke(before, level.typing);
+    resolveDefeats(before.cursor);
     bookmark();
     if (atEnd(level.typing)) finishChunk();
+  }
+
+  /**
+   * The words finished by the keystroke just applied, and what they fell.
+   *
+   * Called from `onInput` and from nowhere else, which is the whole design: a
+   * monster can only ever be defeated by a keystroke, on the exact frame the
+   * keystroke arrives rather than a frame later when the loop notices. Nothing
+   * here can hurt the player and there is no branch in which a monster wins --
+   * a monster is either felled or still standing, and standing costs nothing.
+   * See docs/design/03-pacing.md#a-monster-is-a-word.
+   *
+   * More than one word can land on a keystroke: a greyed run auto-advances the
+   * cursor past whatever it covers, spaces included, so the loop walks every
+   * word crossed rather than assuming one.
+   */
+  function resolveDefeats(cursorBefore: number): void {
+    const from = wordsDone(level.breaks, cursorBefore);
+    const to = wordsDone(level.breaks, level.typing.cursor);
+    for (let word = from; word < to; word += 1) {
+      const standing = monstersAt(level.monsters, word);
+      if (standing.length === 0) continue;
+      const drops = new Set<string>();
+      for (const monster of standing) {
+        // From the level's own seeded stream, never `Math.random`: the same
+        // passage typed again drops the same pots.
+        const roll = dropsInkPot(level.dropRng, damage.combo, tuning);
+        level.dropRng = roll.state;
+        if (!roll.dropped) continue;
+        drops.add(monster.id);
+        // Granted as it is dropped rather than left lying to be collected. A
+        // pickup that could be walked past would be a way to lose something by
+        // being slow, and that is the one thing this game does not have.
+        damage = restoreHeart(damage, tuning);
+      }
+      level.monsters = strikeWord(level.monsters, word, drops).entities;
+      level.strikeMs = 0;
+      cues.push('defeat');
+    }
   }
 
   /**
@@ -969,7 +1089,7 @@ async function boot(): Promise<void> {
     const telegraphing = cloud.phase !== 'absent';
     const step = stepCloud(
       cloud,
-      { stage: level.stage, correctKey: correctThisFrame, enabled: true },
+      { stage: level.stage, correctKey: correctThisFrame, enabled: cloudEnabled },
       dtMs,
       tuning,
     );
@@ -1026,8 +1146,15 @@ async function boot(): Promise<void> {
     if (live) {
       level.typing = tick(level.typing, dtMs);
       level.animMs += dtMs;
-      level.monsters = stepEntities(level.monsters, dtMs);
+      // Bobbing, and running out the bursts a keystroke already started; a
+      // finished burst is swept here. No monster is placed, moved or defeated
+      // by this call -- only `resolveDefeats` can do any of that.
+      level.monsters = stepMonsters(level.monsters, dtMs, tuning);
       level.scribe = stepEntities([level.scribe], dtMs)[0] ?? level.scribe;
+      if (level.strikeMs !== null) {
+        const held = level.strikeMs + dtMs;
+        level.strikeMs = held >= strikeDurationMs(tuning) ? null : held;
+      }
       stepThreat(dtMs);
       // Word-driven, and only word-driven: the target is a function of how many
       // words are behind the cursor, and this only eases toward it.

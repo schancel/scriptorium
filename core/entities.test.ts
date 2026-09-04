@@ -1,5 +1,6 @@
 /**
- * The cloud comes for silence and for nothing else.
+ * The cloud comes for silence, monsters come for words, and neither comes for
+ * slowness.
  *
  * @doc docs/design/03-pacing.md#the-threat-is-idleness-not-slowness
  *
@@ -16,19 +17,29 @@ import { readFileSync } from 'node:fs';
 
 import {
   bobOffset,
+  burstDurationMs,
+  burstFraction,
+  burstPose,
   cloudPose,
   createCloud,
   createEntity,
   frameAt,
   idleThresholdMs,
+  isBursting,
   isTelegraphing,
+  monstersAt,
   poseOf,
   stepCloud,
   stepEntities,
   stepEntity,
+  stepMonsters,
+  strikeDurationMs,
+  strikePose,
+  strikeWord,
   toCloudState,
   type BlotCloud,
   type CloudInput,
+  type Entity,
 } from './entities.js';
 import { spriteFor } from './sprites.js';
 import { loadTuning, tuningValue } from './tuning.js';
@@ -262,4 +273,163 @@ test('frameAt and bobOffset are total', () => {
   assert.equal(bobOffset(750, 1000, 2), -2);   // tuning-exempt: test fixture, not a game tunable
   assert.equal(bobOffset(250, 0, 2), 0);   // tuning-exempt: test fixture, not a game tunable
   assert.ok(Number.isInteger(bobOffset(137, 900, 2)), 'a fractional bob shimmers');   // tuning-exempt: test fixture, not a game tunable
+});
+
+// --- a monster is a word ----------------------------------------------------
+
+/**
+ * Three monsters anchored to words 2, 5 and 9 of a passage.
+ *
+ * The anchors are the fixture's whole content: a monster in this game is a word
+ * index and a picture, and everything asserted below is about the first half.
+ */
+const ANCHORS: readonly number[] = [2, 5, 9]; // tuning-exempt: test fixture, not a game tunable
+
+function level(): Entity[] {
+  return [
+    createEntity('bat-0', 'bat', 100, 60, 0, -1, ANCHORS[0]),   // tuning-exempt: test fixture placement
+    createEntity('skel-0', 'skeleton', 300, 60, 0, -1, ANCHORS[1]), // tuning-exempt: test fixture placement
+    createEntity('bat-1', 'bat', 500, 60, 0, -1, ANCHORS[2]),   // tuning-exempt: test fixture placement
+  ];
+}
+
+/**
+ * Everything about a monster except its animation clock.
+ *
+ * `phaseMs` is a wing beat and is allowed to advance in silence -- a bat that
+ * froze mid-flap would look broken. Every other field is combat, and none of it
+ * may move without a keystroke. Comparing this projection rather than the whole
+ * record is what makes that distinction assertable instead of merely intended.
+ */
+function combatState(entities: readonly Entity[]): string {
+  return JSON.stringify(
+    entities.map(({ id, kind, x, y, facing, word, burstMs, drop }) => ({
+      id, kind, x, y, facing, word, burstMs, drop,
+    })),
+  );
+}
+
+test('completing the anchored word fells that monster, and nothing else does', () => {
+  const struck = strikeWord(level(), ANCHORS[1] ?? 0);
+  assert.equal(struck.defeated.length, 1);
+  assert.equal(struck.defeated[0]?.id, 'skel-0');
+  for (const entity of struck.entities) {
+    assert.equal(isBursting(entity), entity.word === ANCHORS[1], `${entity.id} took the wrong blow`);
+  }
+
+  // Every other word in the passage, including words off both ends of it,
+  // leaves the whole level standing.
+  for (let word = -2; word < 14; word += 1) {   // tuning-exempt: test fixture, a span wider than the anchors
+    const expected = ANCHORS.includes(word) ? 1 : 0;
+    assert.equal(
+      strikeWord(level(), word).defeated.length,
+      expected,
+      `word ${String(word)} felled the wrong number of monsters`,
+    );
+  }
+});
+
+test('a monster cannot be struck twice, and a strike carries the drop it was given', () => {
+  const once = strikeWord(level(), ANCHORS[0] ?? 0);
+  assert.equal(once.defeated.length, 1);
+  assert.equal(once.defeated[0]?.drop, false, 'a strike invented a drop of its own');
+  assert.equal(strikeWord(once.entities, ANCHORS[0] ?? 0).defeated.length, 0);
+
+  const looted = strikeWord(level(), ANCHORS[0] ?? 0, new Set(['bat-0']));
+  assert.equal(looted.defeated[0]?.drop, true);
+  // A set naming something that is not there is not an error and changes nothing.
+  const stranger = strikeWord(level(), ANCHORS[0] ?? 0, new Set(['no-such-monster']));
+  assert.equal(stranger.defeated[0]?.drop, false);
+});
+
+test('monstersAt names the standing monsters and forgets the felled ones', () => {
+  const standing = level();
+  assert.deepEqual(monstersAt(standing, ANCHORS[2] ?? 0).map((e) => e.id), ['bat-1']);
+  assert.deepEqual(monstersAt(standing, 4).map((e) => e.id), []);   // tuning-exempt: test fixture, an unanchored word
+  const after = strikeWord(standing, ANCHORS[2] ?? 0).entities;
+  assert.deepEqual(monstersAt(after, ANCHORS[2] ?? 0).map((e) => e.id), []);
+});
+
+test('no monster state advances without a keystroke', () => {
+  // The ADR 0004 property, stated as strictly as it can be: over ten seconds of
+  // total silence the combat state of the level is byte-identical. Nothing is
+  // struck, nothing bursts, nothing is swept away, nothing moves and nothing
+  // acquires a drop. The only field allowed to change is the wing beat.
+  let world = level();
+  const before = combatState(world);
+  const tenSeconds = 10000; // tuning-exempt: the length of the simulated trace
+  for (let t = 0; t < tenSeconds; t += FRAME_MS) world = stepMonsters(world, FRAME_MS, TUNING);
+  assert.equal(combatState(world), before, 'something in the level advanced on a clock');
+  assert.equal(world.length, ANCHORS.length, 'a monster arrived or left during silence');
+  assert.ok(world.every((e) => !isBursting(e)));
+});
+
+test('a monster never blocks progress, however long the player takes over its word', () => {
+  // An hour of deliberation over one word costs nothing and changes nothing:
+  // the monster is exactly where it was, still standing, and the word still
+  // fells it when it finally arrives. There is no state in which it wins.
+  let world = level();
+  const hour = 3600000; // tuning-exempt: the length of the simulated trace
+  for (let t = 0; t < hour; t += FRAME_MS) world = stepMonsters(world, FRAME_MS, TUNING);
+  assert.deepEqual(world.map((e) => e.x), level().map((e) => e.x));
+  assert.deepEqual(world.map((e) => e.burstMs), [null, null, null]);
+
+  const late = strikeWord(world, ANCHORS[1] ?? 0);
+  assert.equal(late.defeated.length, 1, 'an hour of patience cost the player the fight');
+});
+
+test('the burst runs its whole course and then the monster is gone', () => {
+  let world = strikeWord(level(), ANCHORS[0] ?? 0).entities;
+  assert.equal(world.length, ANCHORS.length, 'the monster vanished on the frame it was struck');
+
+  const span = burstDurationMs(TUNING);
+  const art = spriteFor('burst');
+  assert.ok(art !== null);
+  const framesSeen = new Set<number>();
+  for (let t = 0; t < span; t += FRAME_MS) {
+    const struck = world.find((e) => e.id === 'bat-0');
+    assert.ok(struck !== undefined, `the burst was swept away at ${String(t)}ms of ${String(span)}`);
+    const pose = burstPose(struck, TUNING);
+    assert.ok(pose !== null);
+    assert.equal(pose.spriteId, 'burst');
+    assert.ok(pose.frame >= 0 && pose.frame < art.frames.length);
+    framesSeen.add(pose.frame);
+    world = stepMonsters(world, FRAME_MS, TUNING);
+  }
+  assert.deepEqual([...framesSeen].sort((a, b) => a - b), [0, 1, 2], 'the burst skipped a frame');
+  assert.equal(world.find((e) => e.id === 'bat-0'), undefined, 'the burst never ended');
+  assert.equal(world.length, ANCHORS.length - 1);
+  // And the monsters it stood beside are untouched.
+  assert.deepEqual(world.map((e) => e.id), ['skel-0', 'bat-1']);
+});
+
+test('a standing monster has no burst pose, and the fraction is total', () => {
+  const standing = level()[0];
+  assert.ok(standing !== undefined);
+  assert.equal(burstPose(standing, TUNING), null);
+  assert.equal(burstFraction(standing, TUNING), 0);
+
+  const struck = strikeWord([standing], standing.word ?? 0).entities[0];
+  assert.ok(struck !== undefined);
+  assert.equal(burstFraction(struck, TUNING), 0);
+  assert.equal(burstFraction(stepEntity(struck, burstDurationMs(TUNING) * 4), TUNING), 1);   // tuning-exempt: test fixture, well past the end
+});
+
+test('the scribe holds the strike pose for strike_pose_ms and then puts it down', () => {
+  const scribe = createEntity('scribe', 'scribe', 10, 20);   // tuning-exempt: test fixture placement
+  const span = strikeDurationMs(TUNING);
+  const art = spriteFor('scribe_strike');
+  assert.ok(art !== null);
+
+  assert.equal(strikePose(scribe, null, TUNING), null, 'he struck without being asked to');
+  assert.equal(strikePose(scribe, 0, TUNING)?.spriteId, 'scribe_strike');
+  assert.equal(strikePose(scribe, span - 1, TUNING)?.spriteId, 'scribe_strike');
+  assert.equal(strikePose(scribe, span, TUNING), null, 'the pose outstayed its tuning row');
+
+  for (let ms = 0; ms < span; ms += 1) {
+    const pose = strikePose(scribe, ms, TUNING);
+    assert.ok(pose !== null && pose.frame >= 0 && pose.frame < art.frames.length);
+    assert.equal(pose.x, scribe.x);
+    assert.equal(pose.y, scribe.y);
+  }
 });

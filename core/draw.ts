@@ -31,8 +31,18 @@
 
 import { CELL_W, focalX, visibleRange } from './rail.js';
 import { smudgeFraction } from './damage.js';
-import { cloudBob, cloudPose, frameAt, poseOf, type Entity } from './entities.js';
-import { SPRITE_SIZE } from './sprites.js';
+import {
+  burstFraction,
+  burstPose,
+  cloudBob,
+  cloudPose,
+  frameAt,
+  isBursting,
+  poseOf,
+  strikePose,
+  type Entity,
+} from './entities.js';
+import { CANDLE_UNLIT_FRAME, SPRITE_SIZE } from './sprites.js';
 import { roleIndex, worldFor, type ParallaxLayer, type World } from './worlds.js';
 import {
   DEFAULT_SPACE_THUMB,
@@ -159,9 +169,11 @@ const SCENE = {
   cloudY: 26,           // tuning-exempt: band composition
   candleFlickerMs: 220, // tuning-exempt: animation cadence, art not difficulty
   candleFrames: 2,      // tuning-exempt: frame count of the art in core/sprites.ts
-  unlitAlpha: 0.4,      // tuning-exempt: art -- a candle the scribe has not reached
+  unlitAlpha: 0.55,     // tuning-exempt: art -- a candle the scribe has not reached
   layerAlphaBase: 0.45, // tuning-exempt: art -- how far the furthest layer recedes
   layerAlphaSpan: 0.55, // tuning-exempt: art -- and how much nearer depth closes it up
+  dropRise: 12,         // tuning-exempt: art -- how far a dropped ink pot floats up
+  dropFloor: 0.35,      // tuning-exempt: art -- the pot is never fainter than this
 } as const;
 
 /** The art role the sky behind the parallax takes; every theme supplies one. */
@@ -266,6 +278,15 @@ export interface SceneState {
   readonly heartsMax: number;
   /** The checkpoint candles standing in this stretch of world. */
   readonly candles: readonly SceneCandle[];
+  /**
+   * Milliseconds since the scribe last struck, or null when he has not.
+   *
+   * The one duration in this record, and the only thing here a clock touches.
+   * It is set to zero by a *completed word* and by nothing else, so the pose it
+   * selects is a consequence of typing rather than of time passing; the clock
+   * only decides when to stop showing it.
+   */
+  readonly strikeMs: number | null;
 }
 
 // --- the report card --------------------------------------------------------
@@ -486,7 +507,7 @@ function onScreen(x: number): boolean {
  * the player is looking at; the scenery says where he is and then stays out of
  * the way.
  */
-function pushScene(cmds: DrawCmd[], scene: SceneState): void {
+function pushScene(cmds: DrawCmd[], scene: SceneState, tuning: Tuning): void {
   const world = worldFor(scene.theme);
   const theme = world.id;
   const projection = projectionOf(world.parallax);
@@ -516,28 +537,50 @@ function pushScene(cmds: DrawCmd[], scene: SceneState): void {
   for (const candle of scene.candles) {
     const x = px(candle.x - scene.cameraX);
     if (!onScreen(x)) continue;
-    // An unlit candle is the same art, dimmed: the flame is drawn into every
-    // frame of it, and a checkpoint the player has not reached yet should read
-    // as "there, and not yet yours" rather than as a different object.
+    // An unlit candle is a candle that is *out* -- its own flameless frame, not
+    // the lit art at a low alpha. Dimming the flame drew a fire on a checkpoint
+    // nobody had lit, which left the moment of lighting with nothing to be a
+    // change from; now the flame arriving is the whole event. It stays a little
+    // dimmer as well, because an unreached checkpoint is also further away.
     cmds.push({
       op: 'sprite', id: 'candle', x, y: standY,
-      frame: candle.lit ? frameAt(scene.animMs, SCENE.candleFlickerMs, SCENE.candleFrames) : 0,
+      frame: candle.lit
+        ? frameAt(scene.animMs, SCENE.candleFlickerMs, SCENE.candleFrames)
+        : CANDLE_UNLIT_FRAME,
       alpha: candle.lit ? 1 : SCENE.unlitAlpha,
       theme,
     });
   }
 
   for (const entity of scene.entities) {
-    const pose = poseOf(entity);
+    // A struck monster is drawn as its burst instead of itself. The burst has a
+    // duration and the monster does not, which is the only asymmetry in the
+    // whole band: everything else here is a function of the camera, and the
+    // camera is a function of words typed.
+    const pose = burstPose(entity, tuning) ?? poseOf(entity);
     const x = px(pose.x - scene.cameraX);
     if (!onScreen(x)) continue;
     cmds.push({
       op: 'sprite', id: pose.spriteId, x, y: px(pose.y), frame: pose.frame,
       flip: pose.flip, theme,
     });
+    // The ink pot it left, floating up out of the burst. It is already in the
+    // player's hand by the time this is drawn -- see the pacing doc -- so this
+    // is the receipt for a heart, not a thing to be caught.
+    if (entity.drop && isBursting(entity)) {
+      const risen = burstFraction(entity, tuning);
+      cmds.push({
+        op: 'sprite', id: 'ink_pot', x, y: px(pose.y - risen * SCENE.dropRise),
+        alpha: 1 - risen * (1 - SCENE.dropFloor),
+        theme,
+      });
+    }
   }
 
-  const scribe = poseOf(scene.scribe, scene.walking);
+  // The strike outranks walking and idling: at the moment something is
+  // destroyed the player should be looking at the blow.
+  const scribe = strikePose(scene.scribe, scene.strikeMs, tuning)
+    ?? poseOf(scene.scribe, scene.walking);
   cmds.push({
     op: 'sprite', id: scribe.spriteId, x: px(scribe.x), y: px(scribe.y),
     frame: scribe.frame, flip: scribe.flip, theme,
@@ -564,7 +607,7 @@ function pushScene(cmds: DrawCmd[], scene: SceneState): void {
 export function drawFrame(state: FrameState, rail: RailState, tuning: Tuning): DrawCmd[] {
   const cmds: DrawCmd[] = [];
   cmds.push({ op: 'rect', x: 0, y: 0, w: M.vw, h: M.vh, color: pal('bg') });
-  if (state.scene !== undefined) pushScene(cmds, state.scene);
+  if (state.scene !== undefined) pushScene(cmds, state.scene, tuning);
   pushHud(cmds, state, tuning);
   pushRail(cmds, state, rail, tuning);
   pushKeyboard(cmds, state, tuning);

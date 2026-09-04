@@ -11,7 +11,7 @@ its contents rather than on pixels.
 ## Commands
 
 ```js
-{ op: 'sprite', id: 'scribe',  x, y, frame, flip, tint, alpha, theme }
+{ op: 'sprite', id: 'scribe',  x, y, frame, flip, alpha, theme }
 { op: 'tile',   id: 'stone',   x, y, w, h, alpha, theme }
 { op: 'text',   value: '…',    x, y, style, color, alpha }
 { op: 'rect',   x, y, w, h, color, alpha, theme }
@@ -30,6 +30,11 @@ Rules that keep it portable:
   data. If a command cannot survive `JSON.stringify` and back, it is wrong. That includes
   `-0`, which is a real and distinct value in JavaScript and does not come back as itself;
   `core/draw.ts` normalises it away at every rounding.
+- **No field the renderer does not execute.** `sprite` carried a `tint` for a while that
+  every backend silently ignored, so a core author could recolour a sprite, see no change,
+  and have nothing to debug. A field in this list is a promise; a field nobody keeps is
+  worse than a missing feature. Recolouring is what `theme` is for -- a sprite's pixels are
+  already role indices, so a different sixteen colours is the whole mechanism.
 
 ## Which palette a command speaks
 

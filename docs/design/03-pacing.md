@@ -26,6 +26,38 @@ The idle threshold starts generous and tightens by stage — values in
 [tuning](07-tuning.md). It can be disabled outright if it turns out to stress rather than
 motivate; that switch is deliberate, not a debug leftover.
 
+## A monster is a word
+
+Monsters idle, and something has to happen to them or the platformer is scenery behind a
+typing exercise. The owner's report after the first playable build was exactly that: *"The
+skeletons don't get defeated yet, but very cool."*
+
+So each monster is **anchored to a word** in the passage. Finishing that word fells it: the
+scribe strikes, the monster bursts, and it is gone. The camera already advances one stride
+per completed word, so a monster's world position and the word that kills it are the same
+fact stated twice; the strike lands on the keystroke that completes the word, on the same
+signal that moves the world.
+
+What follows from that, and what must stay true:
+
+- **A monster cannot block progress and cannot be lost to.** There is no timer, no
+  approach, no health bar, no way to fail a fight and no way to be hurt by one. A player
+  who takes four minutes over a word finds the monster exactly where it was, still bobbing.
+  Combat is a *reward* for typing, wearing the costume of a fight. See
+  [ADR 0004](../decisions/0004-idle-threat-not-speed-timer.md).
+- **Nothing about it advances on a clock.** A monster's anchor, its position and whether it
+  has been struck are all functions of the cursor. The burst and the strike pose have
+  durations (`monster_burst_ms`, `strike_pose_ms`) because an animation must, but they only
+  ever *start* on a keystroke, and while they run nothing is at stake.
+- **Drops are occasional and seeded.** A felled monster sometimes leaves an ink pot --
+  `monster_drop_chance`, drawn from the injected PRNG in `core/rng.ts`, so a passage
+  replays identically. The pot is granted as it is dropped rather than left lying to be
+  collected: a pickup the player could walk past would be a way to lose something by being
+  slow, and that is the one thing this game does not have.
+- **The combo is acknowledged, modestly.** A long clean run adds up to `combo_drop_bonus`
+  to the drop chance and rings the defeat cue harder. Breaking the combo returns both to
+  base; it never takes anything away, and there is no second failure mode hiding in it.
+
 ## Damage is metered
 
 A beginner errs on roughly one keystroke in ten. A heart per typo would empty their hearts four

@@ -23,6 +23,15 @@ export interface OverlayHandlers {
   restart(): void;
   jump(edition: string, book: string, chapter: number): void;
   setKeyboard(layout: KeyboardLayout, spaceThumb: Thumb): void;
+  /**
+   * The player asked for the blot-cloud on or off.
+   *
+   * ADR 0004 requires this switch to exist and to stay. The cloud is the only
+   * pressure in the game and it is there to motivate; if it turns out to stress
+   * this player instead, the game must still be playable, and a switch nothing
+   * exposes is a switch that does not exist.
+   */
+  setCloud(enabled: boolean): void;
   startOver(): void;
   exportFile(): void;
   importFile(file: File): void;
@@ -46,6 +55,8 @@ export interface MenuView {
   readonly chapter: number;
   readonly layout: KeyboardLayout;
   readonly spaceThumb: Thumb;
+  /** Whether the blot-cloud is armed. See `OverlayHandlers.setCloud`. */
+  readonly cloudEnabled: boolean;
   readonly history: readonly HistoryEntry[];
 }
 
@@ -101,6 +112,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const goButton = need('menu-go', HTMLButtonElement);
   const layoutSelect = need('menu-layout', HTMLSelectElement);
   const thumbSelect = need('menu-thumb', HTMLSelectElement);
+  const cloudSelect = need('menu-cloud', HTMLSelectElement);
   const errorLine = need('menu-error', HTMLParagraphElement);
   const resumeButton = need('menu-resume', HTMLButtonElement);
   const restartButton = need('menu-restart', HTMLButtonElement);
@@ -196,6 +208,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     chapterInput.value = String(view.chapter);
     layoutSelect.value = view.layout;
     thumbSelect.value = view.spaceThumb;
+    cloudSelect.value = view.cloudEnabled ? 'on' : 'off';
     errorLine.textContent = '';
     renderHistory(view.history);
     promotionPanel.hidden = true;
@@ -270,6 +283,9 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   };
   layoutSelect.addEventListener('change', onKeyboardChange);
   thumbSelect.addEventListener('change', onKeyboardChange);
+  cloudSelect.addEventListener('change', () => {
+    handlers.setCloud(cloudSelect.value !== 'off');
+  });
   chapterInput.addEventListener('keydown', (event: KeyboardEvent) => {
     if (event.key === 'Enter') go();
   });

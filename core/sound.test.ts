@@ -16,6 +16,7 @@ import {
   setAudioOn,
   stepSound,
   type AudioState,
+  type Cue,
   type Songbook,
 } from './sound.js';
 import { createLibrary, loadThemeTunes, loadTune } from './tunes.js';
@@ -61,7 +62,7 @@ const songbook: Songbook = {
   }),
 };
 
-function frame(theme: string, combo = 0, cues: readonly ('error' | 'candle')[] = []) {
+function frame(theme: string, combo = 0, cues: readonly Cue[] = []) {
   return { theme, combo, cues };
 }
 
@@ -161,4 +162,33 @@ test('every event survives a JSON round trip', () => {
 
 test('master_volume is the one loudness knob', () => {
   assert.equal(masterGain(tuning), tuningValue(tuning, 'master_volume'));
+});
+
+test('felling a monster has a voice, and the combo decides how hard it is struck', () => {
+  const on = setAudioOn(createAudio(tuning), true);
+  const velocityAt = (combo: number): number => {
+    const step = stepSound(on, songbook, frame('abbey', combo, ['defeat']), FRAME_MS, tuning);
+    const cue = step.events.find((e) => e.type === 'sfx' && e.id === 'defeat');
+    assert.ok(cue !== undefined && cue.type === 'sfx');
+    return cue.vel ?? 0;
+  };
+
+  const quiet = velocityAt(0);
+  const full = comboForFullTempo(tuning);
+  const loud = velocityAt(full);
+  assert.ok(quiet > 0);
+  assert.ok(loud > quiet, 'a long clean run struck no harder than a cold start');
+  // Bounded, like the tempo: a runaway combo does not run the mix off the top.
+  assert.equal(velocityAt(full * 10), loud); // tuning-exempt: test fixture, well past a full combo
+  // And it never falls below the base, so losing a combo quietens nothing.
+  for (let combo = 0; combo <= full; combo += 1) assert.ok(velocityAt(combo) >= quiet);
+
+  // Only the defeat cue moves. Everything else is a fixed weight in the mix.
+  const other = (combo: number): number => {
+    const step = stepSound(on, songbook, frame('abbey', combo, ['candle']), FRAME_MS, tuning);
+    const cue = step.events.find((e) => e.type === 'sfx');
+    assert.ok(cue !== undefined && cue.type === 'sfx');
+    return cue.vel ?? 0;
+  };
+  assert.equal(other(0), other(full * 10)); // tuning-exempt: test fixture, well past a full combo
 });

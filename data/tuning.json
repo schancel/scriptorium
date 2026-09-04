@@ -29,6 +29,10 @@
     "lectio_ramp_wpm": 20,
     "lectio_max_wpm": 700,
     "candle_interval": 3,
+    "monster_burst_ms": 320,
+    "strike_pose_ms": 200,
+    "monster_drop_chance": 0.2,
+    "combo_drop_bonus": 0.2,
     "gild_score_per_char": 2,
     "gild_page_bonus": 50,
     "bonus_word_chance": 0.15,
@@ -153,6 +157,22 @@
     "candle_interval": {
       "unit": "verses",
       "description": "Checkpoint spacing, so death costs a verse or two, never a chapter."
+    },
+    "monster_burst_ms": {
+      "unit": "ms",
+      "description": "How long a struck monster takes to burst and leave the screen. Feedback only -- nothing is at stake while it runs."
+    },
+    "strike_pose_ms": {
+      "unit": "ms",
+      "description": "How long the scribe holds the strike pose after felling a monster."
+    },
+    "monster_drop_chance": {
+      "unit": "probability",
+      "description": "Chance a felled monster leaves an ink pot."
+    },
+    "combo_drop_bonus": {
+      "unit": "probability",
+      "description": "Added to that chance at a full combo, scaling linearly from none. Losing the combo only returns the chance to its base; nothing is ever taken away."
     },
     "gild_score_per_char": {
       "unit": "points",
