@@ -51,9 +51,9 @@ so the game is not editorialising, only showing what the text already does.
 | `beginning` | progression | Genesis 1 | John 1 | `In the beginning` | John opens by quoting Genesis word for word |
 | `i-am` | progression | Exodus 3 | John 8 | `I AM` | The name given at the bush, claimed at the temple |
 | `shepherd` | progression | Psalm 23 | John 10 | `shepherd` | The psalm's image, claimed in the first person |
-| `forsaken` | progression | Psalm 22 | Matthew 27 | `why have you forsaken me` | Quoted from the cross, verbatim |
+| `forsaken` | progression | Psalm 22 | Matthew 27 | `My God, my God` | Quoted from the cross, verbatim |
 | `tree-of-life` | progression | Genesis 3 | Revelation 22 | `tree of life` | The tree barred at the start, open at the end |
-| `only-son` | flashback | John 19 | Genesis 22 | `your son` | A father, an only son, a hill — seen from the cross |
+| `only-son` | flashback | John 19 | Genesis 22 | `son` | A father, an only son, a hill — seen from the cross |
 | `serpent` | flashback | John 3 | Numbers 21 | `serpent` | John 3:14 cites the bronze serpent outright |
 | `three-days` | flashback | Matthew 12 | Jonah 1 | `three days and three nights` | Jesus names Jonah as the sign |
 | `passover` | flashback | John 19 | Exodus 12 | `bone` | John quotes the Passover rule about unbroken bones |

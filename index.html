@@ -1,0 +1,63 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scriptorium</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: dark; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #14120f;
+    color: #c8bda6;
+    font: 14px/1.6 ui-sans-serif, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
+    overflow: hidden;
+  }
+  /* The canvas fills the window; core/draw.ts works in a fixed virtual
+     resolution and canvas_renderer.ts letterboxes it to whatever this is. */
+  #stage {
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+  }
+  #boot {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    gap: .75rem;
+    padding: 2rem;
+    text-align: center;
+    background: #14120f;
+  }
+  #boot h1 { margin: 0; font-size: 1.5rem; font-weight: 600; color: #f0b429; letter-spacing: .04em; }
+  #boot p { margin: 0; max-width: 34rem; }
+  #boot code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #1e1a15;
+    padding: .15em .45em;
+    border-radius: .25em;
+    color: #ece0c4;
+  }
+  #boot .dim { color: #7a6b50; font-size: .85rem; }
+  body.ready #boot { display: none; }
+</style>
+
+<canvas id="stage"></canvas>
+
+<div id="boot">
+  <h1>Scriptorium</h1>
+  <p>Learn to type by copying the Bible.</p>
+  <p>
+    This page runs the compiled output. If you are seeing this message, build it
+    once with <code>npm install &amp;&amp; npm run build</code> (or <code>make build</code>),
+    then reload.
+  </p>
+  <p class="dim">
+    Opened from a file:// URL, the browser will not load ES modules or fetch the
+    corpus. Run <code>make serve</code> and open <code>http://localhost:8000</code>.
+  </p>
+</div>
+
+<script type="module" src="./build/platform/web/main.js"></script>
