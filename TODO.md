@@ -31,19 +31,24 @@ alone.
 
 ## Known problems
 
-- **The strike reads as a shuffle, not a leap.** `hopPeakPx` is 12 on a 360px
-  frame against a 16px scribe, and `strike_reach` is 36px — he hops less than his
-  own height and travels two body widths. Reported: *"you just stand on top of
-  them for a bit."* The arc constants are `tuning-exempt` in `core/entities.ts`
-  and should be rows in `docs/design/07-tuning.md` so they can be turned without
-  a code change.
-- **Gilding is undiscoverable.** It works, but it lives under a menu heading
-  called "Your stage", and nobody wanting to type the dim letters would look
-  there. Reported: *"I can't type the grey'd words."*
 - A hop caught mid-air freezes under the report card when a part ends.
 - Raw exception text can reach the menu's error line on corrupt data.
 - The map says "not on the pilgrimage route" in lower case; the design doc
   capitalises it.
+
+## Waiting to be looked at
+
+- **Is the strike arc big enough?** Unverified, and the report that started it
+  cannot settle it: *"you didn't change the kill animation"* came from a browser
+  serving a cached page, so the stomp and the ink throw had shipped but had not
+  been seen. The five numbers that decide how large the blow draws are rows in
+  `docs/design/07-tuning.md` now — `strike_hop_px`, `strike_contact_px`,
+  `strike_bounce_ratio`, `strike_nib_arc_px`, `strike_rise_travel` — so the feel
+  can be turned without a code change. At the shipped values the scribe rises
+  **12 px** above his standing line and crosses the **36 px** of `strike_reach`
+  to the skeleton; the thrown nib arcs **14 px** off the line to the bat. He is
+  16 px tall and has 58 px of room above him before the HUD, so there is a great
+  deal of headroom if it wants to be bigger. Look at it once and say.
 
 ## Not done
 

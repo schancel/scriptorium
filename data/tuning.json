@@ -33,6 +33,11 @@
     "strike_reach": 36,
     "stomp_ms": 460,
     "ink_ms": 420,
+    "strike_hop_px": 12,
+    "strike_contact_px": 7,
+    "strike_bounce_ratio": 0.6,
+    "strike_nib_arc_px": 14,
+    "strike_rise_travel": 0.7,
     "monster_drop_chance": 0.2,
     "combo_drop_bonus": 0.2,
     "ink_pot_points": 25,
@@ -184,6 +189,26 @@
     "ink_ms": {
       "unit": "ms",
       "description": "The whole ink throw: the flung nib's flight, and the burst it makes on the bat."
+    },
+    "strike_hop_px": {
+      "unit": "px",
+      "description": "How high the scribe's leap arcs above the ground line when he stomps. The size of the leap is what makes a felled monster read as something that was *done to* rather than stood next to, and it is the first number to turn if it does not."
+    },
+    "strike_contact_px": {
+      "unit": "px",
+      "description": "How high he is at the moment of contact, so he lands on top of the skull rather than through it. Keep it below `strike_hop_px` or the blow rises into the landing instead of dropping onto it."
+    },
+    "strike_bounce_ratio": {
+      "unit": "ratio",
+      "description": "The bounce off the skull, as a fraction of `strike_hop_px`. Below 1 so the bounce arcs lower than the leap did, which is what makes the second arc read as a rebound."
+    },
+    "strike_nib_arc_px": {
+      "unit": "px",
+      "description": "How high the thrown nib arcs on its way to the bat. At zero it slides across the gap in a straight line; the arc is what says it was thrown."
+    },
+    "strike_rise_travel": {
+      "unit": "fraction",
+      "description": "How far across the gap to the monster the leap carries him before the contact frame takes over the rest. Low and he floats in and drops on it; near 1 and he arrives flat."
     },
     "monster_drop_chance": {
       "unit": "probability",

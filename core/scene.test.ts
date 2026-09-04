@@ -42,7 +42,7 @@ import { classify } from './illumination.js';
 import type { BlotCloud, DamageState, DrawCmd, Glyph, Key, Score, Tuning } from './types.js';
 
 /** The rows data/tuning.json carries that any of this path reads. */
-const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20, report_trend_parts: 20, report_finger_min_hits: 12, report_reach_ratio: 2.0, report_key_min_attempts: 12, report_worst_key_rate: 0.12, smudge_max: 100, smudge_per_error_base: 12, smudge_per_error_step: 1, smudge_decay_per_key: 3, hearts_start: 3, hearts_max: 5, idle_base_ms: 8000, idle_step_ms: 400, idle_floor_ms: 3000, cloud_approach_ms: 2500, cloud_smudge: 25, monster_burst_ms: 320, strike_reach: 36, stomp_ms: 460, ink_ms: 420 }; // tuning-exempt: test fixture mirroring data/tuning.json
+const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20, report_trend_parts: 20, report_finger_min_hits: 12, report_reach_ratio: 2.0, report_key_min_attempts: 12, report_worst_key_rate: 0.12, smudge_max: 100, smudge_per_error_base: 12, smudge_per_error_step: 1, smudge_decay_per_key: 3, hearts_start: 3, hearts_max: 5, idle_base_ms: 8000, idle_step_ms: 400, idle_floor_ms: 3000, cloud_approach_ms: 2500, cloud_smudge: 25, monster_burst_ms: 320, strike_reach: 36, stomp_ms: 460, ink_ms: 420, strike_hop_px: 12, strike_contact_px: 7, strike_bounce_ratio: 0.6, strike_nib_arc_px: 14, strike_rise_travel: 0.7 }; // tuning-exempt: test fixture mirroring data/tuning.json
 
 const FRAME_MS = 16; // tuning-exempt: test fixture, a frame at 60Hz
 const HOUR_MS = 3600000; // tuning-exempt: the length of the simulated trace

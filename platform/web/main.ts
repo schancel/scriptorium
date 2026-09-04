@@ -173,6 +173,8 @@ const FALLBACK_TUNING = {
     warp_echo_hold_ms: 900, lectio_start_wpm: 180, lectio_ramp_wpm: 20, lectio_max_wpm: 700,
     candle_interval: 3, bonus_word_chance: 0.15, master_volume: 0.35, audio_default_on: 0,
     monster_burst_ms: 320, strike_reach: 36, stomp_ms: 460, ink_ms: 420,
+    strike_hop_px: 12, strike_contact_px: 7, strike_bounce_ratio: 0.6,
+    strike_nib_arc_px: 14, strike_rise_travel: 0.7,
     monster_drop_chance: 0.2, combo_drop_bonus: 0.2,
     gild_score_per_char: 2, gild_page_bonus: 50, gild_offer_wpm: 60, gild_offer_sessions: 3,
     wpm_chars_per_word: 5, history_max_sessions: 500, first_run_note_keys: 8,

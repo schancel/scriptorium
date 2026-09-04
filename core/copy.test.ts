@@ -279,6 +279,31 @@ test('THE INTERFACE SPEAKS THE PLAYER’S LANGUAGE, NOT THE SOURCE TREE’S', ()
   }
 });
 
+test('THE SWITCH FOR THE DIM LETTERS LIVES UNDER A HEADING ABOUT THE DIM LETTERS', () => {
+  /*
+   * It lived under "Your stage", beside the stage picker, and the one player it
+   * was built for could not find it: "I can't type the grey'd words?" A menu is
+   * read by its headings, and gilding is not a property of his stage -- the
+   * stage decides which letters are lit, the mode decides who types the ones
+   * that are not. docs/design/01-illumination.md#finding-the-mode.
+   *
+   * So: the heading immediately above the control names the thing on screen he
+   * is asking about, and the section says what a dim letter is before it asks
+   * him anything.
+   */
+  const html = readRepoFile('index.html');
+  const at = html.indexOf('id="menu-gilding"');
+  assert.ok(at > 0, 'the gilding control is gone from the menu');
+  const headings = [...html.slice(0, at).matchAll(/<h3>([\s\S]*?)<\/h3>/g)];
+  const heading = headings[headings.length - 1]?.[1]?.trim() ?? '';
+  assert.match(heading, /dim letters/i, `the control sits under "${heading}"`);
+
+  // And the stage picker is not under it: two controls under one heading is how
+  // the second one became invisible in the first place.
+  const stageAt = html.indexOf('id="menu-stage-select"');
+  assert.ok(stageAt > 0 && stageAt < (headings[headings.length - 1]?.index ?? 0));
+});
+
 test('the report card says one thing, and says it as a fact about his hands', () => {
   // One finding, never a list: "a card that says four things says none of them,
   // and he has a part to get back to." docs/design/08-stats.md#what-to-work-on-next.

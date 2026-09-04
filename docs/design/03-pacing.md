@@ -169,6 +169,29 @@ fraction and a lift, never pixels — because only `core/draw.ts` knows where th
 put the monster this frame. That is what makes the nib land on the bat rather than on the
 place the bat was standing when it was thrown.
 
+**How big the blow is, is a row and not a literal.** How long a verb runs was always
+tuning (`stomp_ms`, `ink_ms`); how *large* it draws was five constants marked
+`tuning-exempt` in `core/entities.ts`, which is the trap [tuning](07-tuning.md) exists to
+prevent — the owner could not change the way his own game felt without editing
+TypeScript. The height of the leap (`strike_hop_px`), where he stands at the moment of
+contact (`strike_contact_px`), how hard he rebounds (`strike_bounce_ratio`), the arc of
+the thrown nib (`strike_nib_arc_px`) and how far across the gap the leap carries him
+(`strike_rise_travel`) are rows now, read on every frame, so a bigger leap is a table edit
+and a reload.
+
+What stays exempt is three fractions and only three: `riseTo`, `contactTo` and `flightTo`,
+which say where one *drawing* gives way to the next. Each is a fact about the art in
+`core/sprites.ts` rather than about the feel — turning `riseTo` alone does not make the
+blow bigger, it puts the wrong frame on the screen at the moment of impact — so they
+belong beside the sprite sheet and not in a table an owner is invited to turn.
+
+For the record, at the shipped values: the scribe stands with his feet on the ground line
+at y 96 of the 360px frame and his head at y 80, and the HUD ends at y 22 — so he has 58
+virtual pixels of room above him. The stomp lifts him **12 px** and carries him the
+**36 px** of `strike_reach` to the skeleton; the thrown nib rises **14 px** off the line
+from his hand to the bat, which with the bat's own height puts it 24 px above his head at
+its highest. Nothing either verb draws comes within 33 px of the HUD or reaches the rail.
+
 The art is in `core/sprites.ts`: `scribe_hop` (rise, contact, bounce) for the stomp, and
 `nib` plus `ink_burst` for the throw, which reuses the existing `scribe_strike` frames for
 the wind-up and follow-through — the pose was always right; what was missing was something

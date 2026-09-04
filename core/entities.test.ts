@@ -48,7 +48,7 @@ import {
   type Strike,
   type StrikeVerb,
 } from './entities.js';
-import { spriteFor } from './sprites.js';
+import { HOP_RISE, spriteFor } from './sprites.js';
 import { loadTuning, tuningValue } from './tuning.js';
 import type { Tuning } from './types.js';
 
@@ -540,6 +540,100 @@ test('the stomp arcs out to the skull and comes back, without leaving the ground
   // The lift is never negative, which is what keeps the whole verb out of the
   // rail's band however far it travels: `core/draw.ts` only ever subtracts it.
   assert.ok(seen.every((p) => p.lift >= 0));
+});
+
+/** The real table with a row or two turned, exactly as an owner would turn them. */
+function retuned(overrides: Readonly<Record<string, number>>): Tuning {
+  const doc = loadDataFile('tuning.json') as { values: Record<string, number> };
+  return loadTuning({ values: { ...doc.values, ...overrides } });
+}
+
+/** The highest the scribe gets above his standing line, over a whole stomp. */
+function stompPeakPx(tuning: Tuning): number {
+  let peak = 0;
+  for (let ms = 0; ms < strikeSpanMs('stomp', tuning); ms += 1) {
+    const strike: Strike = { verb: 'stomp', x: SKELETON.x, y: SKELETON.y, elapsedMs: ms };
+    peak = Math.max(peak, scribeStrike(SCRIBE, [strike], tuning)?.lift ?? 0);
+  }
+  return peak;
+}
+
+/** The highest the thrown nib gets above the line from his hand to the bat. */
+function nibPeakPx(tuning: Tuning): number {
+  let peak = 0;
+  for (let ms = 0; ms < strikeSpanMs('ink', tuning); ms += 1) {
+    const strike: Strike = { verb: 'ink', x: BAT.x, y: BAT.y, elapsedMs: ms };
+    peak = Math.max(peak, strikeMissiles([strike], tuning)[0]?.lift ?? 0);
+  }
+  return peak;
+}
+
+/** How far across the gap the rise carries him before contact takes over. */
+function risePeakTravel(tuning: Tuning): number {
+  let top = 0;
+  for (let ms = 0; ms < strikeSpanMs('stomp', tuning); ms += 1) {
+    const strike: Strike = { verb: 'stomp', x: SKELETON.x, y: SKELETON.y, elapsedMs: ms };
+    const pose = scribeStrike(SCRIBE, [strike], tuning);
+    if (pose?.spriteId === 'scribe_hop' && pose.frame === HOP_RISE) top = Math.max(top, pose.travel);
+  }
+  return top;
+}
+
+test('HOW BIG THE BLOW IS COMES FROM THE TUNING TABLE, NOT FROM A LITERAL IN THIS FILE', () => {
+  // The size of the leap was a `tuning-exempt` constant in core/entities.ts,
+  // which meant the owner could not change how his own game felt without
+  // editing TypeScript -- the exact trap docs/design/07-tuning.md exists to
+  // prevent. The durations were always rows; the amplitudes are now too.
+
+  // What the shipped table draws, in virtual pixels.
+  assert.ok(Math.abs(stompPeakPx(TUNING) - tuningValue(TUNING, 'strike_hop_px')) <= 1);
+  assert.ok(Math.abs(nibPeakPx(TUNING) - tuningValue(TUNING, 'strike_nib_arc_px')) <= 1);
+  assert.ok(risePeakTravel(TUNING) <= tuningValue(TUNING, 'strike_rise_travel'));
+
+  // Turn the rows and the picture follows. This is the whole of the fix: a
+  // bigger leap is a table edit and a reload, not a commit.
+  const taller = retuned({
+    strike_hop_px: tuningValue(TUNING, 'strike_hop_px') * 2,
+    strike_nib_arc_px: tuningValue(TUNING, 'strike_nib_arc_px') * 2,
+    strike_rise_travel: 1,
+  });
+  assert.ok(Math.abs(stompPeakPx(taller) - tuningValue(taller, 'strike_hop_px')) <= 1);
+  assert.ok(Math.abs(nibPeakPx(taller) - tuningValue(taller, 'strike_nib_arc_px')) <= 1);
+  assert.ok(stompPeakPx(taller) > stompPeakPx(TUNING), 'a taller row drew the same leap');
+  assert.ok(nibPeakPx(taller) > nibPeakPx(TUNING), 'a taller row drew the same throw');
+  assert.ok(risePeakTravel(taller) > risePeakTravel(TUNING), 'a longer reach drew the same leap');
+
+  // And nothing the rows can be set to reintroduces a way to miss: the leap
+  // still arrives, still comes home, and still never dips below the ground line
+  // -- which is what keeps the whole verb out of the rail's band.
+  for (const arc of [TUNING, taller, retuned({ strike_hop_px: 0, strike_nib_arc_px: 0 })]) {
+    const seen: { travel: number; lift: number }[] = [];
+    for (let ms = 0; ms < strikeSpanMs('stomp', arc); ms += 1) {
+      const pose = scribeStrike(SCRIBE, [{ verb: 'stomp', x: SKELETON.x, y: SKELETON.y, elapsedMs: ms }], arc);
+      assert.ok(pose !== null);
+      seen.push({ travel: pose.travel, lift: pose.lift });
+    }
+    assert.equal(Math.max(...seen.map((p) => p.travel)), 1, 'he never reached the skull');
+    assert.ok(seen.every((p) => p.lift >= 0), 'the leap went below the ground line');
+  }
+
+  // Every one of the five is genuinely read from the table. Drop a row and the
+  // blow cannot be drawn at all, rather than quietly falling back to a number
+  // that exists only in the source.
+  const rows = [
+    'strike_hop_px', 'strike_contact_px', 'strike_bounce_ratio',
+    'strike_nib_arc_px', 'strike_rise_travel',
+  ];
+  const doc = loadDataFile('tuning.json') as { values: Record<string, number> };
+  for (const row of rows) {
+    const values = Object.fromEntries(Object.entries(doc.values).filter(([key]) => key !== row));
+    const without = loadTuning({ values });
+    assert.throws(
+      () => scribeStrike(SCRIBE, [beginStrike(SKELETON)], without),
+      new RegExp(row),
+      `${row} is not actually read from the tuning table`,
+    );
+  }
 });
 
 test('STRIKES ARE A LIST, SO A SECOND BLOW DOES NOT CUT THE FIRST ONE SHORT', () => {

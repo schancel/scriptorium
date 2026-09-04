@@ -270,7 +270,7 @@
     </p>
     <p class="dim">
       Either answer is fine and this is the only time you will be asked. The
-      menu has the switch from now on.
+      menu has the switch from now on, under <i>Typing the dim letters</i>.
     </p>
     <div class="row">
       <button id="gild-yes" class="primary" type="button">Turn gilding on</button>
@@ -425,17 +425,33 @@
     <h3>Your stage</h3>
     <div class="row">
       <label>Stage <select id="menu-stage-select"></select></label>
-      <label>Type every letter
-        <select id="menu-gilding">
-          <option value="off">Off</option>
-          <option value="on">On — gilding</option>
-        </select>
-      </label>
     </div>
     <p class="dim">
       The stage decides which letters are lit. Setting it yourself is the honest
       way to skip ahead if you already type — nothing else moves it except
       earning it.
+    </p>
+
+    <!-- Gilding was the second control under "Your stage", which is exactly
+         where the one player it was built for could not find it: "I can't type
+         the grey'd words?" It is not a property of his stage — it changes what
+         the page asks of him — so it gets a heading naming the thing on screen
+         he was asking about, in the words he asked in. The control is the same
+         one; only where it lives and what it is called have changed.
+         See ADR 0008 and docs/design/01-illumination.md#finding-the-mode. -->
+    <h3>Typing the dim letters</h3>
+    <div class="row">
+      <label>Dim letters
+        <select id="menu-gilding">
+          <option value="off">The game types them for you</option>
+          <option value="on">You type them — gilding</option>
+        </select>
+      </label>
+    </div>
+    <p class="dim">
+      Some letters on the page are dim. They need keys your stage has not taught
+      yet, so the game types them for you and the cursor skips past them. If you
+      already type, you can ask for all of them instead.
     </p>
     <p class="dim">
       <b>Gilding</b> is for people who already type. With it on, every character

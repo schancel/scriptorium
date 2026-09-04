@@ -439,24 +439,58 @@ export function burstPose(entity: Entity, tuning: Tuning): EntityPose | null {
 // --- the two verbs ----------------------------------------------------------
 
 /**
- * The shape of both verbs, in fractions of their own span.
+ * Where one drawing of a verb gives way to the next, in fractions of its span.
  *
- * `tuning-exempt` on exactly the grounds `ANIM` is: these choreograph a picture
- * and none of them changes what the player must do. How high the scribe hops is
- * a drawing decision; *how long he hops for* is `stomp_ms` and is a row in
- * docs/design/07-tuning.md, because a duration is something someone might
- * legitimately want to turn.
+ * These three stay `tuning-exempt`, and only these three. Each names a *frame
+ * boundary* -- the moment `scribe_hop`'s rise gives way to its contact frame,
+ * the moment that gives way to the bounce, the moment the flying nib becomes an
+ * ink burst -- so each is a fact about the art in `core/sprites.ts` rather than
+ * about the feel. Turning one without redrawing the sprite does not make the
+ * blow bigger; it puts the wrong picture on the screen at the moment of impact.
+ *
+ * Everything somebody could watch and want *more* of -- how high he leaps, how
+ * far the leap carries him, how hard he rebounds, how the thrown nib arcs -- was
+ * exempt here too, and should not have been. Those are rows in
+ * docs/design/07-tuning.md now, read through `strikeArc` below. A number that
+ * decides how the game feels and can only be changed by editing TypeScript is a
+ * number the owner of the game does not have.
  */
 const STRIKE = {
-  hopPeakPx: 12,      // tuning-exempt: art -- how high the leap arcs
-  contactLiftPx: 7,   // tuning-exempt: art -- he lands on the skull, not through it
-  nibArcPx: 14,       // tuning-exempt: art -- how high the thrown nib arcs
-  riseTo: 0.4,        // tuning-exempt: art -- fraction of the stomp spent leaping
-  contactTo: 0.6,     // tuning-exempt: art -- and where the contact frame gives way
-  reachAt: 0.7,       // tuning-exempt: art -- how far along the leap carries him before the drop
-  bouncePeak: 0.6,    // tuning-exempt: art -- the bounce arcs lower than the leap did
-  flightTo: 0.6,      // tuning-exempt: art -- fraction of the ink verb the nib is in the air
+  riseTo: 0.4,        // tuning-exempt: art -- where the rise frame gives way to the contact frame
+  contactTo: 0.6,     // tuning-exempt: art -- and where the contact frame gives way to the bounce
+  flightTo: 0.6,      // tuning-exempt: art -- where the flying nib gives way to the ink burst
 } as const;
+
+/**
+ * How big the picture is: the turnable half of both verbs.
+ *
+ * Read from tuning on every frame rather than captured once, so that changing a
+ * row and reloading is the whole of the edit. Nothing here can change what the
+ * player must *do* -- a bigger leap is still begun by a completed word, still
+ * cannot miss and still has nothing at stake while it runs.
+ */
+interface StrikeArc {
+  /** Peak of the leap, in virtual pixels above the ground line. */
+  readonly hopPeakPx: number;
+  /** How high he stands at contact: on top of the skull, not through it. */
+  readonly contactLiftPx: number;
+  /** The rebound, as a fraction of `hopPeakPx`. Below 1, so it arcs lower. */
+  readonly bouncePeak: number;
+  /** Peak of the thrown nib's arc, in virtual pixels. */
+  readonly nibArcPx: number;
+  /** How far across the gap the rise carries him before contact takes over. */
+  readonly reachAt: number;
+}
+
+function strikeArc(tuning: Tuning): StrikeArc {
+  return {
+    hopPeakPx: tuningValue(tuning, 'strike_hop_px'),
+    contactLiftPx: tuningValue(tuning, 'strike_contact_px'),
+    bouncePeak: tuningValue(tuning, 'strike_bounce_ratio'),
+    nibArcPx: tuningValue(tuning, 'strike_nib_arc_px'),
+    reachAt: tuningValue(tuning, 'strike_rise_travel'),
+  };
+}
 
 /**
  * One thing to draw for a strike, positioned *along the path* from the scribe to
@@ -497,29 +531,29 @@ function strikeFraction(strike: Strike, tuning: Tuning): number {
  * he always comes home (`travel` returns to 0), whatever the frame trace: there
  * is no branch in which the leap falls short.
  */
-function stompVisual(strike: Strike, fraction: number): StrikeVisual {
+function stompVisual(strike: Strike, fraction: number, arc: StrikeArc): StrikeVisual {
   const base = { toX: strike.x, toY: strike.y, flip: false };
   if (fraction < STRIKE.riseTo) {
     const u = fraction / STRIKE.riseTo;
     return {
       ...base, spriteId: 'scribe_hop', frame: HOP_RISE,
-      travel: u * STRIKE.reachAt, lift: STRIKE.hopPeakPx * u,
+      travel: u * arc.reachAt, lift: arc.hopPeakPx * u,
     };
   }
   if (fraction < STRIKE.contactTo) {
     const u = (fraction - STRIKE.riseTo) / (STRIKE.contactTo - STRIKE.riseTo);
     return {
       ...base, spriteId: 'scribe_hop', frame: HOP_CONTACT,
-      travel: STRIKE.reachAt + (1 - STRIKE.reachAt) * u,
-      lift: STRIKE.hopPeakPx + (STRIKE.contactLiftPx - STRIKE.hopPeakPx) * u,
+      travel: arc.reachAt + (1 - arc.reachAt) * u,
+      lift: arc.hopPeakPx + (arc.contactLiftPx - arc.hopPeakPx) * u,
     };
   }
   const u = (fraction - STRIKE.contactTo) / (1 - STRIKE.contactTo);
   return {
     ...base, spriteId: 'scribe_hop', frame: HOP_BOUNCE,
     travel: 1 - u,
-    lift: STRIKE.contactLiftPx * (1 - u)
-      + Math.sin(u * Math.PI) * STRIKE.hopPeakPx * STRIKE.bouncePeak,
+    lift: arc.contactLiftPx * (1 - u)
+      + Math.sin(u * Math.PI) * arc.hopPeakPx * arc.bouncePeak,
   };
 }
 
@@ -531,7 +565,7 @@ function stompVisual(strike: Strike, fraction: number): StrikeVisual {
  * standing next to it. It cannot be aimed and it cannot fall short -- `travel`
  * is a fraction of elapsed time and reaches 1 by `flightTo`, always.
  */
-function inkVisual(strike: Strike, fraction: number): StrikeVisual {
+function inkVisual(strike: Strike, fraction: number, arc: StrikeArc): StrikeVisual {
   const base = { toX: strike.x, toY: strike.y, flip: false };
   if (fraction < STRIKE.flightTo) {
     const u = fraction / STRIKE.flightTo;
@@ -540,7 +574,7 @@ function inkVisual(strike: Strike, fraction: number): StrikeVisual {
       spriteId: 'nib',
       frame: frameAt(strike.elapsedMs, ANIM.nibSpinMs, NIB_FRAMES),
       travel: u,
-      lift: Math.sin(u * Math.PI) * STRIKE.nibArcPx,
+      lift: Math.sin(u * Math.PI) * arc.nibArcPx,
     };
   }
   const u = (fraction - STRIKE.flightTo) / (1 - STRIKE.flightTo);
@@ -577,7 +611,9 @@ export function scribeStrike(
   const latest = strikes[strikes.length - 1];
   if (latest === undefined) return null;
   const fraction = strikeFraction(latest, tuning);
-  if (latest.verb === 'stomp') return { ...stompVisual(latest, fraction), flip: scribe.facing < 0 };
+  if (latest.verb === 'stomp') {
+    return { ...stompVisual(latest, fraction, strikeArc(tuning)), flip: scribe.facing < 0 };
+  }
   return {
     spriteId: 'scribe_strike',
     frame: Math.min(FRAMES.scribeStrike - 1, Math.floor(fraction * FRAMES.scribeStrike)),
@@ -599,9 +635,10 @@ export function scribeStrike(
  */
 export function strikeMissiles(strikes: readonly Strike[], tuning: Tuning): StrikeVisual[] {
   const out: StrikeVisual[] = [];
+  const arc = strikeArc(tuning);
   for (const strike of strikes) {
     if (strike.verb !== 'ink') continue;
-    out.push(inkVisual(strike, strikeFraction(strike, tuning)));
+    out.push(inkVisual(strike, strikeFraction(strike, tuning), arc));
   }
   return out;
 }

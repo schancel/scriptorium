@@ -189,6 +189,38 @@ is untouched by the mode.
   [ink pot at full hearts](03-pacing.md#an-ink-pot-at-full-hearts-must-still-be-worth-something)
   scores too, and points paid into a counter the player cannot see are not paid at all.
 
+### Finding the mode
+
+The switch lived in the menu under a heading called **Your stage**, beside the stage
+picker. That is where the one player it was built for went looking and did not find it.
+His words, at around 140 WPM: *"I can't type the grey'd words?"*
+
+He was asking about something on the screen — the dim letters — and the menu was
+answering under a heading about something else. Gilding is not a property of his stage.
+The stage decides which letters are lit; gilding decides who types the ones that are not,
+and the two are independent: every combination of stage and mode is legal, and the mode
+never moves the stage.
+
+So it has its own section, headed with the thing it acts on rather than the thing it sits
+near: **Typing the dim letters**, with a first sentence that says what a dim letter is
+before the control asks anything about it, and the choice itself spelled out rather than
+labelled on and off — *The game types them for you* against *You type them — gilding*. A
+player who has wondered what the dim letters are can now find the answer by reading the
+headings, which is the only way anyone looks through a menu. The gilding offer names that
+heading too, so the one panel that explains the mode also says where the switch will be
+afterwards.
+
+**Nothing was added to the page itself.** A just-in-time note at the first dim letter was
+considered and rejected. The first-run note that fires there already says *"These dim
+letters aren't yours yet. The game types them for you — just keep going"*, which is true,
+is the right thing to tell a beginner, and is the sentence a second note would have to
+qualify within a line or two of it. The player who needs the qualification is the fluent
+typist, and he is not the player the notes are for — see
+[the first run](10-first-run.md#what-is-deliberately-not-said), where gilding is on the
+list of things deliberately not mentioned. He is reached by the two routes that exist
+already: the offer after sustained fast sessions, and a menu heading that now says what it
+is about. Where the two players' interests conflict, the beginner wins.
+
 ### Being offered it
 
 The game may offer the mode after `gild_offer_sessions` consecutive sessions at or above

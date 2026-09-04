@@ -47,6 +47,11 @@ first evening a real beginner plays it and something feels wrong.
 | `strike_reach` | 36 | px | How far beyond the scribe a monster stands, so a blow has a gap to cross. Derived placement put it exactly where he arrives, and standing in a monster is not a fight -- see [pacing](03-pacing.md#defeating-a-monster-must-read-as-an-action). |
 | `stomp_ms` | 460 | ms | The whole stomp: the hop out, the landing on the skull, the bounce back. Longer than the ~430 ms a 140 WPM typist spends on a word, which is why strikes are a list rather than a slot. |
 | `ink_ms` | 420 | ms | The whole ink throw: the flung nib's flight, and the burst it makes on the bat. |
+| `strike_hop_px` | 12 | px | How high the scribe's leap arcs above the ground line when he stomps. The size of the leap is what makes a felled monster read as something that was *done to* rather than stood next to, and it is the first number to turn if it does not. |
+| `strike_contact_px` | 7 | px | How high he is at the moment of contact, so he lands on top of the skull rather than through it. Keep it below `strike_hop_px` or the blow rises into the landing instead of dropping onto it. |
+| `strike_bounce_ratio` | 0.6 | ratio | The bounce off the skull, as a fraction of `strike_hop_px`. Below 1 so the bounce arcs lower than the leap did, which is what makes the second arc read as a rebound. |
+| `strike_nib_arc_px` | 14 | px | How high the thrown nib arcs on its way to the bat. At zero it slides across the gap in a straight line; the arc is what says it was thrown. |
+| `strike_rise_travel` | 0.7 | fraction | How far across the gap to the monster the leap carries him before the contact frame takes over the rest. Low and he floats in and drops on it; near 1 and he arrives flat. |
 | `monster_drop_chance` | 0.20 | probability | Chance a felled monster leaves an ink pot. |
 | `combo_drop_bonus` | 0.20 | probability | Added to that chance at a full combo, scaling linearly from none. Losing the combo only returns the chance to its base; nothing is ever taken away. |
 | `ink_pot_points` | 25 | points | What an ink pot is worth when the player's hearts are already full. Roughly half a fully gilded part (`gild_page_bonus`), because a pot is a small piece of luck and a finished page is work. See [pacing](03-pacing.md#an-ink-pot-at-full-hearts-must-still-be-worth-something). |
