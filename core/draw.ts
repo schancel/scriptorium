@@ -900,7 +900,7 @@ function pushReport(cmds: DrawCmd[], state: FrameState): void {
   }
 
   cmds.push({
-    op: 'text', value: 'enter: type it again      esc: next part',
+    op: 'text', value: 'enter: next part      r: type it again      esc: menu',
     x: M.reportX, y: M.reportFootY, style: 'report', color: pal('dim'),
   });
 }

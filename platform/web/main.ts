@@ -875,17 +875,25 @@ async function boot(): Promise<void> {
 
   function onInput(event: { type: string; value: string }): void {
     if (level.reporting) {
-      if (event.type !== 'command') return;
-      if (event.value === 'enter') {
-        // "type it again", exactly as the report card's footer offers.
+      // Enter is the forward action and Escape backs out, everywhere. The
+      // report card had them the other way round, and Escape additionally
+      // meant "menu" in every other screen -- so the same key did two
+      // different things depending on where you were.
+      if (event.type === 'command') {
+        if (event.value === 'enter') {
+          // Forward from the checkpoint just reached, not back to the passage
+          // just typed.
+          goTo(progress.position, () => {
+            /* the next chunk is definitionally reachable */
+          });
+        } else if (event.value === 'escape') {
+          openMenu();
+        }
+        return;
+      }
+      if (event.value.toLowerCase() === 'r') {
         goTo({ book: level.bookTitle, chapter: level.chapter, unit: level.chunk.first }, () => {
           /* the chunk we just typed is definitionally reachable */
-        });
-      } else if (event.value === 'escape') {
-        // "next part", exactly as the report card's footer says: forward from
-        // the checkpoint just reached, not back to the passage just typed.
-        goTo(progress.position, () => {
-          /* likewise */
         });
       }
       return;
