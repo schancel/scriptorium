@@ -22,6 +22,7 @@ import {
   overlayLayout,
   reportFingers,
 } from './keyboard.js';
+import { classify as illuminate, fingerFor } from './illumination.js';
 import type { DrawCmd, Glyph, Key, KeyStat, Score, Tuning } from './types.js';
 
 /** The rows data/tuning.json actually carries, as a fixture. */
@@ -72,9 +73,9 @@ const LIVE_CHARS = new Set<string>([...`asdfghjkl;`, ` `]);
 
 function classify(text: string): Glyph[] {
   return [...text].map((ch) => {
-    const live = LIVE_CHARS.has(ch);
-    const key: Key | null = live ? (ch === ` ` ? `<space>` : ch) : null;
-    return { ch, live, key, finger: key === null ? null : fingerForKey(key, `ansi`) };
+    if (!LIVE_CHARS.has(ch)) return { ch, live: false, strokes: [] };
+    const key: Key = ch === ` ` ? `<space>` : ch;
+    return { ch, live: true, strokes: [{ key, finger: fingerFor(key, `ansi`) }] };
   });
 }
 
@@ -363,6 +364,92 @@ test(`the space bar is the key the overlay lights when a space is next`, () => {
 });
 
 // --- the overlay ------------------------------------------------------------
+
+/**
+ * The overlay's key faces, paired back with the keys they were drawn for.
+ *
+ * Every key face carries an `alpha` -- it is either taught or dimmed -- and
+ * nothing else in a level frame does, so the rects can be matched one for one
+ * against `overlayLayout` in paint order. Cheaper and less brittle than
+ * re-deriving the board's pixel geometry here.
+ */
+function keyFaces(cmds: readonly DrawCmd[]): { key: Key; lit: boolean; dim: boolean }[] {
+  const rects = cmds.filter(
+    (c): c is Extract<DrawCmd, { op: `rect` }> => c.op === `rect` && c.alpha !== undefined,
+  );
+  const keys = overlayLayout(`ansi`);
+  assert.equal(rects.length, keys.length, `one face per key`);
+  return keys.map((k, i) => ({
+    key: k.key,
+    lit: rects[i]?.color === GOLD,
+    dim: (rects[i]?.alpha ?? 1) < 1,
+  }));
+}
+
+/** Stage 8: home row, the letters below, and the shift that lights capitals. */
+const SHIFT_KEYS: readonly Key[] = [...STAGE_1_KEYS, `<shift>`];
+
+function overlayFor(text: string): { key: Key; lit: boolean; dim: boolean }[] {
+  const glyphs = illuminate(text, new Set(SHIFT_KEYS), `ansi`);
+  assert.equal(glyphs[0]?.live, true, `${text} must be live for this test to mean anything`);
+  return keyFaces(
+    drawFrame({ ...frame(glyphs, 0), keySet: SHIFT_KEYS }, createRail(0), TUNING),
+  );
+}
+
+test(`a capital lights the letter and the shift held by the other hand`, () => {
+  // The visible payoff of the stroke model, and the thing the overlay could not
+  // do before: point at the *far* shift. Pointing at the near one would drill
+  // the same-hand shift, which is the two-finger typist's habit and the reason
+  // stage 8 exists at all.
+  const left = overlayFor(`A`);
+  assert.deepEqual(
+    left.filter((f) => f.lit).map((f) => f.key).sort(),
+    [`<rshift>`, `a`],
+    `a left-hand capital takes the right shift`,
+  );
+
+  const right = overlayFor(`J`);
+  assert.deepEqual(
+    right.filter((f) => f.lit).map((f) => f.key).sort(),
+    [`<shift>`, `j`],
+    `a right-hand capital takes the left shift`,
+  );
+
+  // An unshifted letter still lights exactly one key: no shift is owed.
+  assert.deepEqual(overlayFor(`a`).filter((f) => f.lit).map((f) => f.key), [`a`]);
+});
+
+test(`both shift keys stop being dim when the curriculum teaches shift`, () => {
+  // The board draws two shift keys and the curriculum names one. Keying the
+  // dimming off the drawn name left `<rshift>` greyed for ever -- half of what
+  // stage 8 unlocks, permanently marked untaught.
+  for (const face of overlayFor(`A`)) {
+    if (face.key === `<shift>` || face.key === `<rshift>`) {
+      assert.equal(face.dim, false, `${face.key} should be taught at stage 8`);
+    }
+  }
+  const untaught = keyFaces(
+    drawFrame(frame(SPACED, 0), createRail(0), TUNING),
+  ).filter((f) => f.key === `<shift>` || f.key === `<rshift>`);
+  assert.equal(untaught.length, 2);
+  for (const face of untaught) assert.equal(face.dim, true, `${face.key} at stage 1`);
+});
+
+test(`the hint names both keys of a capital, and the finger for each`, () => {
+  const glyphs = illuminate(`A`, new Set(SHIFT_KEYS), `ansi`);
+  const cmds = drawFrame({ ...frame(glyphs, 0), keySet: SHIFT_KEYS }, createRail(0), TUNING);
+  const hint = cmds.find(
+    (c): c is Extract<DrawCmd, { op: `text` }> => c.op === `text` && c.style === `hint-center`,
+  );
+  assert.ok(hint !== undefined);
+  assert.ok(hint.value.includes(`shift`), hint.value);
+  assert.ok(hint.value.includes(`a`), hint.value);
+  // Named in striking order, and the shift is the far pinky: `a` is a left-hand
+  // letter, so the hint must read "shift (R pinky)" and never "shift (L pinky)".
+  assert.ok(hint.value.startsWith(`next: shift (R pinky)`), hint.value);
+  assert.ok(hint.value.endsWith(`a (L pinky)`), hint.value);
+});
 
 test(`both keyboard layouts are the same size and nothing overlaps`, () => {
   const ansi = overlayExtent(`ansi`);

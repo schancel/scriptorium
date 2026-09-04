@@ -10,7 +10,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import type { Key, KeyboardLayout, Stage } from './types.js';
+import type { Finger, Key, KeyboardLayout, Stage } from './types.js';
 import { classify, coverage, fingerFor } from './illumination.js';
 import { keySetFor, loadStages, stageAt } from './curriculum.js';
 
@@ -66,15 +66,24 @@ const SHIFTED_ON: Readonly<Record<string, string>> = {
 
 function oracleKeys(ch: string, keySet: ReadonlySet<Key>): readonly Key[] {
   if (ch === ' ') return ['<space>'];
-  if (keySet.has(ch)) return [ch];
   const lower = ch.toLowerCase();
-  if (lower !== ch) return ['<shift>', lower];
+  // A character the curriculum names outright is its own key -- `:` at stage 8
+  // -- but it still costs the shift the hands actually have to hold.
+  if (lower !== ch) return ['<shift>', keySet.has(ch) ? ch : lower];
   const base = SHIFTED_ON[ch];
-  if (base !== undefined) return ['<shift>', base];
+  if (base !== undefined) return ['<shift>', keySet.has(ch) ? ch : base];
   return [ch];
 }
 
+/** The hand a finger belongs to, for the opposite-hand shift rule. */
+function hand(finger: Finger): string {
+  return finger.startsWith('l') ? 'left' : 'right';
+}
+
 const LAYOUTS: readonly KeyboardLayout[] = ['ansi', 'iso'];
+
+/** The stage that teaches `<shift>`, read off the curriculum rather than typed. */
+const SHIFT_STAGE: Stage | undefined = stages.find((s) => s.keys.includes('<shift>'));
 
 test('THE ILLUMINATION INVARIANT: no live glyph needs an untaught key', () => {
   let checked = 0;
@@ -85,11 +94,28 @@ test('THE ILLUMINATION INVARIANT: no live glyph needs an untaught key', () => {
         for (const glyph of classify(sentence, keySet, layout)) {
           if (!glyph.live) continue;
           checked += 1;
-          assert.notEqual(glyph.key, null, `live glyph "${glyph.ch}" has no key`);
-          for (const key of oracleKeys(glyph.ch, keySet)) {
+          assert.ok(glyph.strokes.length > 0, `live glyph "${glyph.ch}" has no strokes`);
+          const oracle = oracleKeys(glyph.ch, keySet);
+          for (const key of oracle) {
             assert.ok(
               keySet.has(key),
               `stage ${stage.stage}: live "${glyph.ch}" needs untaught key "${key}"`,
+            );
+          }
+          // Every key the glyph *claims* to cost is taught, too -- the claim and
+          // the oracle have to be the same list, or the invariant above is
+          // checking a model the game does not use. This is the half that the
+          // one-key-per-glyph model could not state: the shift of a capital was
+          // simply not in the list.
+          assert.deepEqual(
+            glyph.strokes.map((s) => s.key),
+            oracle,
+            `stage ${stage.stage}: strokes for "${glyph.ch}" disagree with the oracle`,
+          );
+          for (const stroke of glyph.strokes) {
+            assert.ok(
+              keySet.has(stroke.key),
+              `stage ${stage.stage}: live "${glyph.ch}" strikes untaught key "${stroke.key}"`,
             );
           }
         }
@@ -99,17 +125,25 @@ test('THE ILLUMINATION INVARIANT: no live glyph needs an untaught key', () => {
   assert.ok(checked > 0);
 });
 
-test('a greyed glyph carries no key and no finger; a live one carries both', () => {
+test('a greyed glyph carries no strokes; a live one carries a key and a finger for each', () => {
   for (const stage of stages) {
     const keySet = keySetFor(stages, stage.stage);
     for (const sentence of SENTENCES) {
       for (const glyph of classify(sentence, keySet, 'ansi')) {
         if (glyph.live) {
-          assert.notEqual(glyph.key, null);
-          assert.notEqual(glyph.finger, null);
+          assert.ok(glyph.strokes.length > 0);
+          const primary = glyph.strokes[glyph.strokes.length - 1];
+          assert.ok(primary !== undefined);
+          assert.equal(primary.finger, fingerFor(primary.key, 'ansi'), primary.key);
+          // Only shift is ever a modifier, and its finger is the letter's
+          // business rather than the table's -- see the opposite-hand test.
+          for (const stroke of glyph.strokes.slice(0, -1)) {
+            assert.equal(stroke.key, '<shift>');
+          }
         } else {
-          assert.equal(glyph.key, null);
-          assert.equal(glyph.finger, null);
+          // Nothing is being asked for, so there is nothing to strike. `typing.ts`
+          // reads an empty stroke list as "greyed" and snaps the cursor past it.
+          assert.deepEqual(glyph.strokes, []);
         }
       }
     }
@@ -132,8 +166,7 @@ test('space is live from stage 0', () => {
   assert.ok(space !== undefined);
   assert.equal(space.ch, ' ');
   assert.equal(space.live, true);
-  assert.equal(space.key, '<space>');
-  assert.equal(space.finger, 'rt');
+  assert.deepEqual(space.strokes, [{ key: '<space>', finger: 'rt' }]);
 
   // Present in every stage's set, and never absent from any real sentence.
   for (const stage of stages) {
@@ -166,6 +199,73 @@ test('capitals need <shift>, so they stay greyed until stage 8', () => {
   assert.ok(!beforeShift.has('<shift>'));
 });
 
+test('a capital is two strokes: shift first, struck by the opposite hand', () => {
+  assert.ok(SHIFT_STAGE !== undefined);
+  const keySet = keySetFor(stages, SHIFT_STAGE.stage);
+
+  // A left-hand letter takes the RIGHT shift, and a right-hand letter the LEFT.
+  // This is the habit stage 8 exists to build and the one a two-finger typist
+  // has never formed: shifting with the hand that is about to strike the letter
+  // rolls it off home row for every capital in the corpus.
+  const cases: readonly (readonly [string, string, string])[] = [
+    ['A', 'a', 'left'],   // left pinky letter -> right shift
+    ['S', 's', 'left'],
+    ['G', 'g', 'left'],
+    ['J', 'j', 'right'],  // right index letter -> left shift
+    ['P', 'p', 'right'],
+    ['O', 'o', 'right'],
+  ];
+
+  for (const layout of LAYOUTS) {
+    for (const [capital, letter, letterHand] of cases) {
+      const glyph = classify(capital, keySet, layout)[0];
+      assert.ok(glyph !== undefined);
+      assert.equal(glyph.live, true, capital);
+      assert.equal(glyph.strokes.length, 2, `"${capital}" is two keys, not one`);
+
+      const [shift, primary] = glyph.strokes;
+      assert.ok(shift !== undefined && primary !== undefined);
+      assert.equal(shift.key, '<shift>', 'the modifier comes first');
+      assert.equal(primary.key, letter, 'the printing key comes last');
+      assert.equal(primary.finger, fingerFor(letter, layout));
+      assert.equal(hand(primary.finger), letterHand, `${capital} fixture`);
+      assert.notEqual(
+        hand(shift.finger),
+        hand(primary.finger),
+        `"${capital}": shift must be held by the other hand`,
+      );
+      assert.ok(shift.finger === 'lp' || shift.finger === 'rp', 'shift is a pinky');
+    }
+  }
+
+  // Both hands really are exercised by the fixture above, so a rule that always
+  // answered "left shift" could not pass it.
+  const shiftFingers = new Set(
+    cases.map(([capital]) => classify(capital, keySet, 'ansi')[0]?.strokes[0]?.finger),
+  );
+  assert.deepEqual([...shiftFingers].sort(), ['lp', 'rp']);
+});
+
+test('a shifted punctuation mark costs its shift too, and names its own key', () => {
+  assert.ok(SHIFT_STAGE !== undefined);
+  const keySet = keySetFor(stages, SHIFT_STAGE.stage);
+  const colon = classify(':', keySet, 'ansi')[0];
+  assert.ok(colon !== undefined);
+  assert.equal(colon.live, true);
+  // `:` is a stage-8 key in its own right, so it stays the key the report card
+  // and the gate name -- but it is struck with shift held, and the overlay has
+  // to be able to say so.
+  assert.deepEqual(
+    colon.strokes.map((s) => s.key),
+    ['<shift>', ':'],
+  );
+  assert.equal(colon.strokes[1]?.finger, 'rp');
+  assert.equal(colon.strokes[0]?.finger, 'lp', 'a right-hand key takes the left shift');
+
+  // The unshifted key beneath it is one stroke and no shift.
+  assert.deepEqual(classify(';', keySet, 'ansi')[0]?.strokes, [{ key: ';', finger: 'rp' }]);
+});
+
 test('classification never varies with keyboard layout, only the finger does', () => {
   for (const stage of stages) {
     const keySet = keySetFor(stages, stage.stage);
@@ -173,8 +273,8 @@ test('classification never varies with keyboard layout, only the finger does', (
       const ansi = classify(sentence, keySet, 'ansi');
       const iso = classify(sentence, keySet, 'iso');
       assert.deepEqual(
-        ansi.map((g) => [g.ch, g.live, g.key]),
-        iso.map((g) => [g.ch, g.live, g.key]),
+        ansi.map((g) => [g.ch, g.live, g.strokes.map((s) => s.key)]),
+        iso.map((g) => [g.ch, g.live, g.strokes.map((s) => s.key)]),
       );
     }
   }

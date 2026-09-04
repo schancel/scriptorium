@@ -45,6 +45,12 @@ Stage 8 matters more than its position suggests. Proper two-handed shifting — 
 for right-hand capitals and vice versa — is a skill two-finger typists never acquire, and
 it is taught explicitly here rather than assumed.
 
+`<shift>` is one key in this table and two on the board, deliberately. It is one *skill*,
+so the gate below and the report card should both read as one number; which of the two
+physical shifts a capital wants is decided per character, from the letter's hand, and only
+the overlay ever needs the answer. See
+[illumination: the shift is the opposite hand's](01-illumination.md#the-shift-is-the-opposite-hands).
+
 ## The mastery gate
 
 A stage unlocks when, **on that stage's new keys specifically**:
@@ -53,6 +59,13 @@ A stage unlocks when, **on that stage's new keys specifically**:
 - median keystroke latency is below the stage's threshold
 
 Thresholds live in [tuning](07-tuning.md).
+
+A capital counts toward this gate as a keystroke on `<shift>` *and* one on its letter,
+because that is what the hands did. It contributes a single latency sample, on the letter:
+one keypress is one measurement, and crediting the modifier with it too would put every
+capital into the median twice. So at stage 8 the accuracy half of the gate is carried
+largely by shifting, which is the point — a stage-8 player who never shifts correctly
+cannot pass by typing colons well. See [stats](08-stats.md#definitions).
 
 Both conditions are required, and the second one is the important one. Accuracy alone can
 be satisfied by typing slowly and looking down — which is exactly the habit being
@@ -64,7 +77,10 @@ There is a test asserting precisely that.
 Escalating, so the support is withdrawn as it stops being needed:
 
 1. **Keyboard overlay.** An on-screen keyboard with the next key highlighted, colour-coded
-   by which finger should strike it. On by default.
+   by which finger should strike it. On by default. A capital highlights **both** of its
+   keys — the letter and the shift on the *opposite* hand — because the reach the player
+   does not know is the shift, and lighting the near one would drill the wrist-rolling
+   habit this stage exists to replace.
 2. **Earned fade-out.** Once a key's accuracy passes threshold, that key stops being
    highlighted on the overlay. The crutch removes itself key by key, as it is earned,
    without the player ever choosing to give it up.

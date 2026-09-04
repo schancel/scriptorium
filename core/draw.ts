@@ -19,9 +19,10 @@ import { CELL_W, focalX, visibleRange } from './rail.js';
 import {
   DEFAULT_SPACE_THUMB,
   FINGER_LABELS,
+  boardKeyFor,
+  curriculumKeyFor,
   fingerForKey,
   keyLabel,
-  normaliseKey,
   overlayExtent,
   overlayLayout,
   reportFingers,
@@ -411,6 +412,41 @@ function isMastered(key: Key, state: FrameState, tuning: Tuning): boolean {
   return attempts > 0 && stat.hits / attempts >= tuningValue(tuning, 'gate_accuracy');
 }
 
+/**
+ * The physical keys the next character costs, minus the ones already mastered.
+ *
+ * Two translations happen here, and both are the overlay's business alone. The
+ * glyph names the *character* owed and the board draws physical keys, so `:`
+ * only lines up with the `;` it is struck on once `boardKeyFor` has said so --
+ * without it nothing lights at all for a colon. And a capital costs two keys on
+ * two hands: the letter, and the shift held by the *opposite* pinky. Lighting
+ * both is the point of stage 8, and lighting the near shift instead would drill
+ * the wrist-rolling habit the stage exists to replace.
+ *
+ * Mastery is judged per key, so the shift can go on being pointed at after the
+ * letter has earned its fade-out, and vice versa.
+ */
+function highlightedKeys(
+  next: Glyph | null,
+  state: FrameState,
+  tuning: Tuning,
+): ReadonlySet<Key> {
+  const out = new Set<Key>();
+  if (next === null) return out;
+  for (const stroke of next.strokes) {
+    if (isMastered(stroke.key, state, tuning)) continue;
+    out.add(boardKeyFor(stroke.key, stroke.finger));
+  }
+  return out;
+}
+
+/** The keys of the next character, named in striking order: shift first. */
+function describeStrokes(next: Glyph): string {
+  return next.strokes
+    .map((s) => `${keyLabel(boardKeyFor(s.key, s.finger))} (${FINGER_LABELS[s.finger]})`)
+    .join(' + ');
+}
+
 function pushKeyboard(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
   const spaceThumb = state.spaceThumb ?? DEFAULT_SPACE_THUMB;
   const keys = overlayLayout(state.layout, spaceThumb);
@@ -418,21 +454,17 @@ function pushKeyboard(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void 
   const originX = (M.vw - extent.w * M.kbUnit) / 2;
   const taught = new Set(state.keySet);
   const next = nextLiveGlyph(state);
-  const nextKey = next === null ? null : next.key;
-  // The glyph names the *character* owed; the overlay draws physical keys. `:`
-  // is struck on `;`, so the two only line up once the key has been normalised.
-  // Without it nothing lights at all for a colon -- the stage-8 player is left
-  // hunting for the key the overlay exists to point at.
-  const nextBoardKey = nextKey === null ? null : normaliseKey(nextKey);
+  const lit = highlightedKeys(next, state, tuning);
 
   for (const k of keys) {
     const x = originX + k.x * M.kbUnit + M.keyPad;
     const y = M.kbTop + k.y * M.kbUnit + M.keyPad;
     const w = k.w * M.kbUnit - M.keyPad * 2;
     const h = k.h * M.kbUnit - M.keyPad * 2;
-    const isNext =
-      nextKey !== null && k.key === nextBoardKey && !isMastered(nextKey, state, tuning);
-    const known = taught.has(k.key);
+    const isNext = lit.has(k.key);
+    // Both shift keys are the one `<shift>` the curriculum teaches, so the
+    // right-hand one stops being dim exactly when the left-hand one does.
+    const known = taught.has(curriculumKeyFor(k.key));
     cmds.push({
       op: 'rect', x, y, w, h,
       color: pal(isNext ? 'gold' : k.finger),
@@ -445,11 +477,9 @@ function pushKeyboard(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void 
     });
   }
 
-  if (next !== null && next.key !== null) {
-    const finger = fingerForKey(next.key, state.layout, spaceThumb);
-    const named = finger === null ? '' : FINGER_LABELS[finger];
+  if (next !== null) {
     cmds.push({
-      op: 'text', value: `next: ${keyLabel(next.key)}    ${named}`,
+      op: 'text', value: `next: ${describeStrokes(next)}`,
       x: M.vw / 2, y: M.hintY, style: 'hint-center', color: pal('gold'),
     });
   }
@@ -521,7 +551,7 @@ function pushReport(cmds: DrawCmd[], state: FrameState): void {
   }
 
   cmds.push({
-    op: 'text', value: 'enter: type it again      esc: back to the passage',
+    op: 'text', value: 'enter: type it again      esc: on to the next candle',
     x: M.reportX, y: M.reportFootY, style: 'report', color: pal('dim'),
   });
 }

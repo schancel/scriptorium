@@ -8,12 +8,24 @@
  * which case it is dimmed and the cursor snaps past it.
  *
  * The invariant this file exists to hold: no glyph marked live may require a
- * key outside the stage's key set. One leaked `z` at stage 2 and the player is
- * hunting for it, which is the exact habit the game is built to remove.
+ * key outside the stage's key set -- *every* key it requires, not merely the
+ * one it prints. One leaked `z` at stage 2 and the player is hunting for it,
+ * which is the exact habit the game is built to remove.
+ *
+ * A live glyph therefore carries a list of strokes rather than a key: a capital
+ * costs two, shift and the letter, struck by two hands. See
+ * docs/design/01-illumination.md#strokes.
  */
 
-import type { Finger, Glyph, Key, KeyboardLayout, Thumb } from './types.js';
-import { DEFAULT_SPACE_THUMB, fingerForKey, isBoardKey, needsShift, normaliseKey } from './keyboard.js';
+import type { Finger, Glyph, Key, KeyboardLayout, Stroke, Thumb } from './types.js';
+import {
+  DEFAULT_SPACE_THUMB,
+  fingerForKey,
+  isBoardKey,
+  needsShift,
+  normaliseKey,
+  shiftFingerFor,
+} from './keyboard.js';
 
 /**
  * The space bar, live from stage 0: a thumb key and ~18% of all keystrokes.
@@ -43,10 +55,47 @@ const SHIFT: Key = '<shift>';
  */
 function requiredKeys(ch: string, keySet: ReadonlySet<Key>): readonly Key[] | null {
   if (ch === ' ') return [SPACE];
-  if (keySet.has(ch)) return [ch];
   const base = normaliseKey(ch);
   if (!isBoardKey(base)) return null;
-  return needsShift(ch) ? [SHIFT, base] : [base];
+  // A character the curriculum names outright is its own key -- stage 8 teaches
+  // `:`, and the report card and the gate should say `:` rather than `;`. It
+  // still costs a shift: naming a key is a statement about the curriculum, not
+  // about what the hands do.
+  const primary = keySet.has(ch) ? ch : base;
+  return needsShift(ch) ? [SHIFT, primary] : [primary];
+}
+
+/**
+ * Every stroke a character costs, in striking order, or null when it cannot be
+ * typed at this stage at all.
+ *
+ * The shift stroke is the reason this exists. Its key is fixed -- the
+ * curriculum teaches one `<shift>` -- but its *finger* depends on the letter:
+ * the opposite hand's pinky, so the striking hand never leaves home row. See
+ * `keyboard.shiftFingerFor`.
+ */
+function strokesFor(
+  ch: string,
+  keySet: ReadonlySet<Key>,
+  layout: KeyboardLayout,
+  spaceThumb: Thumb,
+): Stroke[] | null {
+  const required = requiredKeys(ch, keySet);
+  if (required === null) return null;
+  if (!required.every((k) => keySet.has(k))) return null;
+  const primaryKey = required[required.length - 1];
+  if (primaryKey === undefined) return null;
+
+  const primary: Stroke = { key: primaryKey, finger: fingerFor(primaryKey, layout, spaceThumb) };
+  const strokes: Stroke[] = [];
+  for (const key of required.slice(0, -1)) {
+    const finger = key === SHIFT
+      ? shiftFingerFor(primary.finger)
+      : fingerFor(key, layout, spaceThumb);
+    strokes.push({ key, finger });
+  }
+  strokes.push(primary);
+  return strokes;
 }
 
 /**
@@ -78,7 +127,9 @@ export function fingerFor(
  *
  * The text is never filtered or rewritten -- see
  * `docs/decisions/0003-illumination-over-corpus-filtering.md`. Every character
- * comes back, in order, marked live or greyed.
+ * comes back, in order, marked live or greyed. A live glyph carries the strokes
+ * it costs, modifiers first and the printing key last; a greyed one carries
+ * none, because there is nothing the player is being asked to strike.
  *
  * @param text   the passage exactly as printed
  * @param keySet everything typable at the current stage, from `keySetFor`
@@ -94,13 +145,11 @@ export function classify(
 ): Glyph[] {
   const glyphs: Glyph[] = [];
   for (const ch of text) {
-    const required = requiredKeys(ch, keySet);
-    const key = required === null ? undefined : required[required.length - 1];
-    const live = required !== null && key !== undefined && required.every((k) => keySet.has(k));
-    if (!live || key === undefined) {
-      glyphs.push({ ch, live: false, key: null, finger: null });
+    const strokes = strokesFor(ch, keySet, layout, spaceThumb);
+    if (strokes === null) {
+      glyphs.push({ ch, live: false, strokes: [] });
     } else {
-      glyphs.push({ ch, live: true, key, finger: fingerFor(key, layout, spaceThumb) });
+      glyphs.push({ ch, live: true, strokes });
     }
   }
   return glyphs;

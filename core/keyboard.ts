@@ -70,6 +70,22 @@ export function reportFingers(spaceThumb: Thumb): readonly Finger[] {
 const SPACE: Key = '<space>';
 
 /**
+ * The two shift keys.
+ *
+ * The curriculum names one, `<shift>`, because it teaches one skill; the board
+ * has two, and which of them a capital is struck on is the whole content of
+ * that skill. `<shift>` is therefore the *curriculum* key throughout core, and
+ * `boardKeyFor` is the only place it becomes a left or a right one -- at the
+ * point of drawing it.
+ */
+const SHIFT: Key = '<shift>';
+const RIGHT_SHIFT: Key = '<rshift>';
+
+function isLeftHand(finger: Finger): boolean {
+  return finger.startsWith('l');
+}
+
+/**
  * Touch-typing finger assignment for the unshifted US ANSI main block, plus the
  * modifier tokens the curriculum and the overlay name. Standard home-row
  * discipline: index fingers take the two columns they stretch to, the pinkies
@@ -217,6 +233,47 @@ export function fingerForKey(
   const override = FINGER_OVERRIDES[layout][key];
   if (override !== undefined) return override;
   return FINGER_BY_KEY[key] ?? FINGER_BY_KEY[normaliseKey(key)] ?? null;
+}
+
+/**
+ * The pinky that should hold shift while `finger` strikes the letter.
+ *
+ * Always the opposite hand, and this is the entire lesson of stage 8. A
+ * two-finger typist shifts with the same hand, rolling the wrist off home
+ * position for every capital; correct technique holds the far shift so the
+ * striking hand never leaves its row. `docs/design/06-curriculum.md#stages`
+ * calls it out as a skill that is taught rather than assumed, and a model that
+ * could only name one key per character could not express it at all.
+ *
+ * Thumbs never take a shifted character -- space is the only thumb key -- so
+ * the answer is a pinky either way.
+ */
+export function shiftFingerFor(finger: Finger): Finger {
+  return isLeftHand(finger) ? 'rp' : 'lp';
+}
+
+/**
+ * The physical key a stroke lands on, for the overlay to light.
+ *
+ * Two translations, both of which the drawn board needs and the curriculum does
+ * not: a shifted character lives on the unshifted key beneath it (`:` on `;`),
+ * and the one `<shift>` the curriculum teaches is whichever of the board's two
+ * shift keys the stroke's finger belongs to. Lighting the near shift for a
+ * left-hand capital would teach precisely the habit stage 8 exists to break.
+ */
+export function boardKeyFor(key: Key, finger: Finger): Key {
+  if (key === SHIFT || key === RIGHT_SHIFT) return isLeftHand(finger) ? SHIFT : RIGHT_SHIFT;
+  return normaliseKey(key);
+}
+
+/**
+ * The curriculum key a drawn key belongs to: the inverse of `boardKeyFor`, and
+ * only the right-hand shift is any different. The board draws two shift keys
+ * and the curriculum teaches one, so dimming `<rshift>` until some `<rshift>`
+ * is taught would grey out, for ever, half of what stage 8 unlocks.
+ */
+export function curriculumKeyFor(key: Key): Key {
+  return key === RIGHT_SHIFT ? SHIFT : key;
 }
 
 function rowsFor(layout: KeyboardLayout): readonly string[] {

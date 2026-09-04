@@ -1,6 +1,6 @@
 # Illumination
 
-**Implemented by:** `core/illumination.ts`, `core/corpus.ts`
+**Implemented by:** `core/illumination.ts`, `core/keyboard.ts`, `core/corpus.ts`
 
 The central mechanic, and the reason the Bible works as a beginner corpus at all.
 
@@ -19,9 +19,9 @@ unlearned letter is an invitation to look down and hunt for it. See
 
 The real verse is always displayed in full. Each character is classified:
 
-- **live** — the character's key is in the current stage's key set. The player must
-  type it. The cursor will not advance until they do.
-- **greyed** — the character's key is not yet taught. It renders dimmed and
+- **live** — every key the character costs is in the current stage's key set. The player
+  must type it. The cursor will not advance until they do.
+- **greyed** — some key it costs is not yet taught. It renders dimmed and
   auto-advances the moment the cursor reaches it. The player never presses it and is
   never shown where it is.
 
@@ -36,8 +36,9 @@ The metaphor is exact and was the reason for the project's name: an illuminated
 manuscript, lit letter by letter as the scribe earns it.
 
 **Invariant.** No character classified live may require a key outside the current
-stage's key set. This is checked exhaustively over the whole corpus, not sampled, and it
-is the single most important correctness property in the codebase. One leaked `z` at
+stage's key set — *every* key it requires, not merely the one it prints. This is checked
+exhaustively over the whole corpus, not sampled, and it is the single most important
+correctness property in the codebase. One leaked `z` at
 stage 2 and the player is hunting for it — which is the exact behaviour the game exists
 to eliminate.
 
@@ -49,6 +50,40 @@ Because it prints nothing, a live space still has to be *shown* — the rail mar
 is owed rather than leaving a gap. See [the space affordance](02-rail.md#the-space-affordance).
 Which thumb it is credited to is the player's preference, not a property of the key; see
 [stats](08-stats.md#nine-rows-not-ten).
+
+## Strokes
+
+A character is not a key. A capital is **two keys struck by two hands** — a shift held
+with one, the letter with the other — and `:` is shift and `;` together. So a live glyph
+carries a *list of strokes*, each a key and the finger that should strike it, modifiers
+first and the printing key last. A greyed glyph carries none: nothing is being asked for.
+
+This is not bookkeeping. A model with one key per character loses three things, and all
+three of them are stage 8:
+
+- the [mastery gate](06-curriculum.md#the-mastery-gate) measures a stage's *new keys*, so
+  with the shift half of every capital invisible, `<shift>` received **zero samples** and
+  the stage that exists to teach two-handed shifting gated on `'`, `:`, `;` and `-`
+  instead — on anything except the skill.
+- the overlay could only ever light the letter, so the one crutch the player has says
+  nothing about the key he does not know how to reach.
+- **which** shift could not be named at all. See below.
+
+### The shift is the opposite hand's
+
+Correct technique is the *far* shift: a left-hand letter takes the right shift, a
+right-hand letter the left. Shifting with the striking hand rolls the wrist off home row
+for every capital in the corpus, and it is exactly what a two-finger typist does today.
+
+So the shift stroke's finger is a fact about the *letter*, not about the key — the same
+`<shift>` is a right-pinky stroke for `A` and a left-pinky stroke for `J`. That is why a
+stroke carries its finger rather than looking one up: no table keyed on the key could
+answer it. The rule itself lives in `core/keyboard.ts` beside the finger table.
+
+The curriculum names **one** `<shift>`, because it teaches one skill and the statistics
+should read as one skill. The board has two shift keys, and turning the curriculum's key
+into the physical one is the overlay's job alone, at the moment of drawing it — so the
+overlay lights the letter and the far shift together, which is what teaches the habit.
 
 ## Which finger, and which keys
 

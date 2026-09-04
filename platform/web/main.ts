@@ -566,7 +566,8 @@ async function boot(): Promise<void> {
           /* the chunk we just typed is definitionally reachable */
         });
       } else if (event.value === 'escape') {
-        // "back to the passage": on with it, from the candle just lit.
+        // "on to the next candle", exactly as the report card's footer says:
+        // forward from the candle just lit, not back to the one just typed.
         goTo(progress.position, () => {
           /* likewise */
         });

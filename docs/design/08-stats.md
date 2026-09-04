@@ -18,6 +18,18 @@ Standard, so the numbers are comparable with every other typing tool:
   being struck. The first keystroke after any pause longer than the idle threshold is
   discarded, so thinking time does not pollute the muscle-memory signal.
 
+A character can cost more than one key — a capital is shift and a letter, struck by two
+hands; see [illumination: strokes](01-illumination.md#strokes). **Every** key it costs is
+credited with a hit, because every one of them was struck, and that is what gives
+`<shift>` any statistics at all. The three numbers above still count *characters*: one
+keypress is one keystroke and one latency sample, and the sample is attributed to the
+printing key alone. Giving the modifier a copy of it would enter every capital into the
+median twice and flatter the median latency of a player who shifts.
+
+An error is recorded against the printing key, unchanged: what failed is the production
+of the character, and the platform delivers a composed character or nothing — the player
+cannot get the modifier wrong on its own.
+
 Only live characters count toward any of these. Greyed characters are not typed and must
 never inflate WPM — an easy and tempting bug, since it would make early stages look
 flattering.

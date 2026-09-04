@@ -9,6 +9,11 @@
  *
  * Only live glyphs pass through `applyKey`, so only live characters can reach
  * `correct` -- which is what keeps greyed characters out of WPM.
+ *
+ * A character can cost more than one key. A capital is shift plus a letter, and
+ * both keys are credited, or the mastery gate at stage 8 measures everything
+ * except the skill stage 8 teaches. Keystrokes, accuracy and latency still
+ * count *characters*: one keypress, one sample.
  */
 
 import type { Glyph, Key, KeyStat, Score, Tuning, TypingState } from './types.js';
@@ -118,32 +123,46 @@ export function applyKey(state: TypingState, ch: string, tuning: Tuning): Typing
   const idleMs = tuningValue(tuning, 'idle_base_ms');
   const cursor = skipGreyed(state.glyphs, state.cursor);
   const target = state.glyphs[cursor];
+  const strokes = target !== undefined && target.live ? target.strokes : [];
+  const primary = strokes[strokes.length - 1];
 
-  if (target === undefined || !target.live || target.key === null) {
-    // Past the end of the passage: the keypress still happened, but there is
-    // nothing to score it against.
+  if (target === undefined || primary === undefined) {
+    // Past the end of the passage, or on a glyph with no strokes -- which is
+    // what greyed means. The keypress still happened, but there is nothing to
+    // score it against.
     return { ...state, cursor, keystrokes: state.keystrokes + 1, sinceKeyMs: 0, blocked: false };
   }
 
   if (ch === target.ch) {
     const latencyMs = state.sinceKeyMs > idleMs ? null : state.sinceKeyMs;
+    // Every stroke earns a hit: a capital is two keys, and crediting only the
+    // letter is what left `<shift>` with no samples at all for the stage that
+    // exists to teach it. The latency belongs to the primary stroke alone,
+    // though, or a capital would put its one measurement into the median twice.
+    let keyStats = state.keyStats;
+    for (const stroke of strokes) {
+      keyStats = withHit(keyStats, stroke.key, stroke === primary ? latencyMs : null);
+    }
     return {
       ...state,
       cursor: skipGreyed(state.glyphs, cursor + 1),
       keystrokes: state.keystrokes + 1,
       correct: state.correct + 1,
       sinceKeyMs: 0,
-      keyStats: withHit(state.keyStats, target.key, latencyMs),
+      keyStats,
       blocked: false,
     };
   }
 
+  // The error goes against the primary stroke: what failed is the production of
+  // the character, and the modifier is not a thing the player can get wrong on
+  // its own -- the platform delivers a composed character or nothing at all.
   return {
     ...state,
     cursor,
     keystrokes: state.keystrokes + 1,
     sinceKeyMs: 0,
-    keyStats: withError(state.keyStats, target.key, ch),
+    keyStats: withError(state.keyStats, primary.key, ch),
     blocked: true,
   };
 }

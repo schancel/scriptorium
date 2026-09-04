@@ -59,6 +59,19 @@ export interface Passage {
 }
 
 /**
+ * One key struck, with the finger that should strike it.
+ *
+ * The finger is carried rather than looked up because it is not always a
+ * function of the key: `<shift>` is struck by whichever pinky is *not* busy
+ * with the letter, so the same key is a left-pinky stroke for one capital and a
+ * right-pinky stroke for the next. See docs/design/01-illumination.md#strokes.
+ */
+export interface Stroke {
+  readonly key: Key;
+  readonly finger: Finger;
+}
+
+/**
  * A single character of displayed text, classified against the current stage.
  * See docs/design/01-illumination.md#classification.
  */
@@ -67,9 +80,16 @@ export interface Glyph {
   readonly ch: string;
   /** True when the player must type it; false when greyed and auto-advanced. */
   readonly live: boolean;
-  /** The key required, or null when greyed. */
-  readonly key: Key | null;
-  readonly finger: Finger | null;
+  /**
+   * Every key the character costs, modifiers first and the primary key last;
+   * empty when greyed.
+   *
+   * A capital is two keys struck by two hands, and one key could never name
+   * them: with a single `key` field the shift half of every capital was
+   * invisible to the statistics, to the gate that is supposed to measure it,
+   * and to the overlay that is supposed to point at it.
+   */
+  readonly strokes: readonly Stroke[];
 }
 
 // --- typing -----------------------------------------------------------------
