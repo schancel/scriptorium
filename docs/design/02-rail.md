@@ -111,6 +111,29 @@ is where to start; until then there is nothing here to repair.
 Recorded because a measurement that looks alarming and turns out not to matter is worth
 keeping — otherwise it gets rediscovered and "fixed" by the next person to notice it.
 
+## The scribe at his lectern
+
+The keyboard overlay is a scaffold, and [the curriculum](06-curriculum.md) retires it a
+key at a time: once a key's accuracy passes threshold it stops being highlighted. For a
+player who has arrived, the whole band eventually goes quiet.
+
+**What fills it is the scribe at his lectern**, hunched over the page, quill moving as
+the player types and the page filling as verses complete. Not an ornament in a corner --
+the band the keyboard occupied, given back.
+
+This is the best reward the game has to give, because it is the thing the game is
+actually about. He stops needing the keys drawn for him and gets to watch himself write
+instead. Nothing is announced, no panel congratulates him; the crutch simply becomes the
+work.
+
+Rules it inherits: it is below the rail and never enters it, it never competes for
+attention with the text, and it moves only when the player types -- a quill scratching on
+its own while someone thinks is the same lie as a world that scrolls without them.
+
+The figure is the same scribe who walks the scenery band above. He is a novice copying a
+manuscript, never anyone from the text -- see
+[scenery](05-scenery-warps.md#held-scenes-not-every-passage-is-a-journey).
+
 ## Reading mode
 
 The rail makes a reading mode nearly free: same ribbon, same focal guide, no typing.
