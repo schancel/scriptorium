@@ -98,6 +98,12 @@ export interface Progress {
   readonly version: number;
   readonly stage: number;
   readonly translation: string;
+  /**
+   * Which reading of the book he is on: `pilgrimage`, `canonical`, `narrative`
+   * or `wisdom`, naming `data/routes/<id>.json`. It decides what the map draws
+   * and nothing else -- not the stage, not the gate, not where he is standing.
+   * See docs/design/04-route.md#choosing-a-route.
+   */
   readonly route: string;
   /**
    * The physical keyboard. Not in the published schema yet; the overlay is
@@ -670,6 +676,24 @@ export function setCloudEnabled(progress: Progress, cloudEnabled: boolean): Prog
  */
 export function setMotion(progress: Progress, motion: MotionSetting): Progress {
   return { ...progress, motion };
+}
+
+/**
+ * Choose which route the player is reading.
+ *
+ * A reading of the book rather than a place in it, so it moves nobody: the
+ * verse he is typing, the bookmark, the stage and the trailing window are all
+ * untouched, and `completed` is one list of chapters that every route reads.
+ * A chapter typed on one route is finished on all four.
+ *
+ * Unknown ids are refused rather than stored. A record naming a route whose
+ * file does not exist would boot into a map that could not load, and the map is
+ * the screen whose whole job is saying where he is.
+ * See docs/design/04-route.md#choosing-a-route.
+ */
+export function setRoute(progress: Progress, route: string, known: readonly string[]): Progress {
+  if (!known.includes(route) || route === progress.route) return progress;
+  return { ...progress, route };
 }
 
 /**

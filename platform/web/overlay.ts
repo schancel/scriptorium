@@ -114,8 +114,16 @@ export interface OverlayHandlers {
    * with a sentence beside each thread, and the canvas is for the rail.
    */
   requestMap(): void;
-  /** The player chose a passage on the map. */
+  /** The player chose a passage on the map, or a Chronicle passage in the menu. */
   travel(ref: string): void;
+  /**
+   * The player chose which route to read.
+   *
+   * A reading of the book rather than a place in it, so nothing moves: he stays
+   * in the verse he was typing and the map redraws against the new graph. See
+   * docs/design/04-route.md#choosing-a-route.
+   */
+  setRoute(id: string): void;
   /**
    * The player asked to read rather than type.
    *
@@ -175,6 +183,20 @@ export interface AudioMenuView {
   readonly music: readonly PlayingTune[];
 }
 
+/** One route the menu can offer. Every word of it is authored in the route doc. */
+export interface RouteOfferView {
+  readonly id: string;
+  readonly name: string;
+  /** One sentence saying what this reading of the book is. */
+  readonly what: string;
+}
+
+/** One genealogy, and whether he has already typed it. */
+export interface ChroniclePassageView {
+  readonly ref: string;
+  readonly completed: boolean;
+}
+
 export interface MenuView {
   readonly where: string;
   readonly stageLine: string;
@@ -198,6 +220,18 @@ export interface MenuView {
   /** The stage the player is on, and every stage they could choose instead. */
   readonly stage: number;
   readonly stages: readonly { readonly stage: number; readonly description: string }[];
+  /** Which route the record names, and every route this build ships. */
+  readonly route: string;
+  readonly routes: readonly RouteOfferView[];
+  /**
+   * The genealogies, offered back.
+   *
+   * The same sixteen chapters on every route, because they are skipped on every
+   * route and are a fact about the canon rather than about a reading of it.
+   * Nothing in the game leads here; this list is the only way in.
+   * See docs/design/04-route.md#chronicle-the-genealogies-are-opt-in
+   */
+  readonly chronicle: readonly ChroniclePassageView[];
   /** Whether gilding is on. See `OverlayHandlers.setGilding`. */
   readonly gilding: boolean;
   /**
@@ -244,8 +278,11 @@ export interface HandsView {
 
 /** One passage on the map. Every judgement in it is made by `core/route.ts`. */
 export interface RouteNodeView {
+  /** As the route table spells it, span and all: `Genesis 1-50`. */
   readonly ref: string;
   readonly kind: 'stop' | 'secret';
+  /** The route's own sentence about this passage, or null when it has none. */
+  readonly note: string | null;
   readonly unlocked: boolean;
   readonly completed: boolean;
   readonly current: boolean;
@@ -285,6 +322,18 @@ export interface RoutePartyView {
 
 export interface RouteView {
   readonly routeId: string;
+  /** The name the player knows it by: `Pilgrimage`, not `pilgrimage`. */
+  readonly routeName: string;
+  /**
+   * Whether this route has threads at all.
+   *
+   * False on three of the four shipped routes, and the map has to say so: an
+   * empty Threads heading reads as a screen that failed to load, and a counter
+   * promising that secret rooms are not counted promises rooms that do not
+   * exist. See
+   * docs/design/04-route.md#three-of-the-four-are-lists-and-that-is-not-an-omission
+   */
+  readonly threaded: boolean;
   readonly complete: boolean;
   /** Stops finished, out of the stops the route requires. Secrets are not counted. */
   readonly finished: number;
@@ -435,6 +484,9 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const motionSelect = need('menu-motion', HTMLSelectElement);
   const motionNote = need('menu-motion-note', HTMLParagraphElement);
   const stageSelect = need('menu-stage-select', HTMLSelectElement);
+  const routeSelect = need('menu-route', HTMLSelectElement);
+  const routeNote = need('menu-route-note', HTMLParagraphElement);
+  const chronicleList = need('menu-chronicle', HTMLUListElement);
   const gildingSelect = need('menu-gilding', HTMLSelectElement);
   const mistakesSelect = need('menu-mistakes', HTMLSelectElement);
   const editionNext = need('menu-edition-next', HTMLParagraphElement);
@@ -484,6 +536,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const mapParty = need('map-party', HTMLUListElement);
   const mapPartyNote = need('map-party-note', HTMLParagraphElement);
   const mapStanding = need('map-standing', HTMLParagraphElement);
+  const mapThreadsNote = need('map-threads-note', HTMLParagraphElement);
   const mapMenu = need('map-menu', HTMLButtonElement);
   const mapResume = need('map-resume', HTMLButtonElement);
 
@@ -671,6 +724,61 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     stageSelect.value = String(view.stage);
   }
 
+  /**
+   * The route picker, and the sentence under it.
+   *
+   * Built from the routes the game actually loaded, for the reason the stage
+   * picker is: a route cannot appear in the menu that the map has never heard
+   * of. The **description of the chosen one is said out loud** underneath,
+   * rather than left inside the option text, because that is the whole lesson
+   * of the translation control above it -- a choice presented as a dropdown of
+   * proper nouns is a choice nobody can make.
+   * docs/design/04-route.md#choosing-a-route
+   */
+  function renderRoutes(view: MenuView): void {
+    routeSelect.replaceChildren();
+    for (const row of view.routes) {
+      const option = document.createElement('option');
+      option.value = row.id;
+      option.textContent = row.name;
+      routeSelect.append(option);
+    }
+    routeSelect.value = view.route;
+    routeSelect.disabled = view.routes.length === 0;
+    routeNote.textContent = view.routes.find((r) => r.id === view.route)?.what ?? '';
+  }
+
+  /**
+   * The genealogies, listed with a way in.
+   *
+   * The only way in. Nothing on any route leads here, nothing requires one, and
+   * finishing one leads nowhere -- so if this list did not exist the sixteen
+   * chapters would be unreachable except by typing the chapter number into the
+   * jump box, which is not an offer.
+   * docs/design/04-route.md#chronicle-the-genealogies-are-opt-in
+   */
+  function renderChronicle(view: MenuView): void {
+    chronicleList.replaceChildren();
+    for (const passage of view.chronicle) {
+      const row = document.createElement('li');
+      if (passage.completed) row.classList.add('done');
+      const name = document.createElement('span');
+      name.className = 'what';
+      name.textContent = passage.ref;
+      const state = document.createElement('span');
+      state.className = 'how';
+      state.textContent = passage.completed ? 'finished' : '';
+      const go = document.createElement('button');
+      go.type = 'button';
+      go.textContent = 'Go';
+      go.addEventListener('click', () => {
+        handlers.travel(passage.ref);
+      });
+      row.append(name, state, go);
+      chronicleList.append(row);
+    }
+  }
+
   function openMenu(view: MenuView): void {
     // Walking off the opening screen into the menu counts as having read it.
     // Leaving it unanswered would bring it back on the next reload, which is
@@ -692,6 +800,8 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     gildingSelect.value = view.gilding ? 'on' : 'off';
     mistakesSelect.value = view.mistakesStand ? 'stand' : 'block';
     renderStages(view);
+    renderRoutes(view);
+    renderChronicle(view);
     renderAudio(view.audio);
     errorLine.textContent = '';
     renderHistory(view.history);
@@ -721,9 +831,14 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     mapProgress.textContent = view.error !== null
       ? ''
       : view.complete
-        ? `Every passage on the ${view.routeId} route is finished.`
-        : `${String(view.finished)} of ${String(view.stops)} passages finished. ` +
-          'Secret rooms are not counted \u2014 you can finish without ever finding one.';
+        ? `Every passage on the ${view.routeName} route is finished.`
+        // The sentence about secret rooms is a promise about doorways, and three
+        // of the four routes have none. Saying it there would be the screen
+        // describing a mechanism this reading of the book does not have.
+        : `${String(view.finished)} of ${String(view.stops)} passages finished.`
+          + (view.threaded
+            ? ' Secret rooms are not counted \u2014 you can finish without ever finding one.'
+            : '');
     // Standing somewhere the route does not name, the map marks nothing and
     // says so. It used to mark the route's first entry instead, which told a
     // player reading Genesis 2 that he was in Genesis 1 -- and being off the
@@ -731,8 +846,13 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     // statement and not a correction.
     mapStanding.textContent = view.standing === null
       ? ''
-      : `You are reading ${view.standing}, which is not on the ${view.routeId} route. `
-        + 'Nothing is wrong \u2014 the route is a set of threads, not a fence.'
+      : `You are reading ${view.standing}, which is not on the ${view.routeName} route. `
+        // The noun follows the route. "A set of threads" is true of Pilgrimage
+        // and of nothing else, and the claim being made -- that being outside it
+        // is normal -- is the same either way.
+        + `Nothing is wrong \u2014 the route is ${
+          view.threaded ? 'a set of threads' : 'a list of passages'
+        }, not a fence.`
         // Only when there is one. A card that told him where he left off with
         // nothing finished would be asserting something the record does not say.
         + (view.finished > 0
@@ -768,6 +888,16 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
               : 'finish a passage that leads here';
 
       row.append(name, state);
+      // The route's own sentence about this passage, where it has one. Wisdom
+      // says what each book of the Psalter is; Canonical says nothing about
+      // anything, and sixty-six empty spans is the honest picture of a route
+      // whose whole argument is the order the books are printed in.
+      if (node.note !== null) {
+        const note = document.createElement('span');
+        note.className = 'note';
+        note.textContent = node.note;
+        row.append(note);
+      }
       if (node.unlocked && !node.current) {
         const go = document.createElement('button');
         go.type = 'button';
@@ -780,6 +910,14 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
       mapNodes.append(row);
     }
 
+    // An empty heading reads as a screen that failed to load, so a route with no
+    // threads says what it is instead of showing nothing.
+    mapThreadsNote.textContent = view.error !== null || view.threaded
+      ? ''
+      : `${view.routeName} has no threads. It is a list of passages in the order `
+        + 'the book prints them, and reading straight on is the whole of it. '
+        + 'Threads are the Pilgrimage\u2019s idea: every one of them is a phrase '
+        + 'two passages really share, and there is no honest one to draw here.';
     for (const thread of view.threads) {
       const row = document.createElement('li');
       if (thread.travelled) row.classList.add('done');
@@ -1185,6 +1323,9 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   });
   mistakesSelect.addEventListener('change', () => {
     handlers.setMistakesStand(mistakesSelect.value === 'stand');
+  });
+  routeSelect.addEventListener('change', () => {
+    handlers.setRoute(routeSelect.value);
   });
   stageSelect.addEventListener('change', () => {
     const stage = Number.parseInt(stageSelect.value, 10);

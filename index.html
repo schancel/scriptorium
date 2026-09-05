@@ -181,7 +181,14 @@
   /* The map: a list of passages, and a list of the threads between them. The
      thread's note is the point of the whole screen -- without it the map is a
      reading order rather than a route. */
-  #map-nodes, #map-threads, #map-party { margin: 0; padding: 0; list-style: none; font-size: .9rem; }
+  #map-nodes, #map-threads, #map-party, #menu-chronicle { margin: 0; padding: 0; list-style: none; font-size: .9rem; }
+  #menu-chronicle { max-height: 14rem; overflow: auto; }
+  #menu-chronicle li { display: flex; gap: .6rem; align-items: baseline; padding: .15rem 0; }
+  #menu-chronicle .what { flex: 1; }
+  #menu-chronicle .how { color: var(--dim); font-size: .85rem; }
+  #menu-chronicle li.done .what { color: var(--bright); }
+  #menu-chronicle button { font-size: .8rem; padding: .1em .6em; }
+  #map-nodes .note { color: var(--dim); font-size: .85rem; flex-basis: 100%; }
   #map-nodes li, #map-threads li, #map-party li {
     display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap;
     padding: .25rem 0; border-bottom: 1px solid rgba(122, 107, 80, .18);
@@ -353,6 +360,10 @@
     <ul id="map-party"></ul>
 
     <h3>Threads</h3>
+    <!-- A route with no threads says what it is here, rather than showing an
+         empty heading that reads as a screen which failed to load.
+         docs/design/04-route.md#three-of-the-four-are-lists-and-that-is-not-an-omission -->
+    <p class="dim" id="map-threads-note"></p>
     <ul id="map-threads"></ul>
     <p class="dim">
       A thread marked with &#8617; is a doorway: an optional room partway
@@ -631,19 +642,51 @@
       look at when you want to.
     </p>
 
-    <h3>The route</h3>
+    <!-- Four readings of the same book. Named and described here rather than
+         offered on the first screen: the opening deliberately mentions no
+         stages, no map and no modes, and four unfamiliar words plus a decision
+         is how you lose someone in the first fifteen seconds.
+         docs/design/04-route.md#choosing-a-route -->
+    <h3>Which route</h3>
     <div class="row">
+      <label>Route <select id="menu-route"></select></label>
       <button id="menu-map" type="button">Show the route</button>
+    </div>
+    <p class="dim" id="menu-route-note"></p>
+    <p class="dim">
+      A route is a reading of the book, not a place in it. Choosing another one
+      leaves you in the verse you are typing and changes what the map draws; a
+      chapter you have finished stays finished on all four. If you would rather
+      not start in Genesis, <b>Wisdom</b> is the shortest way in &mdash; a psalm
+      is about a third the length of a chapter of Genesis, and in the proverbs
+      nineteen verses in twenty are one whole thought with a full stop after it.
+    </p>
+
+    <h3>Reading</h3>
+    <div class="row">
       <button id="menu-read" type="button">Read without typing</button>
     </div>
     <p class="dim">
-      The route is a small graph of passages joined by phrases they share, not a
-      run through the Bible front to back. <b>Reading</b> is the same page shown
-      one word at a time, each word landing on the same spot so your eyes never
-      have to travel, with nothing asked of you. It speeds up gently the longer
-      you stay with it; the <b>up</b> and <b>down</b> arrows set the pace, and
-      <b>Esc</b> brings you back.
+      <b>Reading</b> is the same page shown one word at a time, each word landing
+      on the same spot so your eyes never have to travel, with nothing asked of
+      you. It speeds up gently the longer you stay with it; the <b>up</b> and
+      <b>down</b> arrows set the pace, and <b>Esc</b> brings you back.
     </p>
+
+    <!-- The genealogies. Skipped on every route by default, and reachable only
+         from here: nothing leads to one, nothing requires one, and finishing one
+         leads nowhere. docs/design/04-route.md#chronicle-the-genealogies-are-opt-in -->
+    <h3>Chronicle</h3>
+    <p class="dim">
+      Sixteen chapters of nothing but names and ages &mdash; <i>and Mahalalel
+      lived eight hundred and thirty years</i> &mdash; which every route steps
+      over. They are here if you want them and no route will ever ask you for
+      one. Be warned what they are: not numbers, since every number in the Bible
+      is spelled out in words, but names. In 1 Chronicles 1 nearly half of all
+      the words start with a capital, against one word in eight across the rest
+      of the book, so it is mostly shifting.
+    </p>
+    <ul id="menu-chronicle"></ul>
 
     <h3>The opening</h3>
     <div class="row">

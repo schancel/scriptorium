@@ -19,6 +19,25 @@
  * function, and it is what makes "skipping a flashback still leaves the level
  * completable" a property of the graph rather than a hope about the code.
  *
+ * ## A route is a graph, or a list, or both
+ *
+ * Pilgrimage is the graph this module was written for. The other three shipped
+ * routes -- Canonical, Narrative, Wisdom -- carry no edges at all, because a
+ * thread is a claim that two passages share a phrase and that claim is not
+ * available outside Pilgrimage. So a route file may also carry **stops**: the
+ * passages it is made of, in the order the book prints them. Everything else
+ * here already read the graph rather than assuming it, which is why a route
+ * with no edges needs no special case -- `edgesFrom` returns nothing, so
+ * `threadOffer` says nothing and reading onward, which was always the default,
+ * is the whole of the route.
+ * docs/design/04-route.md#three-of-the-four-are-lists-and-that-is-not-an-omission
+ *
+ * A stop may name a **span** -- `Genesis 1-50` -- and the two readings of one
+ * are kept apart deliberately. `routeNodes` keeps the span, because the map
+ * wants sixty-six rows and not 1,189; `requiredRefs` expands it, because
+ * "finished" means every chapter of it and the genealogy default has to have
+ * chapters to take out. docs/design/04-route.md#a-stop-may-be-a-span-of-chapters
+ *
  * ## What "dead end" means here
  *
  * A progression destination with no outgoing edge -- John 1, Revelation 22 --
@@ -55,8 +74,25 @@ export interface RouteEdge {
   readonly note: string;
 }
 
+/**
+ * One row of a stops table in docs/design/04-route.md.
+ *
+ * `ref` is a citation and may be a span of chapters. `note` is the route's own
+ * sentence about the passage, shown on the map beside it -- Wisdom says what
+ * each book of the Psalter is, and Canonical says nothing about anything,
+ * because a route whose whole argument is *in the order it is printed* has
+ * nothing to add to sixty-six book names.
+ */
+export interface RouteStop {
+  readonly ref: string;
+  readonly note: string | null;
+}
+
 export interface Route {
   readonly id: string;
+  /** The passages the route is made of. Empty on a route built from edges. */
+  readonly stops: readonly RouteStop[];
+  /** The threads. Empty on a route that is a list rather than a graph. */
   readonly edges: readonly RouteEdge[];
 }
 
@@ -86,7 +122,22 @@ function asString(value: unknown, what: string): string {
  */
 export function loadRoute(parsed: unknown): Route {
   const doc = asRecord(parsed, 'parsed file');
-  const rawEdges = doc['edges'];
+  const rawStops = doc['stops'] ?? [];
+  if (!Array.isArray(rawStops)) throw new Error('route: "stops" is not an array');
+  const stopRefs = new Set<string>();
+  const stops: RouteStop[] = rawStops.map((raw, index) => {
+    const row = asRecord(raw, `stops[${String(index)}]`);
+    const ref = asString(row['passage'], `stops[${String(index)}].passage`);
+    if (stopRefs.has(ref)) throw new Error(`route: duplicate stop "${ref}"`);
+    stopRefs.add(ref);
+    parseReference(ref);
+    const note = row['note'];
+    if (note !== null && note !== undefined && typeof note !== 'string') {
+      throw new Error(`route: stop "${ref}".note is neither a string nor null`);
+    }
+    return { ref, note: typeof note === 'string' ? note : null };
+  });
+  const rawEdges = doc['edges'] ?? [];
   if (!Array.isArray(rawEdges)) throw new Error('route: parsed file has no "edges" array');
   const seen = new Set<string>();
   const edges: RouteEdge[] = rawEdges.map((raw, index) => {
@@ -114,8 +165,69 @@ export function loadRoute(parsed: unknown): Route {
       note: asString(row['note'], `edge "${id}".note`),
     };
   });
-  if (edges.length === 0) throw new Error('route: no edges');
-  return { id: asString(doc['id'], 'id'), edges };
+  /*
+   * A route has to be made of *something*. It used to have to be made of edges,
+   * and that was right while Pilgrimage was the only route: an empty graph is a
+   * mistyped file rather than a reading. Now a list of passages is also a route,
+   * so the demand is that at least one of the two be there -- an empty file is
+   * still a warp into nothing, which is what this check has always been for.
+   */
+  if (stops.length === 0 && edges.length === 0) {
+    throw new Error('route: no stops and no edges');
+  }
+  return { id: asString(doc['id'], 'id'), stops, edges };
+}
+
+// --- the routes on offer ----------------------------------------------------
+
+/**
+ * One row of the routes table in docs/design/04-route.md#alternate-routes.
+ *
+ * `name` and `what` are player-facing copy -- what the menu says beside each
+ * route -- so they live in the data the document compiles rather than in a
+ * string spelled in a DOM file, for the reason `offerLine` gives below.
+ */
+export interface RouteChoice {
+  readonly id: string;
+  readonly name: string;
+  readonly what: string;
+}
+
+/** Parse `data/routes/routes.json`: which routes exist, and what each one is. */
+export function loadRouteChoices(parsed: unknown): readonly RouteChoice[] {
+  const doc = asRecord(parsed, 'parsed file');
+  const raw = doc['routes'];
+  if (!Array.isArray(raw)) throw new Error('route: parsed file has no "routes" array');
+  const seen = new Set<string>();
+  const out: RouteChoice[] = raw.map((entry, index) => {
+    const row = asRecord(entry, `routes[${String(index)}]`);
+    const id = asString(row['id'], `routes[${String(index)}].id`);
+    if (seen.has(id)) throw new Error(`route: duplicate route id "${id}"`);
+    seen.add(id);
+    return {
+      id,
+      name: asString(row['name'], `route "${id}".name`),
+      what: asString(row['what_it_is'], `route "${id}".what_it_is`),
+    };
+  });
+  if (out.length === 0) throw new Error('route: no routes');
+  return out;
+}
+
+/** The route named `id`, or null. */
+export function routeChoice(choices: readonly RouteChoice[], id: string): RouteChoice | null {
+  return choices.find((choice) => choice.id === id) ?? null;
+}
+
+/**
+ * The route's name as the player knows it: `Pilgrimage`, not `pilgrimage`.
+ *
+ * The map said *"not on the pilgrimage route"* in lower case for as long as
+ * there was one route and its id was also its name. With four of them the id is
+ * a filename and the name is a proper noun, and the screen wants the second.
+ */
+export function routeName(choices: readonly RouteChoice[], id: string): string {
+  return routeChoice(choices, id)?.name ?? id;
 }
 
 // --- canonical order --------------------------------------------------------
@@ -151,15 +263,66 @@ function compareRefs(a: string, b: string): number {
 export type NodeKind = 'stop' | 'secret';
 
 export interface RouteNode {
-  /** Citation as the route table spells it. */
+  /** Citation as the route table spells it, span and all: `Genesis 1-50`. */
   readonly ref: string;
   readonly book: string;
+  /** First chapter of the node. Equal to `lastChapter` for a single chapter. */
   readonly chapter: number;
+  readonly lastChapter: number;
   readonly kind: NodeKind;
+  /** The route's own sentence about this passage, or null. */
+  readonly note: string | null;
   /** Ids of edges arriving here. */
   readonly inbound: readonly string[];
   /** Ids of edges leaving here. */
   readonly outbound: readonly string[];
+}
+
+/**
+ * A citation reduced to the one spelling everything else compares against:
+ * canonical book title, then chapter. `Psalm 23` and `Psalms 23` are the same
+ * passage, and the record spells it one way while the route table spells it the
+ * other.
+ *
+ * It is a *chapter* key, so a span reduces to its first chapter and is never
+ * used as one -- `chaptersOf` is what turns a span into keys.
+ */
+export function refKey(citation: string): string {
+  const parsed = parseReference(citation);
+  return `${parsed.book} ${String(parsed.chapter)}`;
+}
+
+/** Every chapter a node covers, as citations, in order. */
+export function chaptersOf(node: RouteNode): readonly string[] {
+  if (node.chapter === node.lastChapter) return [node.ref];
+  const out: string[] = [];
+  for (let n = node.chapter; n <= node.lastChapter; n += 1) {
+    out.push(`${node.book} ${String(n)}`);
+  }
+  return out;
+}
+
+/** True when this node is the passage `citation` names, span included. */
+export function nodeCovers(node: RouteNode, citation: string): boolean {
+  const parsed = parseReference(citation);
+  return (
+    parsed.book === node.book
+    && parsed.chapter >= node.chapter
+    && parsed.chapter <= node.lastChapter
+  );
+}
+
+/** The node whose span holds `citation`, or null when the route does not name it. */
+export function nodeCovering(route: Route, citation: string): RouteNode | null {
+  for (const node of routeNodes(route).values()) {
+    if (nodeCovers(node, citation)) return node;
+  }
+  return null;
+}
+
+/** True when this route has threads at all. Three of the four shipped do not. */
+export function hasThreads(route: Route): boolean {
+  return route.edges.length > 0;
 }
 
 /** Every node the route names, keyed by citation, in canonical order. */
@@ -175,6 +338,11 @@ export function routeNodes(route: Route): ReadonlyMap<string, RouteNode> {
     else list.push(id);
   };
 
+  const notes = new Map<string, string | null>();
+  for (const stop of route.stops) {
+    refs.add(stop.ref);
+    notes.set(stop.ref, stop.note);
+  }
   for (const edge of route.edges) {
     refs.add(edge.from);
     refs.add(edge.to);
@@ -204,7 +372,9 @@ export function routeNodes(route: Route): ReadonlyMap<string, RouteNode> {
       ref,
       book: parsed.book,
       chapter: parsed.chapter,
+      lastChapter: parsed.lastChapter,
       kind: secret.has(ref) ? 'secret' : 'stop',
+      note: notes.get(ref) ?? null,
       inbound: inbound.get(ref) ?? [],
       outbound: outbound.get(ref) ?? [],
     });
@@ -307,7 +477,12 @@ export function deadEnds(route: Route): readonly string[] {
  * hands in a lookup over the real `data/texts/`.
  */
 export function unresolvedRefs(route: Route, exists: (ref: string) => boolean): readonly string[] {
-  return nodeRefs(route).filter((ref) => !exists(ref));
+  // Every chapter, not every node: a span that named `Genesis 1-60` would
+  // resolve perfectly well on its first chapter and warp into nothing on its
+  // fifty-first, which is exactly the failure this function exists to catch.
+  return [...routeNodes(route).values()]
+    .flatMap((node) => chaptersOf(node))
+    .filter((ref) => !exists(ref));
 }
 
 // --- genealogies ------------------------------------------------------------
@@ -375,7 +550,10 @@ export function requiredRefs(route: Route, options: RouteOptions = DEFAULT_ROUTE
   const nodes = routeNodes(route);
   return [...nodes.values()]
     .filter((node) => node.kind === 'stop')
-    .map((node) => node.ref)
+    // Spans expand here and nowhere else. The map wants Canonical's sixty-six
+    // book rows; "finished" wants its 1,173 chapters, and so does the genealogy
+    // filter, which has nothing to remove from a row reading `Genesis 1-50`.
+    .flatMap((node) => chaptersOf(node))
     .filter((ref) => !(options.skipGenealogies && isGenealogy(ref)));
 }
 
@@ -389,8 +567,28 @@ export function itinerary(route: Route, options: RouteOptions = DEFAULT_ROUTE_OP
  * Skipping is the default, not the only option.
  */
 export function chronicleLevels(route: Route): readonly string[] {
-  const nodes = routeNodes(route);
-  return [...nodes.keys()].filter((ref) => nodes.get(ref)?.kind === 'stop' && isGenealogy(ref));
+  return [...routeNodes(route).values()]
+    .filter((node) => node.kind === 'stop')
+    .flatMap((node) => chaptersOf(node))
+    .filter((ref) => isGenealogy(ref));
+}
+
+/**
+ * Every Chronicle passage there is, whatever route the player is on.
+ *
+ * `chronicleLevels` answers "what did *this* route step over", which is empty
+ * on Pilgrimage because Pilgrimage never went near a genealogy. That is the
+ * wrong list to offer from a menu: docs/design/04-route.md says the genealogies
+ * are skipped on every route and available on every route, and they are a fact
+ * about the canon rather than about a reading of it. So this is the list the
+ * menu shows, and it is the same list from all four routes.
+ */
+export function chroniclePassages(): readonly string[] {
+  return GENEALOGY_SPANS.flatMap((span) => {
+    const out: string[] = [];
+    for (let n = span.first; n <= span.last; n += 1) out.push(`${span.book} ${String(n)}`);
+    return out;
+  });
 }
 
 // --- map state --------------------------------------------------------------
@@ -446,6 +644,26 @@ export function arriveAt(state: MapState, ref: string): MapState {
 }
 
 /**
+ * Has this chapter been finished?
+ *
+ * A *chapter* question and never a span one, and it goes through `refKey`
+ * because the record and the route table do not have to agree about how to
+ * spell a psalm. Comparing the two strings directly left a completed `Psalms 23`
+ * failing to unlock the passage `Psalm 23` leads to, silently, which is the one
+ * class of bug the canon table in `core/corpus.ts` exists to prevent.
+ */
+function isDone(list: readonly string[], ref: string): boolean {
+  if (list.includes(ref)) return true;
+  const key = refKey(ref);
+  return list.some((done) => refKey(done) === key);
+}
+
+/** True when every chapter this node covers has been finished. */
+function nodeFinished(state: MapState, node: RouteNode): boolean {
+  return chaptersOf(node).every((ref) => isDone(state.completed, ref));
+}
+
+/**
  * The passage the player is in, when the route does not name it. Null when it
  * does, and null when they are nowhere yet.
  *
@@ -456,7 +674,10 @@ export function arriveAt(state: MapState, ref: string): MapState {
  */
 export function standingOffRoute(route: Route, state: MapState): string | null {
   if (state.current === '') return null;
-  return routeNodes(route).has(state.current) ? null : state.current;
+  // By span rather than by string: a player in Genesis 4 is on Canonical, which
+  // names `Genesis 1-50` and not `Genesis 4`, and telling him he had wandered
+  // off a route that contains him would be the same untruth in a new place.
+  return nodeCovering(route, state.current) === null ? state.current : null;
 }
 
 export function completePassage(state: MapState, ref: string): MapState {
@@ -474,11 +695,11 @@ export function discoverSecret(state: MapState, ref: string): MapState {
 export function isUnlocked(route: Route, state: MapState, ref: string): boolean {
   const node = routeNodes(route).get(ref);
   if (node === undefined) return false;
-  if (node.kind === 'secret') return state.discovered.includes(ref);
+  if (node.kind === 'secret') return isDone(state.discovered, ref);
   if (node.inbound.length === 0) return true;
   return node.inbound.some((id) => {
     const edge = edgeById(route, id);
-    return edge !== null && state.completed.includes(edge.from);
+    return edge !== null && isDone(state.completed, edge.from);
   });
 }
 
@@ -490,6 +711,8 @@ export function unlockedRefs(route: Route, state: MapState): readonly string[] {
 export interface MapNodeView {
   readonly ref: string;
   readonly kind: NodeKind;
+  /** The route's own sentence about this passage, or null. */
+  readonly note: string | null;
   readonly unlocked: boolean;
   readonly completed: boolean;
   /** Secrets stay off the map until found. */
@@ -501,10 +724,13 @@ export function mapView(route: Route, state: MapState): readonly MapNodeView[] {
   return [...routeNodes(route).values()].map((node) => ({
     ref: node.ref,
     kind: node.kind,
+    note: node.note,
     unlocked: isUnlocked(route, state, node.ref),
-    completed: state.completed.includes(node.ref),
-    visible: node.kind === 'stop' || state.discovered.includes(node.ref),
-    current: state.current === node.ref,
+    // A span is finished when every chapter of it is. Sixty-six rows on
+    // Canonical, and a book goes bright when the last of its chapters does.
+    completed: nodeFinished(state, node),
+    visible: node.kind === 'stop' || isDone(state.discovered, node.ref),
+    current: state.current !== '' && nodeCovers(node, state.current),
   }));
 }
 
@@ -518,8 +744,8 @@ export interface MapThreadView {
 export function mapThreads(route: Route, state: MapState): readonly MapThreadView[] {
   return route.edges.map((edge) => ({
     edge,
-    visible: edge.kind === 'progression' || state.discovered.includes(edge.to),
-    travelled: state.completed.includes(edge.from) && state.completed.includes(edge.to),
+    visible: edge.kind === 'progression' || isDone(state.discovered, edge.to),
+    travelled: isDone(state.completed, edge.from) && isDone(state.completed, edge.to),
   }));
 }
 
@@ -575,7 +801,7 @@ function readsOnTo(from: string, to: string): boolean {
 export function threadOffer(route: Route, state: MapState, ref: string): ThreadOffer | null {
   const onward = edgesFrom(route, ref).filter((edge) => edge.kind === 'progression');
   if (onward.length === 0) return null;
-  if (onward.some((edge) => state.completed.includes(edge.to))) return null;
+  if (onward.some((edge) => isDone(state.completed, edge.to))) return null;
   const named = onward.find((edge) => !readsOnTo(edge.from, edge.to));
   if (named === undefined) return null;
   return { edge: named, others: onward.length - 1 };
@@ -610,10 +836,27 @@ export function offerLine(offer: ThreadOffer): string {
  * Secrets are not counted, which is the whole point: a player who never finds a
  * single flashback finishes the pilgrimage.
  */
+/**
+ * The required passages already finished, in the route's own order.
+ *
+ * Counted in *chapters*, because `requiredRefs` is -- the map's counter reads
+ * "412 of 1,173", and the two halves of one sentence have to be the same unit.
+ * It used to count finished nodes against required chapters, which agreed
+ * perfectly while every node was one chapter and became "0 of 181" for a player
+ * who had finished a psalm the moment a node could be a span.
+ */
+export function finishedRefs(
+  route: Route,
+  state: MapState,
+  options: RouteOptions = DEFAULT_ROUTE_OPTIONS,
+): readonly string[] {
+  return requiredRefs(route, options).filter((ref) => isDone(state.completed, ref));
+}
+
 export function routeComplete(
   route: Route,
   state: MapState,
   options: RouteOptions = DEFAULT_ROUTE_OPTIONS,
 ): boolean {
-  return requiredRefs(route, options).every((ref) => state.completed.includes(ref));
+  return requiredRefs(route, options).every((ref) => isDone(state.completed, ref));
 }

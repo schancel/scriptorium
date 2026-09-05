@@ -1,0 +1,271 @@
+{
+  "id": "canonical",
+  "stops": [
+    {
+      "passage": "Genesis 1-50",
+      "note": null
+    },
+    {
+      "passage": "Exodus 1-40",
+      "note": null
+    },
+    {
+      "passage": "Leviticus 1-27",
+      "note": null
+    },
+    {
+      "passage": "Numbers 1-36",
+      "note": null
+    },
+    {
+      "passage": "Deuteronomy 1-34",
+      "note": null
+    },
+    {
+      "passage": "Joshua 1-24",
+      "note": null
+    },
+    {
+      "passage": "Judges 1-21",
+      "note": null
+    },
+    {
+      "passage": "Ruth 1-4",
+      "note": null
+    },
+    {
+      "passage": "1 Samuel 1-31",
+      "note": null
+    },
+    {
+      "passage": "2 Samuel 1-24",
+      "note": null
+    },
+    {
+      "passage": "1 Kings 1-22",
+      "note": null
+    },
+    {
+      "passage": "2 Kings 1-25",
+      "note": null
+    },
+    {
+      "passage": "1 Chronicles 1-29",
+      "note": null
+    },
+    {
+      "passage": "2 Chronicles 1-36",
+      "note": null
+    },
+    {
+      "passage": "Ezra 1-10",
+      "note": null
+    },
+    {
+      "passage": "Nehemiah 1-13",
+      "note": null
+    },
+    {
+      "passage": "Esther 1-10",
+      "note": null
+    },
+    {
+      "passage": "Job 1-42",
+      "note": null
+    },
+    {
+      "passage": "Psalms 1-150",
+      "note": null
+    },
+    {
+      "passage": "Proverbs 1-31",
+      "note": null
+    },
+    {
+      "passage": "Ecclesiastes 1-12",
+      "note": null
+    },
+    {
+      "passage": "Song of Songs 1-8",
+      "note": null
+    },
+    {
+      "passage": "Isaiah 1-66",
+      "note": null
+    },
+    {
+      "passage": "Jeremiah 1-52",
+      "note": null
+    },
+    {
+      "passage": "Lamentations 1-5",
+      "note": null
+    },
+    {
+      "passage": "Ezekiel 1-48",
+      "note": null
+    },
+    {
+      "passage": "Daniel 1-12",
+      "note": null
+    },
+    {
+      "passage": "Hosea 1-14",
+      "note": null
+    },
+    {
+      "passage": "Joel 1-3",
+      "note": null
+    },
+    {
+      "passage": "Amos 1-9",
+      "note": null
+    },
+    {
+      "passage": "Obadiah 1",
+      "note": null
+    },
+    {
+      "passage": "Jonah 1-4",
+      "note": null
+    },
+    {
+      "passage": "Micah 1-7",
+      "note": null
+    },
+    {
+      "passage": "Nahum 1-3",
+      "note": null
+    },
+    {
+      "passage": "Habakkuk 1-3",
+      "note": null
+    },
+    {
+      "passage": "Zephaniah 1-3",
+      "note": null
+    },
+    {
+      "passage": "Haggai 1-2",
+      "note": null
+    },
+    {
+      "passage": "Zechariah 1-14",
+      "note": null
+    },
+    {
+      "passage": "Malachi 1-4",
+      "note": null
+    },
+    {
+      "passage": "Matthew 1-28",
+      "note": null
+    },
+    {
+      "passage": "Mark 1-16",
+      "note": null
+    },
+    {
+      "passage": "Luke 1-24",
+      "note": null
+    },
+    {
+      "passage": "John 1-21",
+      "note": null
+    },
+    {
+      "passage": "Acts 1-28",
+      "note": null
+    },
+    {
+      "passage": "Romans 1-16",
+      "note": null
+    },
+    {
+      "passage": "1 Corinthians 1-16",
+      "note": null
+    },
+    {
+      "passage": "2 Corinthians 1-13",
+      "note": null
+    },
+    {
+      "passage": "Galatians 1-6",
+      "note": null
+    },
+    {
+      "passage": "Ephesians 1-6",
+      "note": null
+    },
+    {
+      "passage": "Philippians 1-4",
+      "note": null
+    },
+    {
+      "passage": "Colossians 1-4",
+      "note": null
+    },
+    {
+      "passage": "1 Thessalonians 1-5",
+      "note": null
+    },
+    {
+      "passage": "2 Thessalonians 1-3",
+      "note": null
+    },
+    {
+      "passage": "1 Timothy 1-6",
+      "note": null
+    },
+    {
+      "passage": "2 Timothy 1-4",
+      "note": null
+    },
+    {
+      "passage": "Titus 1-3",
+      "note": null
+    },
+    {
+      "passage": "Philemon 1",
+      "note": null
+    },
+    {
+      "passage": "Hebrews 1-13",
+      "note": null
+    },
+    {
+      "passage": "James 1-5",
+      "note": null
+    },
+    {
+      "passage": "1 Peter 1-5",
+      "note": null
+    },
+    {
+      "passage": "2 Peter 1-3",
+      "note": null
+    },
+    {
+      "passage": "1 John 1-5",
+      "note": null
+    },
+    {
+      "passage": "2 John 1",
+      "note": null
+    },
+    {
+      "passage": "3 John 1",
+      "note": null
+    },
+    {
+      "passage": "Jude 1",
+      "note": null
+    },
+    {
+      "passage": "Revelation 1-22",
+      "note": null
+    }
+  ],
+  "edges": [],
+  "_generated_from": "docs/design/04-route.md"
+}

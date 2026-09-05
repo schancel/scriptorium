@@ -1,0 +1,39 @@
+{
+  "id": "wisdom",
+  "stops": [
+    {
+      "passage": "Psalms 1-41",
+      "note": "Book I — mostly David, and the shortest psalms in the Psalter"
+    },
+    {
+      "passage": "Psalms 42-72",
+      "note": "Book II — Korah and David, ending *the prayers of David are ended*"
+    },
+    {
+      "passage": "Psalms 73-89",
+      "note": "Book III — Asaph, and the darkest of the five"
+    },
+    {
+      "passage": "Psalms 90-106",
+      "note": "Book IV — *Lord, you have been our dwelling place in all generations*"
+    },
+    {
+      "passage": "Psalms 107-150",
+      "note": "Book V — the songs of ascents, the long acrostic, and the last hallelujahs"
+    },
+    {
+      "passage": "Proverbs 1-9",
+      "note": "the long instruction: wisdom addressed to a son, in paragraphs"
+    },
+    {
+      "passage": "Proverbs 10-29",
+      "note": "the sentence proverbs: one verse, one thought, nine times in ten a full stop at the end of it"
+    },
+    {
+      "passage": "Proverbs 30-31",
+      "note": "Agur, Lemuel, and the acrostic at the end"
+    }
+  ],
+  "edges": [],
+  "_generated_from": "docs/design/04-route.md"
+}

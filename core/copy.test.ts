@@ -81,7 +81,8 @@ import {
 import { loadStages } from './curriculum.js';
 import { arrivalLines, loadFollowers } from './followers.js';
 import {
-  completePassage, createMap, loadRoute, nodeRefs, offerLine, threadOffer,
+  completePassage, createMap, loadRoute, loadRouteChoices, nodeRefs, offerLine,
+  threadOffer,
 } from './route.js';
 import { NOTES, OPENING } from './onboarding.js';
 import { loadTuning } from './tuning.js';
@@ -103,6 +104,31 @@ const stages = loadStages(JSON.parse(readRepoFile('data/curriculum.json')) as un
 const STAGE_1 = stages[1]?.keySet ?? [];
 const roster = loadFollowers(JSON.parse(readRepoFile('data/followers.json')) as unknown);
 const route = loadRoute(JSON.parse(readRepoFile('data/routes/pilgrimage.json')) as unknown);
+const routeChoices = loadRouteChoices(
+  JSON.parse(readRepoFile('data/routes/routes.json')) as unknown,
+);
+
+/**
+ * Every word the routes themselves say to the player.
+ *
+ * Four names, four descriptions, and the sentence each stop carries on the map
+ * -- all of it authored in docs/design/04-route.md and compiled, so a deny-list
+ * over the source tree would never see any of it. It is copy *about the world*:
+ * it says what a reading of the book is, and passes no judgement on anybody.
+ * docs/design/04-route.md#alternate-routes
+ */
+function routeSentences(): readonly string[] {
+  const out: string[] = [];
+  for (const choice of routeChoices) {
+    out.push(choice.name, choice.what);
+    const named = loadRoute(
+      JSON.parse(readRepoFile(`data/routes/${choice.id}.json`)) as unknown,
+    );
+    for (const stop of named.stops) if (stop.note !== null) out.push(stop.note);
+    for (const edge of named.edges) out.push(edge.note);
+  }
+  return out;
+}
 
 /**
  * Every sentence the offer at the end of a passage can produce.
@@ -292,6 +318,7 @@ const EVALUATIVE: readonly string[] = [
 const WORLD: readonly string[] = [
   ...arrivalLines(roster),
   ...offerSentences(),
+  ...routeSentences(),
   prose(htmlWithout(EVALUATIVE_PANELS)),
 ];
 
@@ -326,6 +353,10 @@ test('the copy really was gathered, or these rules are asserting nothing', () =>
   assert.ok(
     offerSentences().some((s) => s.includes('John 1')),
     'the graph produced no thread offers, so this rule is reading nothing',
+  );
+  assert.ok(
+    routeSentences().some((s) => s.includes('Psalms')),
+    'the routes said nothing, so their copy is not being read',
   );
 });
 

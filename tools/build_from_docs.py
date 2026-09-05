@@ -101,8 +101,26 @@ def shape_curriculum(rows):
     return {"stages": stages}
 
 
-def shape_route(rows):
-    return {"id": "pilgrimage", "edges": rows}
+def shape_route(route_id):
+    """One route file: a list of stops, a list of echo edges, or both.
+
+    Pilgrimage is a *graph* and its table is edges; the other three are lists
+    and their tables are passages. The two are told apart by the columns the
+    document actually wrote, because a route with no threads should not have to
+    carry an empty edges table in the doc to prove it -- see
+    docs/design/04-route.md#three-of-the-four-are-lists-and-that-is-not-an-omission.
+
+    A stop's `passage` may name a span (`Genesis 1-50`). The map draws the span
+    and `requiredRefs` expands it; nothing here expands anything, because the
+    doc is the source and 1,189 rows of compiled JSON would be a projection
+    nobody could read against its table.
+    """
+    def shape(rows):
+        if rows and "kind" in rows[0]:
+            return {"id": route_id, "stops": [], "edges": rows}
+        stops = [{"passage": r["passage"], "note": r.get("note")} for r in rows]
+        return {"id": route_id, "stops": stops, "edges": []}
+    return shape
 
 
 def shape_scenes(rows):
@@ -135,7 +153,11 @@ def shape_followers(rows):
 SHAPERS = {
     "data/tuning.json": shape_tuning,
     "data/curriculum.json": shape_curriculum,
-    "data/routes/pilgrimage.json": shape_route,
+    "data/routes/routes.json": shape_list("routes"),
+    "data/routes/pilgrimage.json": shape_route("pilgrimage"),
+    "data/routes/canonical.json": shape_route("canonical"),
+    "data/routes/narrative.json": shape_route("narrative"),
+    "data/routes/wisdom.json": shape_route("wisdom"),
     "data/scenes/bible.json": shape_scenes,
     "data/scenes/defaults.json": shape_list("defaults"),
     "data/items.json": shape_list("items"),

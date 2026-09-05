@@ -449,6 +449,16 @@ the section below. The heading stays because it is where the next one goes.
   new field on the progress record and nothing to migrate. The map names everyone.
   → `docs/design/11-followers.md`
 
+## Built since the last pass, continued
+
+- **All four routes exist.** `Canonical` (66 stops, straight through), `Narrative`
+  (32, story only) and `Wisdom` (8, the Psalter's five books and Proverbs) join
+  `Pilgrimage`. A route without threads was the interesting part: a route is a list of
+  **stops**, and Pilgrimage is the one that additionally has *edges*. Threads are its
+  idea, not a thing every route must pretend to have.
+- **Chronicle levels.** The genealogies, off every route by default, reachable
+  deliberately by anyone who wants them.
+
 ## Known problems
 
 - A hop caught mid-air freezes under the report card at the end of a stretch of verses.
@@ -494,10 +504,6 @@ the section below. The heading stays because it is where the next one goes.
   stands up and stays). Matthew 27 stopped being a tomb from its first verse while it
   is still a city, and John 19's trial stands still because a trial does not travel.
   → `docs/design/05-scenery-warps.md#jerusalem-a-place-you-arrive-at`
-- Other routes. `Canonical`, `Narrative` and `Wisdom` are specified in
-  `docs/design/04-route.md` and only `Pilgrimage` is authored.
-- Chronicle levels — the genealogies, skipped by default, available as opt-in
-  bonus passages. Specified, not built.
 
 ## How this repo works, and where everything is
 

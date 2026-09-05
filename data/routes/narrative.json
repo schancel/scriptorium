@@ -1,0 +1,135 @@
+{
+  "id": "narrative",
+  "stops": [
+    {
+      "passage": "Genesis 1-50",
+      "note": "from the first day to a coffin in Egypt"
+    },
+    {
+      "passage": "Exodus 1-20",
+      "note": "slavery, the plagues, the sea, and the mountain"
+    },
+    {
+      "passage": "Exodus 24",
+      "note": "the covenant sealed, and Moses goes up into the cloud"
+    },
+    {
+      "passage": "Exodus 32-34",
+      "note": "the calf, the broken tablets, and the second pair"
+    },
+    {
+      "passage": "Numbers 11-14",
+      "note": "the quail, Miriam, and the spies who came back afraid"
+    },
+    {
+      "passage": "Numbers 16-17",
+      "note": "Korah, and the rod that budded"
+    },
+    {
+      "passage": "Numbers 20-25",
+      "note": "Meribah, the bronze serpent, and Balaam's donkey"
+    },
+    {
+      "passage": "Numbers 27",
+      "note": "the daughters of Zelophehad, and Joshua commissioned"
+    },
+    {
+      "passage": "Numbers 31-32",
+      "note": "Midian, and the tribes who asked to stay east of the river"
+    },
+    {
+      "passage": "Deuteronomy 34",
+      "note": "Moses dies within sight of it"
+    },
+    {
+      "passage": "Joshua 1-12",
+      "note": "the river, the walls, and the long day"
+    },
+    {
+      "passage": "Joshua 22-24",
+      "note": "the altar by the Jordan, and Joshua's last words"
+    },
+    {
+      "passage": "Judges 1-21",
+      "note": "the cycle, twelve times, and no king in Israel"
+    },
+    {
+      "passage": "Ruth 1-4",
+      "note": "a famine, a field, and a redeemer"
+    },
+    {
+      "passage": "1 Samuel 1-31",
+      "note": "Samuel, Saul, and the shepherd who was anointed"
+    },
+    {
+      "passage": "2 Samuel 1-24",
+      "note": "the kingdom, the roof, and the son in the oak"
+    },
+    {
+      "passage": "1 Kings 1-22",
+      "note": "the temple, the divided kingdom, and Elijah"
+    },
+    {
+      "passage": "2 Kings 1-25",
+      "note": "Elisha to the exile"
+    },
+    {
+      "passage": "1 Chronicles 1-29",
+      "note": "the same reign, told again for people coming home"
+    },
+    {
+      "passage": "2 Chronicles 1-36",
+      "note": "the temple, and the kings measured against it"
+    },
+    {
+      "passage": "Ezra 1-10",
+      "note": "the return, and the second foundation"
+    },
+    {
+      "passage": "Nehemiah 1-13",
+      "note": "the wall, in fifty-two days"
+    },
+    {
+      "passage": "Esther 1-10",
+      "note": "a banquet, an edict, and a queen who went in unasked"
+    },
+    {
+      "passage": "Job 1-2",
+      "note": "the wager, and everything taken in one afternoon"
+    },
+    {
+      "passage": "Job 42",
+      "note": "the frame closes: he sees, and it is given back"
+    },
+    {
+      "passage": "Daniel 1-6",
+      "note": "the court stories: the furnace, the writing, the lions"
+    },
+    {
+      "passage": "Jonah 1-4",
+      "note": "a man running the other way"
+    },
+    {
+      "passage": "Matthew 1-28",
+      "note": null
+    },
+    {
+      "passage": "Mark 1-16",
+      "note": null
+    },
+    {
+      "passage": "Luke 1-24",
+      "note": null
+    },
+    {
+      "passage": "John 1-21",
+      "note": null
+    },
+    {
+      "passage": "Acts 1-28",
+      "note": "from the upper room to a rented house in Rome"
+    }
+  ],
+  "edges": [],
+  "_generated_from": "docs/design/04-route.md"
+}

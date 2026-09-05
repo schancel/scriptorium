@@ -12,7 +12,11 @@ tables in `docs/design/` by `tools/build_from_docs.py` and must never be hand-ed
 | `data/themes.json` | `docs/design/05-scenery-warps.md` | yes |
 | `data/scenes/bible.json` | `docs/design/05-scenery-warps.md` | yes |
 | `data/scenes/defaults.json` | `docs/design/05-scenery-warps.md` | yes |
+| `data/routes/routes.json` | `docs/design/04-route.md` | yes |
 | `data/routes/pilgrimage.json` | `docs/design/04-route.md` | yes |
+| `data/routes/canonical.json` | `docs/design/04-route.md` | yes |
+| `data/routes/narrative.json` | `docs/design/04-route.md` | yes |
+| `data/routes/wisdom.json` | `docs/design/04-route.md` | yes |
 | `data/followers.json` | `docs/design/11-followers.md` | yes |
 | `data/texts/**` | `tools/fetch_bible.py` | fetched |
 | `data/coverage.json` | `tools/build_wordlists.py` | measured |
@@ -39,18 +43,44 @@ are paragraphs. Nothing downstream knows the difference.
 One file per book, lazily loaded. A full translation is ~4.5 MB of plain text; Genesis
 alone is ~200 KB, which is why nothing is bundled up front.
 
-## Route
+## Routes
+
+`data/routes/routes.json` is the manifest: which routes exist, and the two strings the
+menu says about each. `id` names the file beside it and is what the progress record
+stores.
 
 ```json
-{ "id": "pilgrimage",
+{ "routes": [ { "id": "wisdom", "name": "Wisdom",
+                "what_it_is": "The Psalms and the Proverbs. …" } ] }
+```
+
+A route file carries **stops**, **edges**, or both, and must carry at least one of the
+two. Pilgrimage is a graph and is all edges; Canonical, Narrative and Wisdom are lists
+and are all stops — see
+[three of the four are lists](../design/04-route.md#three-of-the-four-are-lists-and-that-is-not-an-omission).
+
+```json
+{ "id": "pilgrimage", "stops": [],
   "edges": [ { "id": "beginning", "kind": "progression",
                "from": "Genesis 1", "to": "John 1",
                "echo": "In the beginning", "note": "…" } ] }
+
+{ "id": "wisdom", "edges": [],
+  "stops": [ { "passage": "Psalms 1-41", "note": "Book I — mostly David, …" } ] }
 ```
 
 `kind` is `progression` (travel and stay) or `flashback` (round trip, returns to origin).
 `echo` must occur literally in both passages, in every shipped translation — asserted by
 `make check`.
+
+A stop's `passage` may be a **span** of chapters, and the two readings of one are kept
+apart: the map draws the span as one row, and `requiredRefs` expands it into chapters, so
+"finished" means every chapter of it. `note` is the route's own sentence about the
+passage and is null where it has none — Canonical's sixty-six rows all do. `make check`
+asserts every route file's `id` matches its filename, that no two spans of one route
+overlap, that every chapter of every span exists in every shipped translation, that
+Canonical leaves nothing out, and that Wisdom is exactly the Psalms and the Proverbs. See
+[a stop may be a span of chapters](../design/04-route.md#a-stop-may-be-a-span-of-chapters).
 
 ## Scenes
 
@@ -111,6 +141,13 @@ Browser local storage, exportable to a file. Written by
   "firstRun": false, "notesSeen": ["greyed", "wrong", "space"],
   "cloudEnabled": true, "mistakesStand": false, "motion": "auto" }
 ```
+
+`route` names one of the routes in `data/routes/routes.json`, and it decides what the map
+draws and nothing else — not the stage, not the gate, and not where the player is
+standing. Switching moves nobody, and `completed` is one list of chapters that all four
+routes read, so a chapter typed on one is finished on all of them. An id this build does
+not ship falls back to `pilgrimage` rather than to a map that cannot load. See
+[choosing a route](../design/04-route.md#choosing-a-route).
 
 `position` is the bookmark: the translation is `translation`, and `unit` is the
 1-based verse the player resumes *on*, not the last one they finished. Without it the

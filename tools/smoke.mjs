@@ -3130,6 +3130,180 @@ ok(intoTheBand === null,
    intoTheBand ?? `${cityRects} pieces of scenery, none of them on the words`);
 
 
+// --- four routes, and three of them are lists --------------------------------
+//
+// docs/design/04-route.md#alternate-routes. `core/route.test.ts` proves the
+// graph queries answer on a route with no edges; none of that says the *screen*
+// survives one, and the screen is where it would show. The map's counter
+// promises that secret rooms are not counted, its standing sentence calls the
+// route "a set of threads", and its Threads heading would stand over nothing --
+// three sentences written when there was one route and it was a graph.
+await quiesce();
+store.set('scriptorium.progress', JSON.stringify({
+  version: 8, stage: 1, translation: 'WEB', route: 'pilgrimage',
+  position: { book: 'Genesis', chapter: 1, unit: 1 },
+  completed: [], discovered: [],
+  keyStats: {}, recent: {}, history: [],
+  gilding: false, gildOffered: true, firstRun: false, cloudEnabled: true,
+  mistakesStand: false, motion: 'auto', notesSeen: ['space', 'error', 'dim'],
+}));
+await import(`${pathToFileURL(resolve(ROOT, 'build/platform/web/main.js')).href}?routes`);
+await new Promise((r) => setTimeout(r, 400));
+await waitFor(() => refText().startsWith('Genesis 1') && askedFor() !== null);
+tick(4);
+
+const ROUTE_MANIFEST = JSON.parse(
+  await readFile(resolve(ROOT, 'data/routes/routes.json'), 'utf8'),
+).routes;
+
+// The menu offers every route the build ships, by the name a player would use.
+stubEl('menu-open').click();
+tick(2);
+const routeOptions = stubEl('menu-route').children.map((o) => String(o.value));
+ok(routeOptions.length === ROUTE_MANIFEST.length
+   && ROUTE_MANIFEST.every((r) => routeOptions.includes(r.id)),
+   'THE MENU OFFERS EVERY ROUTE THIS BUILD SHIPS',
+   routeOptions.join(', ') || '(none)');
+ok(String(stubEl('menu-route-note').textContent).length > 20,
+   'and says what the chosen one is, rather than leaving a proper noun to explain itself',
+   String(stubEl('menu-route-note').textContent));
+
+// Switching is a change of reading, not a change of place: he stays in the
+// verse he was typing. docs/design/04-route.md#choosing-a-route
+const beforeSwitch = refText();
+stubEl('menu-route').value = 'wisdom';
+stubEl('menu-route').dispatchEvent({ type: 'change' });
+// Reading the new route file is a fetch, and `waitFor` returns without yielding
+// when its condition is already true -- the record is written before the file is
+// asked for. So this waits on the promises rather than on the screen.
+await quiesce();
+tick(4);
+ok(record().route === 'wisdom', 'CHOOSING A ROUTE IS REMEMBERED', String(record().route));
+press('Escape');
+await waitFor(() => askedFor() !== null);
+tick(4);
+ok(refText() === beforeSwitch, 'AND IT MOVES NOBODY: HE IS STILL IN THE VERSE HE WAS TYPING',
+   `${beforeSwitch} -> ${refText()}`);
+
+// The map, against a route with no threads at all.
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-map').click();
+tick(2);
+const wisdomNodes = rowsOf('map-nodes').map(textOf);
+const wisdomThreads = rowsOf('map-threads').map(textOf);
+const threadsNote = String(stubEl('map-threads-note').textContent);
+const progressLine = String(stubEl('map-progress').textContent);
+const standingLine = String(stubEl('map-standing').textContent);
+ok(wisdomNodes.length > 0 && wisdomNodes.every((row) => /Psalms|Proverbs/.test(row)),
+   'A ROUTE WITH NO THREADS STILL DRAWS ITS PASSAGES',
+   `${wisdomNodes.length} rows: ${wisdomNodes[0] ?? '(none)'}`);
+ok(wisdomNodes.some((row) => /Book I/.test(row)),
+   'with the route\u2019s own sentence beside each one',
+   wisdomNodes[0] ?? '');
+ok(wisdomThreads.length === 0 && /no threads/i.test(threadsNote),
+   'AND SAYS IT HAS NO THREADS, RATHER THAN LEAVING AN EMPTY HEADING',
+   threadsNote || `${wisdomThreads.length} thread rows`);
+ok(!/secret room/i.test(progressLine),
+   'and the counter stops promising secret rooms a list of passages does not have',
+   progressLine);
+ok(/Wisdom route/.test(standingLine) && /list of passages, not a fence/.test(standingLine),
+   'AND THE SENTENCE FOR A PLAYER STANDING OFF IT LOSES THE WORD "THREADS"',
+   standingLine);
+ok(!/ pilgrimage | wisdom /.test(` ${progressLine} ${standingLine} `),
+   'and the map calls the route by its name rather than by its filename',
+   `${progressLine} ${standingLine}`);
+
+// --- and a route with no threads is walked, not only looked at ---------------
+//
+// A psalm is the shortest chapter in the book and the reason Wisdom exists:
+// docs/design/04-route.md#wisdom. Typing one out on a route with no edges has to
+// do exactly what typing one out on Pilgrimage does, minus the offer -- the
+// chapter is recorded, the next stretch of verses opens, and the strip under the
+// rail says nothing, because nothing leads anywhere from here.
+press('Escape');
+await waitFor(() => askedFor() !== null);
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-book').value = 'Psalms';
+stubEl('menu-chapter').value = '1';
+stubEl('menu-go').click();
+const onAPsalm = await waitFor(() => refText().startsWith('Psalms 1:') && askedFor() !== null);
+tick(4);
+ok(onAPsalm, 'the harness is standing at the top of the first psalm', refText());
+// Read the screen rather than storage: every game booted in this file is still
+// listening for keys, so `press` advances seven levels at once and the record is
+// whichever of them saved last. The rail is the newest boot's, always.
+for (let i = 0; i < 8 && refText().startsWith('Psalms 1:'); i++) await finishPart();
+ok(refText().startsWith('Psalms 2'),
+   'A ROUTE WITH NO THREADS IS WALKED LIKE ANY OTHER, AND READING ON IS THE WHOLE OF IT',
+   refText());
+ok(offerNow() === undefined,
+   'and finishing a psalm offers nothing, because there is no thread to offer',
+   offerNow() ?? '(nothing in the strip)');
+await quiesce();
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-map').click();
+tick(2);
+const walkedRows = rowsOf('map-nodes').map(textOf);
+const walkedCount = String(stubEl('map-progress').textContent);
+ok(walkedRows.some((row) => row.includes('Psalms 1-41') && row.includes('you are here')),
+   'AND THE MAP KNOWS WHICH SPAN HE IS INSIDE, WITHOUT A ROW FOR THE CHAPTER',
+   walkedRows.find((row) => row.includes('Psalms 1-41')) ?? '(no row)');
+ok(!walkedRows.some((row) => row.includes('Psalms 1-41') && row.includes('finished')),
+   'and one psalm out of forty-one is not a finished book',
+   walkedRows.find((row) => row.includes('Psalms 1-41')) ?? '');
+// Both halves of the counter in chapters. It counted finished *spans* against
+// required *chapters* for exactly one afternoon, and read "0 of 181" to a player
+// who had just finished a psalm.
+ok(/^1 of 181 passages finished\.$/.test(walkedCount),
+   'AND THE COUNTER COUNTS THE SAME THING ON BOTH SIDES OF ITS SENTENCE',
+   walkedCount);
+
+// --- Chronicle: reachable on purpose, and only on purpose --------------------
+//
+// docs/design/04-route.md#chronicle-the-genealogies-are-opt-in. The list in the
+// menu is the only way in -- no thread ends on a genealogy, no doorway opens
+// into one, and no route requires one -- so if this list does not work, sixteen
+// chapters of the Bible are unreachable.
+press('Escape');
+await waitFor(() => askedFor() !== null);
+stubEl('menu-open').click();
+tick(2);
+const chronicleRows = rowsOf('menu-chronicle').map(textOf);
+ok(chronicleRows.length === 16, // the sixteen chapters that are genealogy end to end
+   'THE MENU LISTS EVERY CHRONICLE PASSAGE',
+   `${chronicleRows.length} listed`);
+ok(chronicleRows.some((row) => row.includes('Genesis 5'))
+   && chronicleRows.some((row) => row.includes('1 Chronicles 9')),
+   'including the whole of the 1 Chronicles span, spelled out chapter by chapter',
+   chronicleRows.join(' / ').slice(0, 120));
+
+// Walk into one the way a player does: press its own button.
+const genesis5 = rowsOf('menu-chronicle').find((row) => textOf(row).includes('Genesis 5'));
+const chronicleGo = genesis5?.children.find((c) => String(c.textContent) === 'Go');
+chronicleGo?.click();
+const reachedChronicle = await waitFor(() => refText().startsWith('Genesis 5:') && askedFor() !== null);
+tick(4);
+ok(reachedChronicle, 'AND A CHRONICLE PASSAGE OPENS WHEN HE ASKS FOR IT', refText());
+
+// It is an ordinary passage in every other respect, which is the point: nothing
+// was invented for it. It draws a rail, it asks for keys, and the strip under
+// the rail says nothing, because no thread leaves a genealogy.
+const chronicleRail = rail().length;
+ok(chronicleRail > 0 && askedFor() !== null,
+   'and it is an ordinary passage: a rail, and a key it is asking for',
+   `${chronicleRail} glyphs, next: ${String(askedFor())}`);
+ok(offerNow() === undefined,
+   'NOTHING IS OFFERED AT A GENEALOGY, BECAUSE NOTHING LEADS ANYWHERE FROM ONE',
+   offerNow() ?? '(nothing in the strip)');
+
+// And the route he is on has not changed under him: Chronicle is a place he
+// went, not a route he took.
+ok(record().route === 'wisdom', 'AND GOING THERE IS NOT A CHANGE OF ROUTE',
+   String(record().route));
+
 console.log('');
 if (fails.length > 0) {
   console.error(`smoke FAILED (${fails.length}):`);

@@ -48,7 +48,7 @@
  */
 
 import { frameAt } from './entities.js';
-import { nodeRefs, type MapState, type Route } from './route.js';
+import { nodeCovers, refKey, routeNodes, type MapState, type Route } from './route.js';
 import {
   FOLLOWER_BODIES, FOLLOWER_CLOTHS, FOLLOWER_IDLE_FIRST, FOLLOWER_IDLE_FRAMES,
   FOLLOWER_MARKS, FOLLOWER_WALK_FRAMES, SPRITE_SIZE, followerBodyId, followerMarkId,
@@ -275,28 +275,59 @@ export function party(
   state: MapState,
   verseReached = 0,
 ): readonly Follower[] {
+  /*
+   * Walked over the *roster* rather than over the route's nodes, which is a
+   * change the span made necessary and an improvement anyway. Canonical names
+   * `Genesis 1-50` and the roster names `Genesis 2`, so a lookup keyed on the
+   * node's own spelling would hand back nobody on three of the four routes --
+   * and Adam is formed in Genesis 2 whichever reading of the book took the
+   * player there. Twenty rows is also a fixed cost, where the nodes are 66 on
+   * one route and this runs every frame.
+   */
   const joined = new Set<string>([...state.completed, ...state.discovered]);
-  const byRef = new Map<string, FollowerRow[]>();
+  const isJoined = (ref: string): boolean => joined.has(ref) || joined.has(refKey(ref));
+  // The graph is walked once, not once per row: this runs every frame, and
+  // `routeNodes` sorts the whole route each time it is asked.
+  const nodes = [...routeNodes(route).values()];
+  const standing = state.current === '' ? null : refKey(state.current);
+  const found: { row: FollowerRow; at: number }[] = [];
   for (const row of roster.rows) {
-    const list = byRef.get(row.ref);
-    if (list === undefined) byRef.set(row.ref, [row]);
-    else list.push(row);
+    const at = nodes.findIndex((node) => nodeCovers(node, row.ref));
+    if (at < 0) continue;
+    const here = row.verse !== null
+      && standing === refKey(row.ref)
+      && verseReached >= row.verse;
+    if (!isJoined(row.ref) && !here) continue;
+    found.push({ row, at });
   }
-  const out: Follower[] = [];
-  for (const ref of nodeRefs(route)) {
-    const rows = byRef.get(ref);
-    if (rows === undefined) continue;
-    const finished = joined.has(ref);
-    const standing = state.current === ref;
-    // Verse order inside a passage, so Adam is formed before Eve is built
-    // whichever order the table happened to be written in.
-    for (const row of [...rows].sort((a, b) => (a.verse ?? 0) - (b.verse ?? 0))) {
-      const here = row.verse !== null && standing && verseReached >= row.verse;
-      if (finished || here) out.push(figureFor(row));
-    }
-  }
-  return out;
+  // The route's order, then the chapter, then the verse -- so Adam is formed
+  // before Eve is built whichever order the table happened to be written in,
+  // and a span holding forty chapters still hands them over in reading order.
+  found.sort((a, b) =>
+    a.at - b.at
+    || parseVerseOrder(a.row) - parseVerseOrder(b.row));
+  return found.map((entry) => figureFor(entry.row));
 }
+
+/**
+ * Sort key inside one node: the chapter, then the verse.
+ *
+ * Two rows under one span node have to be told apart by more than their verse
+ * -- `Genesis 1-50` holds both Adam and Eve and would hold anybody else Genesis
+ * handed over. The chapter dominates because a chapter is always ordered before
+ * a verse in it.
+ */
+function parseVerseOrder(row: FollowerRow): number {
+  const chapter = Number(refKey(row.ref).split(' ').pop() ?? 0);
+  return chapter * VERSES_PER_CHAPTER_CEILING + (row.verse ?? 0);
+}
+
+/**
+ * Larger than any chapter's verse count, so a chapter never bleeds into the
+ * next one's ordering. Psalm 119 has 176 verses and is the longest in either
+ * shipped translation.
+ */
+const VERSES_PER_CHAPTER_CEILING = 1000; // tuning-exempt: a sort radix, not a tunable
 
 // --- arriving ---------------------------------------------------------------
 

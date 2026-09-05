@@ -45,26 +45,45 @@ def parse_range(ref: str):
     return book, a, int(m.group(5) or m.group(2)), None, None
 
 
+_BOOKS: dict[tuple[str, str], dict | None] = {}
+
+
+def book_doc(edition: str, book: str) -> dict | None:
+    """One book file, read at most once.
+
+    Canonical names 1,189 chapters and every one of them is checked against
+    every shipped edition, so re-reading Psalms off disk for each of its 150
+    chapters would turn a fast check into a slow one for no gain.
+    """
+    key = (edition, book)
+    if key not in _BOOKS:
+        path = DATA / "texts" / edition / f"{book.lower().replace(' ', '')}.json"
+        _BOOKS[key] = (
+            json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+        )
+    return _BOOKS[key]
+
+
 def chapter_units(edition: str, book: str, chapter: int) -> list[str] | None:
-    path = DATA / "texts" / edition / f"{book.lower().replace(' ', '')}.json"
-    if not path.exists():
+    doc = book_doc(edition, book)
+    if doc is None:
         return None
-    doc = json.loads(path.read_text(encoding="utf-8"))
     for s in doc["sections"]:
         if s["name"] == str(chapter):
             return list(s["units"])
     return None
 
 
-def chapter_text(edition: str, book: str, chapter: int) -> str | None:
-    path = DATA / "texts" / edition / f"{book.lower().replace(' ', '')}.json"
-    if not path.exists():
+def chapters_on_disk(edition: str, book: str) -> list[int] | None:
+    doc = book_doc(edition, book)
+    if doc is None:
         return None
-    doc = json.loads(path.read_text(encoding="utf-8"))
-    for s in doc["sections"]:
-        if s["name"] == str(chapter):
-            return " ".join(s["units"])
-    return None
+    return sorted(int(s["name"]) for s in doc["sections"] if s["name"].isdigit())
+
+
+def chapter_text(edition: str, book: str, chapter: int) -> str | None:
+    units = chapter_units(edition, book, chapter)
+    return None if units is None else " ".join(units)
 
 
 def main() -> int:
@@ -109,6 +128,120 @@ def main() -> int:
                 parse_ref(e[side])
             except ValueError as ex:
                 errors.append(f"route: edge {e['id']}: {ex}")
+
+    # --- every route this build ships
+    #
+    # Pilgrimage is a graph and is checked as one above; the other three are
+    # *lists*, so what there is to get wrong about them is different -- a span
+    # that runs off the end of a book, two spans claiming one chapter, or a
+    # route file whose id disagrees with its own filename, which would make the
+    # record store an id nothing can load.
+    # See docs/design/04-route.md#three-of-the-four-are-lists-and-that-is-not-an-omission
+    editions_present = (
+        sorted(p.name for p in (DATA / "texts").glob("*")) if (DATA / "texts").exists() else []
+    )
+    choices = load("routes/routes.json")["routes"]
+    if not choices:
+        errors.append("routes: the menu would have nothing to offer")
+    named: dict[str, dict] = {}
+    seen_ids: set[str] = set()
+    for choice in choices:
+        rid = choice["id"]
+        if rid in seen_ids:
+            errors.append(f"routes: duplicate route id {rid!r}")
+        seen_ids.add(rid)
+        for field in ("name", "what_it_is"):
+            if not choice.get(field):
+                errors.append(f"routes: {rid} has no {field}")
+        path = DATA / "routes" / f"{rid}.json"
+        if not path.exists():
+            errors.append(f"routes: {rid} is offered and data/routes/{rid}.json is not there")
+            continue
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        if doc.get("id") != rid:
+            errors.append(
+                f"routes: data/routes/{rid}.json calls itself {doc.get('id')!r}; "
+                "the record stores the id and the loader stores the filename"
+            )
+        named[rid] = doc
+
+    for rid, doc in sorted(named.items()):
+        if not doc.get("stops") and not doc.get("edges"):
+            errors.append(f"routes: {rid} has neither stops nor edges")
+        claimed: list[tuple[str, int, int, str]] = []
+        for stop in doc.get("stops", []):
+            ref = stop["passage"]
+            try:
+                book, a, b = parse_ref(ref)
+            except ValueError as ex:
+                errors.append(f"routes: {rid}: {ex}")
+                continue
+            if b < a:
+                errors.append(f"routes: {rid}: span {ref} runs backwards")
+            for ob, oa, obb, oref in claimed:
+                if ob == book and not (b < oa or a > obb):
+                    errors.append(f"routes: {rid}: {ref} overlaps {oref}")
+            claimed.append((book, a, b, ref))
+            # Every chapter of the span, in every text that is on disk. A span
+            # resolves perfectly well on its first chapter and warps into
+            # nothing on its fifty-first, and only the whole of it is a check.
+            for edition in editions_present:
+                have = chapters_on_disk(edition, book)
+                if have is None:
+                    continue
+                missing = [n for n in range(a, b + 1) if n not in have]
+                if missing:
+                    errors.append(
+                        f"routes: {rid}: {ref} names {book} "
+                        f"{', '.join(str(n) for n in missing[:4])} "
+                        f"which {edition} does not have"
+                    )
+
+    # Canonical says *nothing is left out*, and that is checkable rather than
+    # believable: the chapters it names must be exactly the chapters on disk.
+    # Every other route is a selection and has nothing of the sort to prove.
+    canonical = named.get("canonical")
+    if canonical is not None and editions_present:
+        edition = editions_present[0]
+        claimed_chapters = set()
+        for stop in canonical["stops"]:
+            book, a, b = parse_ref(stop["passage"])
+            claimed_chapters |= {(book, n) for n in range(a, b + 1)}
+        on_disk = set()
+        for path in sorted((DATA / "texts" / edition).glob("*.json")):
+            doc = json.loads(path.read_text(encoding="utf-8"))
+            title = doc["title"]
+            for s in doc["sections"]:
+                if s["name"].isdigit():
+                    on_disk.add((title, int(s["name"])))
+        # Psalms ships twice under two filenames so that `Psalm 23` resolves; it
+        # is one book and the route names it once.
+        missing = sorted(on_disk - claimed_chapters)
+        if missing:
+            errors.append(
+                f"routes: canonical leaves out {len(missing)} chapter(s), "
+                f"starting {missing[0][0]} {missing[0][1]}"
+            )
+
+    # Wisdom says it is the Psalms and the Proverbs, all of them and nothing
+    # else. Same kind of claim, same kind of check.
+    wisdom = named.get("wisdom")
+    if wisdom is not None and editions_present:
+        edition = editions_present[0]
+        want = {
+            (book, n)
+            for book in ("Psalms", "Proverbs")
+            for n in (chapters_on_disk(edition, book) or [])
+        }
+        got = set()
+        for stop in wisdom["stops"]:
+            book, a, b = parse_ref(stop["passage"])
+            got |= {(book, n) for n in range(a, b + 1)}
+        if got != want:
+            errors.append(
+                "routes: wisdom is not exactly the Psalms and the Proverbs "
+                f"({len(want - got)} missing, {len(got - want)} extra)"
+            )
 
     # --- scenes
     #

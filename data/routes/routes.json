@@ -1,0 +1,25 @@
+{
+  "routes": [
+    {
+      "id": "pilgrimage",
+      "name": "Pilgrimage",
+      "what_it_is": "Nineteen passages joined by phrases they share, from the first day to the new creation. The threads are the whole idea."
+    },
+    {
+      "id": "canonical",
+      "name": "Canonical",
+      "what_it_is": "All sixty-six books, first chapter to last. Nothing chosen for you, and nothing left out."
+    },
+    {
+      "id": "narrative",
+      "name": "Narrative",
+      "what_it_is": "The Bible as a sequence of events. The books that tell a story, and the chapters of the others that do; no law, no lists, no letters."
+    },
+    {
+      "id": "wisdom",
+      "name": "Wisdom",
+      "what_it_is": "The Psalms and the Proverbs. Short lines, one thought to a verse, and the shortest way into typing whole sentences."
+    }
+  ],
+  "_generated_from": "docs/design/04-route.md"
+}

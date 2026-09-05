@@ -65,10 +65,10 @@ import {
   type Follower, type FollowerLine, type Roster,
 } from '../../core/followers.js';
 import {
-  arriveAt, completePassage, createMap, discoverSecret, flashbacksFrom,
-  loadRoute, mapThreads, mapView, nodeRefs, offerLine, requiredRefs, routeComplete,
-  standingOffRoute, threadOffer,
-  type MapState, type Route, type RouteEdge,
+  chroniclePassages, createMap, finishedRefs, flashbacksFrom, hasThreads, loadRoute,
+  loadRouteChoices, mapThreads, mapView, nodeCovering, offerLine, requiredRefs,
+  routeComplete, routeName, standingOffRoute, threadOffer,
+  type MapState, type Route, type RouteChoice, type RouteEdge,
 } from '../../core/route.js';
 import {
   beginWarp, echoFor, enterFlashback, heldSpan, insideFlashback, leaveFlashback, locateEcho,
@@ -126,6 +126,7 @@ import {
   setMotion,
   setGilding,
   setMistakesStand,
+  setRoute,
   setStage,
   shouldOfferGilding,
   withGildOffered,
@@ -1100,12 +1101,39 @@ async function boot(): Promise<void> {
    * "you have not reached anything yet" and "the route did not load", and only
    * one of them is the player's fault.
    */
-  let route: Route | null = null;
+  /**
+   * Which routes exist, and what the menu says about each.
+   *
+   * Empty when the file cannot be read, which is the honest degraded state: the
+   * menu shows no chooser at all rather than one naming routes it cannot load,
+   * and the game keeps whichever route the record already named.
+   */
+  let routeChoices: readonly RouteChoice[] = [];
   try {
-    route = loadRoute(await fetchJson('data/routes/pilgrimage.json'));
+    routeChoices = loadRouteChoices(await fetchJson('data/routes/routes.json'));
   } catch {
     usingFallback(DATA_NAMES.route);
   }
+
+  let route: Route | null = null;
+
+  /**
+   * Read one route file.
+   *
+   * Called at boot and again whenever the player chooses another. A route that
+   * will not load leaves `route` null and raises the banner, which is what the
+   * map screen is written to say out loud -- there is a real difference between
+   * "you have not reached anything yet" and "the route did not load".
+   */
+  async function loadRouteFile(id: string): Promise<void> {
+    try {
+      route = loadRoute(await fetchJson(`data/routes/${id}.json`));
+    } catch {
+      route = null;
+      usingFallback(DATA_NAMES.route);
+    }
+  }
+
 
   /**
    * Who joins after what.
@@ -1262,6 +1290,15 @@ async function boot(): Promise<void> {
   }
 
   let progress: Progress = loadProgress();
+
+  // The route the record names. An id this build does not ship -- a hand-edited
+  // record, or a route retired between versions -- falls back to the default
+  // rather than to nothing, so a stale record still opens a map.
+  await loadRouteFile(
+    routeChoices.length === 0 || routeChoices.some((choice) => choice.id === progress.route)
+      ? progress.route
+      : DEFAULT_PROGRESS.route,
+  );
 
   // --- how much of the picture is allowed to move ---------------------------
   //
@@ -1649,11 +1686,20 @@ async function boot(): Promise<void> {
     }
   }
 
-  /** The route's own spelling of a citation, or null when it names no node. */
+  /**
+   * The route's own spelling of the node a citation falls in, or null when the
+   * route does not name the passage at all.
+   *
+   * By span rather than by string, because a stop may be a range: Canonical
+   * names `Genesis 1-50` and the player is standing in Genesis 4.
+   */
   function routeRefFor(citation: string): string | null {
     if (route === null) return null;
-    const want = canonRef(citation);
-    return nodeRefs(route).find((ref) => canonRef(ref) === want) ?? null;
+    try {
+      return nodeCovering(route, citation)?.ref ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -1667,22 +1713,30 @@ async function boot(): Promise<void> {
    */
   function mapState(): MapState {
     if (route === null) return { routeId: '', current: '', completed: [], discovered: [] };
-    const done = new Set(progress.completed.map(canonRef));
-    const found = new Set(progress.discovered.map(canonRef));
-    let state = createMap(route);
-    for (const ref of nodeRefs(route)) {
-      if (done.has(canonRef(ref))) state = completePassage(state, ref);
-      if (found.has(canonRef(ref))) state = discoverSecret(state, ref);
-    }
-    // The route's own spelling when it names this passage, and the passage
-    // itself when it does not. Standing off the route is a normal thing to do
-    // -- the menu jumps anywhere and reading on from Genesis 1 reaches Genesis
-    // 2 -- and the map answers it by marking nothing and saying where he is,
-    // rather than by marking the route's first entry and being wrong. See
-    // docs/design/04-route.md#standing-off-the-route.
-    const here = routeRefFor(level.ref)
-      ?? formatReference(level.bookTitle, level.chapter);
-    return arriveAt(state, here);
+    /*
+     * The record's own two lists, handed over as they stand.
+     *
+     * They used to be projected onto the route's nodes first, one
+     * `completePassage` per node the record matched. That was necessary while a
+     * node was always a single chapter spelled the route's way; it stopped
+     * being possible when a node became a span, because `Genesis 1-50` is
+     * finished when fifty chapters are and there is no one string to mark. So
+     * `core/route.ts` compares through `refKey` instead -- `Psalm 23` and
+     * `Psalms 23` are one passage -- and the state is what the record says
+     * rather than a copy of it with the route's spelling on.
+     */
+    const state = createMap(route);
+    // Where he actually is, always as a chapter. Standing off the route is a
+    // normal thing to do -- the menu jumps anywhere, and a route that names
+    // Proverbs does not name Genesis -- and the map answers it by marking
+    // nothing and saying where he is, rather than by marking the route's first
+    // entry and being wrong. docs/design/04-route.md#standing-off-the-route
+    return {
+      ...state,
+      completed: progress.completed,
+      discovered: progress.discovered,
+      current: formatReference(level.bookTitle, level.chapter),
+    };
   }
 
   /**
@@ -1886,13 +1940,22 @@ async function boot(): Promise<void> {
   function routeView(): RouteView {
     if (route === null) {
       return {
-        routeId: '', complete: false, finished: 0, stops: 0,
+        routeId: '', routeName: routeName(routeChoices, progress.route),
+        threaded: false, complete: false, finished: 0, stops: 0,
         nodes: [], threads: [], standing: null, party: [], error: ROUTE_MISSING,
       };
     }
     const state = mapState();
     return {
       routeId: route.id,
+      // The proper noun, not the filename. The map said "not on the pilgrimage
+      // route" in lower case for as long as the id was also the name.
+      routeName: routeName(routeChoices, route.id),
+      // Three of the four shipped routes have no threads at all, and the map
+      // has to say so rather than show an empty heading and a counter promising
+      // secret rooms that do not exist.
+      // docs/design/04-route.md#three-of-the-four-are-lists-and-that-is-not-an-omission
+      threaded: hasThreads(route),
       complete: routeComplete(route, state),
       // Null while he is on a node; the chapter itself while he is not, which
       // is what the map says in place of marking anything.
@@ -1910,13 +1973,17 @@ async function boot(): Promise<void> {
           ref: followerCitation(f), who: f.who, walking: shown.has(followerCitation(f)),
         }));
       })(),
-      finished: mapView(route, state).filter((n) => n.kind === 'stop' && n.completed).length,
+      // Both halves in chapters. Counting finished *nodes* against required
+      // *chapters* read "0 of 181" for a player who had finished a psalm, the
+      // moment a node could be a span of forty-one of them.
+      finished: finishedRefs(route, state).length,
       stops: requiredRefs(route).length,
       nodes: mapView(route, state)
         .filter((node) => node.visible)
         .map((node) => ({
           ref: node.ref,
           kind: node.kind,
+          note: node.note,
           unlocked: node.unlocked,
           completed: node.completed,
           current: node.current,
@@ -2443,6 +2510,25 @@ async function boot(): Promise<void> {
     return {
       stage: progress.stage,
       stages: stages.map((s) => ({ stage: s.stage, description: s.description })),
+      // Which reading of the book he is on, and the ones he could choose
+      // instead. Empty when the manifest did not load, in which case the menu
+      // shows no chooser rather than one naming routes it cannot open.
+      route: progress.route,
+      routes: routeChoices.map((choice) => ({
+        id: choice.id, name: choice.name, what: choice.what,
+      })),
+      /*
+       * The genealogies: opt-in, never on the way to anything, and the same
+       * sixteen chapters whatever route he is on, because they are a fact about
+       * the canon rather than about a reading of it. Marked with what the record
+       * already knows -- a chapter he has finished is finished here too, since
+       * `completed` is one list every route reads.
+       * docs/design/04-route.md#chronicle-the-genealogies-are-opt-in
+       */
+      chronicle: chroniclePassages().map((ref) => ({
+        ref,
+        completed: progress.completed.some((done) => canonRef(done) === canonRef(ref)),
+      })),
       gilding: progress.gilding,
       mistakesStand: progress.mistakesStand,
       where:
@@ -2588,6 +2674,26 @@ async function boot(): Promise<void> {
         hereOptions(),
       );
       overlay.openMenu(menuView());
+    },
+    /**
+     * The player chose which reading of the book to be on.
+     *
+     * It moves nobody. A route is a reading rather than a place: the verse he is
+     * typing, the bookmark, the stage and the trailing window are all untouched,
+     * and the only thing that changes is what the map draws. If the new route
+     * does not name the chapter he is standing in, the map says so plainly --
+     * which is the answer that already existed for a player who wandered, and
+     * the ordinary case for anyone who picks Wisdom while standing in Genesis.
+     * See docs/design/04-route.md#choosing-a-route.
+     */
+    setRoute: (id) => {
+      const next = setRoute(progress, id, routeChoices.map((choice) => choice.id));
+      if (next === progress) return;
+      progress = next;
+      saveProgress(progress);
+      void loadRouteFile(progress.route).then(() => {
+        overlay.openMenu(menuView());
+      });
     },
     setKeyboard: (layout, spaceThumb) => {
       progress = { ...progress, layout, spaceThumb };
