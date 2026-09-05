@@ -216,7 +216,7 @@ letters aren't yours yet. The game types them for you — just keep going"*, whi
 is the right thing to tell a beginner, and is the sentence a second note would have to
 qualify within a line or two of it. The player who needs the qualification is the fluent
 typist, and he is not the player the notes are for — see
-[the first run](10-first-run.md#what-is-deliberately-not-said), where gilding is on the
+[the first run](10-first-run.md#3-what-is-deliberately-not-said), where gilding is on the
 list of things deliberately not mentioned. He is reached by the two routes that exist
 already: the offer after sustained fast sessions, and a menu heading that now says what it
 is about. Where the two players' interests conflict, the beginner wins.

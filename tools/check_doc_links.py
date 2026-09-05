@@ -26,6 +26,31 @@ def anchors(path: Path) -> set[str]:
     return out
 
 
+def check_markdown_links(errors: list[str]) -> int:
+    """Every [text](file.md#anchor) between docs must resolve.
+
+    Added after an agent noticed 01-illumination.md pointing at a heading in
+    10-first-run.md that does not exist. This script validated `@doc` headers in
+    code and nothing at all between documents -- so in a repository whose whole
+    premise is that the documentation is canonical, the links inside it were the
+    one thing nobody checked.
+    """
+    LINK = re.compile(r"\[[^\]]+\]\(([^)\s]+\.md)(?:#([^)\s]+))?\)")
+    checked = 0
+    for doc in sorted(ROOT.glob("docs/**/*.md")) + [ROOT / "README.md", ROOT / "AGENTS.md", ROOT / "TODO.md"]:
+        if not doc.exists():
+            continue
+        for target, anchor in LINK.findall(doc.read_text(encoding="utf-8")):
+            checked += 1
+            dest = (doc.parent / target).resolve()
+            rel = doc.relative_to(ROOT)
+            if not dest.exists():
+                errors.append(f"{rel}: links to missing file {target}")
+            elif anchor and anchor not in anchors(dest):
+                errors.append(f"{rel}: '#{anchor}' is not a heading in {target}")
+    return checked
+
+
 def main() -> int:
     errors: list[str] = []
     modules = sorted((ROOT / "core").rglob("*.ts"))
@@ -65,13 +90,15 @@ def main() -> int:
                 # exists it must carry a resolving @doc header (checked above).
                 pending.add(r)
 
+    links = check_markdown_links(errors)
+
     for e in errors:
         print(f"  {e}", file=sys.stderr)
     if errors:
         print(f"\n{len(errors)} doc-link problem(s).", file=sys.stderr)
         return 1
     note = f", {len(pending)} module(s) specced but unwritten" if pending else ""
-    print(f"    doc links: {len(modules)} module(s), {len(design)} design doc(s){note}")
+    print(f"    doc links: {len(modules)} module(s), {len(design)} design doc(s), {links} cross-reference(s){note}")
     return 0
 
 
