@@ -1,0 +1,10 @@
+{
+  "defaults": [
+    {
+      "text": "bible",
+      "theme": "hills",
+      "why": "dry hills and wide sky: the ground most of the book actually happens on"
+    }
+  ],
+  "_generated_from": "docs/design/05-scenery-warps.md"
+}

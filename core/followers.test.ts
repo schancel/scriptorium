@@ -28,6 +28,7 @@ import { readFileSync } from 'node:fs';
 
 import {
   EMPTY_LINE,
+  arrivalLine,
   followerCountX,
   followerLine,
   followerPoses,
@@ -138,7 +139,7 @@ function draw(state: FrameState): DrawCmd[] {
 
 /** Every sprite id a follower body or mark can be drawn as. */
 const FIGURE_IDS: ReadonlySet<string> = new Set(
-  fullParty().flatMap((f) => [f.bodyId, f.markId]),
+  fullParty().flatMap((f) => (f.markId === null ? [f.bodyId] : [f.bodyId, f.markId])),
 );
 
 function isFigure(cmd: DrawCmd): boolean {
@@ -147,24 +148,75 @@ function isFigure(cmd: DrawCmd): boolean {
 
 // --- the roster --------------------------------------------------------------
 
-test('EVERY PASSAGE ON THE ROUTE HAS A FIGURE, AND NO TWO SHARE ONE', () => {
-  // A route edge added without a figure is a passage that finishes and leaves
-  // nothing behind, which is the whole hole this feature fills.
+test('AT MOST ONE FIGURE PER PASSAGE, AND NEVER A FIGURE OFF THE ROUTE', () => {
+  // It was *exactly* one, and it stopped being right when Eve moved to
+  // Genesis 2: Genesis 3 is the chapter where everyone is driven out, and there
+  // is nobody in it who joins you. A rule demanding a row per node is a rule
+  // demanding an invented companion wherever the text supplies no real person.
+  // What still has teeth is the other direction -- a row naming a passage the
+  // route does not have is a figure nobody can ever meet.
   const rows = new Map(ROSTER.rows.map((row) => [row.ref, row]));
-  for (const ref of NODES) {
-    assert.ok(rows.has(ref), `no figure joins after ${ref}`);
-  }
   for (const row of ROSTER.rows) {
     assert.ok(NODES.includes(row.ref), `${row.who} joins after ${row.ref}, which is not on the route`);
   }
   assert.equal(rows.size, ROSTER.rows.length, 'two figures claim one passage');
+  // And the empty node is the authored one, not a row somebody dropped.
+  const empty = NODES.filter((ref) => !rows.has(ref));
+  assert.deepEqual(empty, ['Genesis 3'], 'a node lost its figure');
+});
+
+test('EVE IS BUILT IN GENESIS 2, WHICH IS WHERE HER LINE BELONGS', () => {
+  // ADR 0012: she is built in 2:22 and becomes a wife in 2:24, which is where
+  // "Wife acquired!" lands. She is not named Eve until 3:20, which is why the
+  // line does not use the name.
+  const eve = ROSTER.rows.find((row) => row.who === 'Eve');
+  assert.equal(eve?.ref, 'Genesis 2');
+  assert.equal(arrivalLine('Eve'), 'Wife acquired!');
+  assert.ok(!arrivalLine('Eve').includes('Eve'), 'she is not named until Genesis 3:20');
+  // Adam still arrives first, which was the owner's correction in the first place.
+  const order = fullParty().map((f) => f.who);
+  assert.ok(order.indexOf('Adam') < order.indexOf('Eve'));
+});
+
+test('MARY MAGDALENE JOINS AT JOHN 20 AND CARRIES NOTHING', () => {
+  // She brings nothing in John 20 and stands outside the tomb weeping; the jar
+  // of spices is Luke's and Mark's, and in John the spices are Nicodemus's the
+  // evening before. An invented prop is the same untruth as an invented
+  // companion, one level down.
+  // docs/design/11-followers.md#a-figure-may-carry-nothing
+  const mary = ROSTER.rows.find((row) => row.who === 'Mary Magdalene');
+  assert.equal(mary?.ref, 'John 20');
+  assert.equal(mary?.mark, null);
+  assert.equal(mary?.body, 'gowned', 'the fourth silhouette exists for exactly this');
+  const figure = fullParty().find((f) => f.who === 'Mary Magdalene');
+  assert.equal(figure?.markId, null);
+  assert.equal(arrivalLine('Mary Magdalene'), 'Mary Magdalene walks with you.');
+  // She is the only one. Everybody else is holding something the text names.
+  assert.deepEqual(
+    ROSTER.rows.filter((row) => row.mark === null).map((row) => row.who),
+    ['Mary Magdalene'],
+  );
 });
 
 test('every figure names art the game actually holds', () => {
   for (const follower of fullParty()) {
     assert.ok(spriteFor(follower.bodyId) !== null, `no body "${follower.bodyId}"`);
+    if (follower.markId === null) continue;
     assert.ok(spriteFor(follower.markId) !== null, `no mark "${follower.markId}"`);
   }
+});
+
+test('a mark that names no art still throws; only a blank one is allowed', () => {
+  // "Blank" and "wrong" must stay different: a mistyped mark is a row somebody
+  // got wrong, and it would reach the player as the game forgetting who he met.
+  assert.throws(
+    () => loadFollowers({ followers: [{ passage: 'John 20', who: 'x', body: 'gowned', cloth: 'light', mark: 'jar' }] }),
+    /jar/,
+  );
+  const blank = loadFollowers({
+    followers: [{ passage: 'John 20', who: 'x', body: 'gowned', cloth: 'light', mark: null }],
+  });
+  assert.equal(blank.rows[0]?.mark, null);
 });
 
 test('a roster naming art that does not exist throws rather than walking empty-handed', () => {
@@ -213,8 +265,9 @@ test('the party is derived from the record and nothing else is stored', () => {
   assert.deepEqual(forwards.map((f) => f.ref), ['Genesis 1', 'Exodus 3', 'Jonah 1']);
 });
 
-test('the whole route gathers the whole company', () => {
-  assert.equal(fullParty().length, NODES.length);
+test('the whole route gathers the whole company, less the node that hands over nobody', () => {
+  assert.equal(fullParty().length, ROSTER.rows.length);
+  assert.equal(fullParty().length, NODES.length - 1);
 });
 
 // --- the cap -----------------------------------------------------------------
@@ -337,20 +390,34 @@ test('nothing a follower draws reaches the reading band, the strip under it, or 
   }
 });
 
-test('a follower is two sprite commands and nothing else: a body, and the thing it carries', () => {
-  const cmds = draw(frame({ followers: followerLine(fullParty(), TUNING) }));
+test('a follower is a body and the thing it carries, and nothing else', () => {
+  const line = followerLine(fullParty(), TUNING);
+  const cmds = draw(frame({ followers: line }));
   const figures = cmds.filter(isFigure);
   const cap = TUNING['follower_line_max'] ?? 0;
-  assert.equal(figures.length, cap * 2);
+  const carrying = line.walking.filter((f) => f.markId !== null).length;
+  assert.equal(line.walking.length, cap);
+  // One command per body, and one more per figure that is holding something. A
+  // figure carrying nothing emits no second command at all rather than a blank
+  // sprite: docs/design/11-followers.md#a-figure-may-carry-nothing.
+  assert.ok(carrying < cap, 'nobody in the drawn line is empty-handed, so this proves nothing');
+  assert.equal(figures.length, cap + carrying);
   // Both halves of a figure are drawn at the same place, so the mark is carried
-  // rather than floating beside somebody it does not belong to.
-  for (let i = 0; i < figures.length; i += 2) {
+  // rather than floating beside somebody it does not belong to. Furthest first,
+  // which is the order the display list puts them in.
+  let i = 0;
+  for (const follower of [...line.walking].reverse()) {
     const body = figures[i];
-    const mark = figures[i + 1];
-    assert.ok(body?.op === 'sprite' && mark?.op === 'sprite');
+    assert.ok(body?.op === 'sprite' && body.id === follower.bodyId, `body ${String(i)}`);
+    i += 1;
+    if (follower.markId === null) continue;
+    const mark = figures[i];
+    assert.ok(mark?.op === 'sprite' && mark.id === follower.markId, `mark ${String(i)}`);
     assert.equal(body.x, mark.x);
     assert.equal(body.y, mark.y);
+    i += 1;
   }
+  assert.equal(i, figures.length);
   // No text over anybody: the only string is the count of who is not here.
   const said = cmds.filter((cmd) => cmd.op === 'text' && cmd.y < RAIL_TOP && cmd.y > LAYOUT.top);
   for (const cmd of said) {
@@ -359,8 +426,11 @@ test('a follower is two sprite commands and nothing else: a body, and the thing 
 });
 
 test('the count says how many walked on ahead, and is absent when nobody has', () => {
+  // Counted over the nodes that actually hand somebody over: Genesis 3 hands
+  // over nobody, so finishing it does not lengthen the line.
+  const withFigures = NODES.filter((ref) => ROSTER.rows.some((row) => row.ref === ref));
   const counted = (n: number): string | null => {
-    const company = party(ROSTER, ROUTE, stateWith(NODES.slice(0, n)));
+    const company = party(ROSTER, ROUTE, stateWith(withFigures.slice(0, n)));
     const cmds = draw(frame({ followers: followerLine(company, TUNING) }));
     for (const cmd of cmds) if (cmd.op === 'text' && /^\+\d+$/.test(cmd.value)) return cmd.value;
     return null;

@@ -62,6 +62,29 @@ def main() -> int:
     scenes = load("scenes/bible.json")
     themes = {t["id"] for t in load("themes.json")["themes"]}
 
+    # --- per-text scene defaults
+    #
+    # A passage with no row wears its text's default, and for the Bible that is
+    # 97.5% of the book -- so a default naming a theme nothing can draw would
+    # repaint almost the whole game and be caught by nobody, because the tests
+    # walk the authored 2.5%. See
+    # docs/design/05-scenery-warps.md#the-default-is-a-property-of-the-text-and-the-bibles-is-open-country
+    defaults = load("scenes/defaults.json")["defaults"]
+    seen_texts: set[str] = set()
+    for d in defaults:
+        if d["text"] in seen_texts:
+            errors.append(f"scenes: two defaults claim text {d['text']!r}")
+        seen_texts.add(d["text"])
+        if d["theme"] not in themes:
+            errors.append(
+                f"scenes: default for {d['text']!r} uses unknown theme {d['theme']!r}"
+            )
+    if scenes["text"] not in seen_texts:
+        errors.append(
+            f"scenes: {scenes['text']} has an authored scene map and no default theme; "
+            "every chapter it does not name would fall back to abbey"
+        )
+
     # --- route shape
     seen = set()
     for e in route["edges"]:
@@ -117,13 +140,26 @@ def main() -> int:
     for ref in sorted(routed):
         book, a, _ = parse_ref(ref)
         if not any(ob == book and oa <= a <= obb for ob, oa, obb in ranges):
-            errors.append(f"scenes: routed passage {ref} has no scene row (would fall back to abbey)")
+            errors.append(
+                f"scenes: routed passage {ref} has no scene row "
+                "(would fall back to the text's default)"
+            )
 
     # --- followers
     #
-    # One figure per passage the route names, drawn from art that exists. A
-    # route edge added without a figure is a passage that finishes and leaves
-    # nothing behind, which is the hole docs/design/11-followers.md is about.
+    # *At most* one figure per passage the route names, drawn from art that
+    # exists. It was `exactly` one, and that was right until Genesis 3 stopped
+    # having anybody: it is the chapter where everyone is driven out, and there
+    # is no one in it who joins you. A rule demanding a row for every node is a
+    # rule demanding an invented companion wherever the text supplies no real
+    # person, which asserts more than the text supports -- the one thing this
+    # project refuses everywhere else. So an empty node is allowed and a row
+    # naming a node the route does not have is still an error.
+    # See docs/design/11-followers.md#who-joins-after-what
+    #
+    # `mark` may be null for the same reason, one level down: Mary Magdalene
+    # carries nothing in John 20, and the jar tradition hands her is Luke's.
+    # See docs/design/11-followers.md#a-figure-may-carry-nothing
     followers = load("followers.json")["followers"]
     art = (ROOT / "core" / "sprites.ts").read_text(encoding="utf-8")
 
@@ -141,13 +177,14 @@ def main() -> int:
         if ref not in routed:
             errors.append(f"followers: {ref} is not a passage the route names")
         for field, known in (("body", bodies), ("cloth", cloths), ("mark", marks)):
-            if f[field] not in known:
+            value = f[field]
+            if value is None and field == "mark":
+                continue
+            if value not in known:
                 errors.append(
-                    f"followers: {ref} names {field} {f[field]!r}, "
+                    f"followers: {ref} names {field} {value!r}, "
                     "which is not art in core/sprites.ts"
                 )
-    for ref in sorted(routed - seen_refs):
-        errors.append(f"followers: no figure joins after {ref}")
 
     # --- echo phrases, only if texts are present
     editions = [p.name for p in (DATA / "texts").glob("*")] if (DATA / "texts").exists() else []

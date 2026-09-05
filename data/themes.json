@@ -3,8 +3,14 @@
     {
       "id": "abbey",
       "palette": "stone greys, candle amber",
-      "mood": "the default; cloister and library",
+      "mood": "cloister and library; indoors, when the text says so",
       "tune": "veni-creator"
+    },
+    {
+      "id": "hills",
+      "palette": "dry grass and olive, wide pale sky",
+      "mood": "open country: fields, flocks, the road between towns",
+      "tune": "cwm-rhondda"
     },
     {
       "id": "garden",

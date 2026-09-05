@@ -1050,6 +1050,71 @@ const TILE_DUNE: readonly string[] = [
 ];
 
 /**
+ * A ridge: two crests of unequal height with a saddle between them.
+ *
+ * Open country, which is the Bible's default scenery and therefore the tile the
+ * player looks at more than any other -- 97.5% of the canon has no authored row.
+ * The dune next door crests once, symmetrically, in the middle of every cell,
+ * and a row of them is a desert precisely *because* they all agree; the comment
+ * on `TILE_WAVE` puts the same fact the other way round, that "a slow single
+ * swell reads as a hill however blue you paint it". So the difference between
+ * country and wilderness at this size is not colour, it is whether the horizon
+ * repeats itself: this one has a high crest, a shoulder, and a dip between the
+ * two, and it troughs at the seam like the dune so a row of them still rolls.
+ */
+const TILE_RIDGE: readonly string[] = [
+  '................',
+  '................',
+  '................',
+  '.........GG.....',
+  '........GGGGG...',
+  '...GG..GGGGGGG..',
+  '..GGGGGGGGGGGGG.',
+  'GGGGGGGGGGGGGGGG',
+  'gggggggggggggggg',
+  'gggggggggggggggg',
+  'ggggGGGGgggggggg',
+  'gggggggggggggggg',
+  'gggggggggggggggg',
+  'gggggggggggGGGgg',
+  'gggggggggggggggg',
+  'gggggggggggggggg',
+];
+
+/**
+ * Scrub: two low bushes standing apart, on their own short stems.
+ *
+ * The middle distance of open country, and the whole of what tells it apart from
+ * the garden: `tile_foliage` is a closed canopy with only chinks of sky in it,
+ * and this is the opposite arrangement -- discrete masses with daylight all the
+ * way to the ground between them, which is what grazed hillside looks like from
+ * far enough away. The stems are `outline` rather than `shade` for the reason
+ * every dark down here is: shade *is* the sky, so a stem drawn in it would be a
+ * bush floating.
+ *
+ * Both edge columns are empty, so nothing straddles the seam and the two bushes
+ * stay two bushes however many times the cell repeats.
+ */
+const TILE_SCRUB: readonly string[] = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '.....LL.........',
+  '....LMMM....LL..',
+  '...MMMMMM..LMMM.',
+  '...MMMMMM..MMMM.',
+  '....MMMM...MMMM.',
+  '.....KK.....MM..',
+  '.....KK.....KK..',
+  '.....KK.....KK..',
+  '................',
+  '................',
+  '................',
+  '................',
+];
+
+/**
  * Waves: two crests to a cell, each capped with foam.
  *
  * Twice the frequency of the dune and half its height, which is the whole
@@ -1502,7 +1567,7 @@ const CHILD_IDLE_1: readonly string[] = [
  * inked out of the void's palette -- so a body told apart by colour would be
  * told apart in the garden and lost in the dark. Shape survives the theme.
  *
- * It is a fourth body in a shared set and not the start of nineteen bespoke
+ * It is a fourth body in a shared set and not the start of twenty bespoke
  * sprites: any woman in the line takes it, and the woman of John 8 does.
  * docs/design/11-followers.md#art-without-ten-bespoke-sprites
  */
@@ -2073,6 +2138,8 @@ export const SPRITES: ReadonlyMap<string, PixelSprite> = new Map(
     sprite('tile_deep', [TILE_DEEP]),
     // Distance: the sky shows through what is not painted.
     sprite('tile_dune', [TILE_DUNE]),
+    sprite('tile_ridge', [TILE_RIDGE]),
+    sprite('tile_scrub', [TILE_SCRUB]),
     sprite('tile_wave', [TILE_WAVE]),
     sprite('tile_peak', [TILE_PEAK]),
     sprite('tile_roofs', [TILE_ROOFS]),

@@ -12,7 +12,7 @@ thing the game is missing.
 ## What they are
 
 Finish a passage the route names and its figure joins a line walking behind the scribe.
-Adam after Genesis 3. Abraham after Moriah. Moses after the bush. The shepherd after
+Adam after the sixth day. Abraham after Moriah. Moses after the bush. The shepherd after
 Psalm 23. They walk when he walks, idle when he idles, and do nothing else at all.
 
 Finding a flashback room adds its figure too — currently a secret room leaves no visible
@@ -20,14 +20,24 @@ trace once you have left it, and this is the natural one.
 
 ### Who Genesis hands over
 
-Genesis 1 gives **Adam** and Genesis 3 gives **Eve**, in that order. The first draft had
+Genesis 1 gives **Adam** and Genesis 2 gives **Eve**, in that order. The first draft had
 them the other way around: Genesis 1:27 says *male and female he created them*, so Eve is
 textually present there, and Adam was left to arrive from Genesis 3.
 
 The owner's correction: *"Adam was created first."* Genesis 2 forms the man and then the
 woman from him, so a party that gathers Eve before Adam gets the order of the story
-backwards even where a single verse names them together. Genesis 3 is the route's node
-for the garden, which is where she belongs.
+backwards even where a single verse names them together.
+
+**Eve then moved again, from Genesis 3 to Genesis 2.** Genesis 3 was only ever where she
+stood because it was the route's node for the garden, and once
+[Genesis 2 became a node](../decisions/0012-the-route-must-not-skip-the-events.md) the
+borrowing was unnecessary: she is *built* in 2:22 and becomes a wife in 2:24, which is the
+chapter she is from and the verse her line is about. She is not named Eve until 3:20, which
+is why *"Wife acquired!"* does not use the name -- it was written before anybody knew it.
+
+**And Genesis 3 now hands over nobody, which is the correct reading of it.** It is the
+chapter in which everyone present is driven out; there is no one in it who joins you.
+See [at most one figure per node](#who-joins-after-what).
 
 ## They have no abilities, deliberately
 
@@ -58,7 +68,7 @@ shown again. It costs no layout -- the strip's space is reserved whether anythin
 or not -- and it costs no mechanic, because it is a sentence and nothing else.
 
 Priority in the strip, highest first: **a first-run note**, then **an arrival**, then **a
-doorway**. A note is spent three times in a player's life, an arrival nineteen times, and a
+doorway**. A note is spent three times in a player's life, an arrival twenty times, and a
 doorway stands open for the rest of its verse; the rarer thing wins.
 
 ### What they say
@@ -66,11 +76,11 @@ doorway stands open for the rest of its verse; the rarer thing wins.
 Deadpan, and formed from the roster: *"Moses walks with you."* The person is the row's
 `who` with its first letter raised, so *"The shepherd walks with you."* and *"The woman he
 did not condemn walks with you."* fall out of the same rule and no second column is needed
-for eighteen of the nineteen.
+for nineteen of the twenty.
 
 **Eve's is a joke.** *"Wife acquired!"* -- the owner asked for it twice and finds it funny,
-and it is his game. It is also the right joke: it lands *because* the other eighteen are
-flat, and one gag among nineteen deadpan lines is funnier than a gag every time. It is the
+and it is his game. It is also the right joke: it lands *because* the other nineteen are
+flat, and one gag among twenty deadpan lines is funnier than a gag every time. It is the
 game's one moment of a video game acknowledging itself, and one is the correct number.
 
 That is the exception that made the exclamation ban narrow. A follower arriving is the
@@ -128,10 +138,9 @@ Neither of those is a colour, and that is deliberate: the palette belongs to the
 so a body told apart by colour would be told apart in the garden and lost in the void.
 Shape survives the theme.
 
-**It is a fourth body in a shared set, not the first of nineteen bespoke sprites.** Any
-woman in the line takes it — Eve, and the woman of John 8 — and so would Mary Magdalene if
-she is ever added. Four bodies in three cloths is twelve sprites for nineteen figures,
-which is the same economy as before.
+**It is a fourth body in a shared set, not the first of twenty bespoke sprites.** Any
+woman in the line takes it — Eve, the woman of John 8, and now Mary Magdalene. Four bodies
+in three cloths is twelve sprites for twenty figures, which is the same economy as before.
 
 `core/sprites.test.ts` commits the picture, as it does for every other sprite, and asserts
 that `gowned` differs from each of the other bodies by a counted number of pixels rather
@@ -140,28 +149,35 @@ already here, and nothing but a count would have caught it.
 
 ## Who joins after what
 
-One figure per passage the route names, and each is a person the passage itself
-puts there — not a mascot invented for the slot. A **stop** hands over its figure
-when the passage is finished; a **secret** hands over its figure when the room is
-found, because finding it is the achievement and walking back out of it is not a
-way to lose one.
+At most one figure per passage the route names, and each is a person the passage
+itself puts there — not a mascot invented for the slot. A **stop** hands over its
+figure when the passage is finished; a **secret** hands over its figure when the
+room is found, because finding it is the achievement and walking back out of it is
+not a way to lose one.
 
 `body` is which of the four shared silhouettes it is drawn from, `cloth` which
 pair of art roles the garment takes, and `mark` the one thing it carries. None of
-the three is unique to a row: that is the entire economy of it.
+the three is unique to a row: that is the entire economy of it. `mark` may also be
+blank; see [a figure may carry nothing](#a-figure-may-carry-nothing).
 
 Eve's `mark` is the **fruit**, and it was a hoe. The hoe was wrong twice: it is a vertical
 stick, and at four columns wide every upright object in this set — the staff, the crook,
 the reed, the harp's shaft — is the same picture; and tilling the ground is *Adam's* curse
-(Genesis 3:23) rather than hers. The fruit is the image the chapter is remembered by, and
-it is round, which is the one shape nothing else in the set can be confused with.
+(Genesis 3:23) rather than hers. The fruit is the image she is remembered by, and it is
+round, which is the one shape nothing else in the set can be confused with.
+
+She now joins a chapter before she takes it, and that is not a contradiction: a **mark
+names the person, not the verse they arrived on**. It has to, because the mark walks with
+her for the rest of the route and there is only one of it. It is also the last thing the
+fruit could be attached to — Genesis 3 hands over nobody now, so a mark tied to the
+chapter rather than to her would simply have left the game.
 
 <!-- generates: data/followers.json -->
 
 | passage | who | body | cloth | mark |
 |---|---|---|---|---|
 | Genesis 1 | Adam | bare | light | shoot |
-| Genesis 3 | Eve | gowned | robe | fruit |
+| Genesis 2 | Eve | gowned | robe | fruit |
 | Genesis 22 | Abraham | hooded | mid | horn |
 | Exodus 3 | Moses | hooded | robe | staff |
 | Exodus 12 | the firstborn | child | light | lamb |
@@ -178,13 +194,51 @@ it is round, which is the one shape nothing else in the set can be confused with
 | John 8 | the woman he did not condemn | gowned | light | stone |
 | John 10 | the doorkeeper | hooded | mid | key |
 | John 19 | Joseph of Arimathaea | hooded | robe | linen |
+| John 20 | Mary Magdalene | gowned | light | — |
 | Revelation 22 | the one who came to the water | bare | light | cup |
 
-`make check` asserts every passage the route names has exactly one row here, that
-no two rows claim the same passage, and that every `body`, `cloth` and `mark`
-names art that exists in `core/sprites.ts`. A route edge added without a figure
-is a passage that finishes and leaves nothing behind, which is the hole this
-whole document is about.
+`make check` asserts every row here names a passage the route names, that no two
+rows claim the same passage, and that every `body`, `cloth` and any `mark`
+names art that exists in `core/sprites.ts`.
+
+**At most one figure per node, not exactly one.** The rule used to be *exactly*,
+and it was right until Genesis 3 stopped having anybody. A route node with no row
+was a passage that finished and left nothing behind, which is the hole this whole
+document is about -- so the check was written to make that impossible. But
+"impossible" and "must be filled" are different demands, and the second one is a
+demand for an invented companion whenever the text does not supply a real person.
+Genesis 3 is the case: it is the chapter where everyone is *driven out*, and there
+is no one in it who joins you. A mascot for the slot would be worse than the
+absence by exactly the amount this project cares about -- it asserts more than the
+text supports, which is the rule the map screen and the report card are both built
+on. So the check now reads *at most one*, and an empty node is a decision somebody
+made rather than a row somebody forgot.
+
+### A figure may carry nothing
+
+**Mary Magdalene carries no mark, and the empty cell is the finding.** Every other row in
+this table names an object the passage puts in somebody's hand: the staff at the bush, the
+crook of the psalm, the linen Joseph of Arimathaea brought. John 20 puts nothing in hers.
+She goes to the tomb before it is light, finds the stone moved, runs, comes back, and
+*"stood outside at the tomb weeping"* — empty-handed in every verse she is in.
+
+The obvious mark is a jar of spices, and the jar is not in this chapter. It is Luke's
+women and Mark's, and in John the spices are Nicodemus's, seventy pounds of them, the
+evening before. Drawing her with one would be the art quietly performing the same merge
+[ADR 0012 declined](../decisions/0012-the-route-must-not-skip-the-events.md) when it kept
+her separate from the woman of John 8 — a thing tradition supplies and the text does not.
+
+So `mark` is optional, and a blank cell draws a body and no object. That costs one
+`null` in the loader and one skipped draw command, and it buys the roster the ability to
+say *nothing* — which, in a table where every other row is an assertion about what a
+person was holding, is the difference between a record and a decoration. It is the same
+answer as Genesis 3 having no figure, one level down: the honest absence beats the
+invented prop.
+
+She is `gowned` and `light` — the fourth silhouette, which
+[exists for exactly this](#a-shared-set-is-not-one-body-with-a-switch-on-it), and the pale
+cloth, because she is the one figure in the line who was first to a resurrection at dawn
+and the palette she is drawn from is the tomb's.
 
 **The marks live in the four columns beside the figure** — the same corner of the
 cell the scribe's quill occupies — so a mark never covers the body it identifies.

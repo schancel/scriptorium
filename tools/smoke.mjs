@@ -358,9 +358,12 @@ ok(!/\bpart\b/i.test(calls.fillText.map((c) => c.v).join(' ')),
 // record and handed to the frame. So this reads the canvas: where a 16x16 sprite
 // was actually drawn, and whether one turned up when a passage was finished.
 //
-// A follower is the one thing in the game drawn as *two* sprites at exactly the
-// same place -- a body and the mark it carries -- at a whole multiple of
-// `follower_spacing_px` behind the scribe. That signature is what is counted.
+// A follower is a sprite standing at a whole multiple of `follower_spacing_px`
+// behind the scribe, usually with a second sprite -- the mark it carries -- at
+// exactly the same place. Usually, and not always: Mary Magdalene carries
+// nothing, so she is one sprite and no second command at all
+// (docs/design/11-followers.md#a-figure-may-carry-nothing). The mark is consumed
+// with its body when it is there, so a figure is counted once either way.
 const TUNING_ROWS = JSON.parse(await readFile(resolve(ROOT, 'data/tuning.json'), 'utf8')).values;
 const SPACING = TUNING_ROWS.follower_spacing_px;
 const CAP = TUNING_ROWS.follower_line_max;
@@ -368,17 +371,26 @@ const CAP = TUNING_ROWS.follower_line_max;
 const SCRIBE_X = FOCAL - 8;
 const RAIL_BAND_TOP = 114;
 
-/** Every follower drawn this frame: body and mark, at one of the line's places. */
+/**
+ * Every follower drawn this frame: a body, and the mark it carries if it has one.
+ *
+ * The line is *contiguous* behind the scribe -- one figure per place, starting
+ * one spacing back and with no gaps -- so the run is walked from the nearest
+ * place outwards and stops at the first empty one. That is what keeps a candle
+ * or a monster which happens to land on a whole multiple of the spacing from
+ * being counted as company: it can sit sixteen places back all it likes, and
+ * there is nobody standing between it and the scribe.
+ */
 function figuresDrawn() {
-  const drawn = calls.sprites;
-  const found = [];
-  for (let i = 1; i < drawn.length; i++) {
-    const a = drawn[i - 1];
-    const b = drawn[i];
-    if (a.x !== b.x || a.y !== b.y) continue;
+  const atPlace = new Map();
+  for (const a of calls.sprites) {
     const back = (SCRIBE_X - a.x) / SPACING;
-    if (back >= 1 && Number.isInteger(back)) { found.push(a); i += 1; }
+    // A mark is drawn at its body's own place, so the first sprite there wins
+    // and a figure is counted once whether or not it is carrying anything.
+    if (back >= 1 && Number.isInteger(back) && !atPlace.has(back)) atPlace.set(back, a);
   }
+  const found = [];
+  for (let back = 1; atPlace.has(back); back += 1) found.push(atPlace.get(back));
   return found;
 }
 
@@ -713,6 +725,17 @@ const left = await waitFor(
 ok(left, 'ONE KEYSTROKE LEAVES THE CARD: no ceremony to sit through');
 await takeCardForward();
 
+// Read on far enough to be off the route. Genesis 2 used to serve here and no
+// longer can -- ADR 0012 made it a node, which was the whole point of the ADR --
+// so the harness stands where the owner was when he found the abbey instead.
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-book').value = 'Genesis';
+stubEl('menu-chapter').value = '4';
+stubEl('menu-go').click();
+await waitFor(() => refText().startsWith('Genesis 4'));
+tick(30);
+
 // The map.
 stubEl('menu-open').click();
 tick(2);
@@ -734,11 +757,11 @@ ok(Boolean(goButton), 'a passage unlocked by a completed origin can be travelled
 // is exhaustively tested as a graph, and none of that says whether the graph
 // reached a player's eyes. Read the panel back instead.
 
-// Where he stands. He has read straight on past the end of Genesis 1, so he is
-// in a chapter the graph does not name -- and the map used to answer that by
-// marking its own first entry, telling a player reading Genesis 2 that he was
-// in Genesis 1. docs/design/04-route.md#standing-off-the-route: mark nothing,
-// say plainly where he is, and leave the finished passages marked.
+// Where he stands. He has read on past the end of Genesis 3, so he is in a
+// chapter the graph does not name -- and the map used to answer that by marking
+// its own first entry, telling a player reading Genesis 4 that he was in
+// Genesis 1. docs/design/04-route.md#standing-off-the-route: mark nothing, say
+// plainly where he is, and leave the finished passages marked.
 const chapterNow = refText().split(':')[0].trim();
 const onTheRoute = nodeRows.some((t) => t.startsWith(chapterNow));
 const hereRows = rowsOf('map-nodes').filter((li) => textOf(li).includes('you are here'));
@@ -1294,6 +1317,190 @@ ok(travelPhases.size > 1,
    'while an ordinary chapter still scrolls, so the measurement means something',
    `${travelPhases.size} parallax positions over ${travelTyped} keys`);
 
+// --- the default scenery, and Genesis 4 --------------------------------------
+//
+// Measured before this existed: 1,159 of the Bible's 1,189 chapters -- 97.5% --
+// resolved to the abbey, because an authored table covers thirty of them and
+// everything else fell back to one constant. Every test in the repository walked
+// the authored 2.5%, which is exactly why nobody saw it. The owner did, by
+// reading on out of Genesis 1 and asking why Genesis 4 was "a dungeon instead of
+// a barren land".
+//
+// So this drives the fallback itself, off the running game: jump into chapters
+// the scene table does not name, in four different books, and read the colour
+// the game actually painted the sky.
+// docs/design/05-scenery-warps.md#the-default-is-a-property-of-the-text-and-the-bibles-is-open-country
+
+/** Stand at the top of a chapter and take the sky it paints. */
+const skyOf = async (book, chapter) => {
+  stubEl('menu-open').click();
+  tick(2);
+  stubEl('menu-book').value = book;
+  stubEl('menu-chapter').value = String(chapter);
+  stubEl('menu-go').click();
+  await waitFor(() => refText().startsWith(`${book === 'Psalms' ? 'Psalm' : book} ${chapter}:`));
+  tick(20);
+  return skyColour();
+};
+
+// An authored abbey, so the harness knows what a cloister actually looks like on
+// this screen rather than guessing at a hex string. Psalm 22-23 is `abbey` in the
+// scene table, and it is the only reference point that cannot go stale.
+const abbeySky = await skyOf('Psalms', 23);
+const ruthSky = await skyOf('Ruth', 2);
+const actsSky = await skyOf('Acts', 9);
+const kingsSky = await skyOf('1 Kings', 18);
+
+ok(abbeySky !== null && ruthSky !== null && actsSky !== null && kingsSky !== null,
+   'the harness reached four chapters and the sky was painted in each',
+   `${abbeySky} / ${ruthSky} / ${actsSky} / ${kingsSky}`);
+ok(ruthSky !== abbeySky && actsSky !== abbeySky && kingsSky !== abbeySky,
+   'AN UNAUTHORED CHAPTER IS NO LONGER A STONE CLOISTER',
+   `abbey ${abbeySky}, Ruth 2 ${ruthSky}, Acts 9 ${actsSky}, 1 Kings 18 ${kingsSky}`);
+ok(ruthSky === actsSky && actsSky === kingsSky,
+   'and they all take one default, which is what makes it a default',
+   `${ruthSky} / ${actsSky} / ${kingsSky}`);
+// The authored rows still win, or the default has eaten the scene table.
+ok(abbeySky !== null && (await skyOf('Exodus', 14)) !== abbeySky,
+   'while an authored passage still wears the theme it was authored with', '');
+
+// Genesis 4, as the owner asked for it: the field where the offerings are
+// brought, the ground that will not yield, and Nod. Typed through, so what is
+// asserted is the world the player is actually shown rather than the resolver.
+const genesis4 = [];
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-book').value = 'Genesis';
+stubEl('menu-chapter').value = '4';
+stubEl('menu-go').click();
+await waitFor(() => refText().startsWith('Genesis 4'));
+tick(20);
+// A chapter is typed a stretch at a time with a report card between them, so
+// this walks the stretches rather than the keys and stops the moment the game
+// leaves Genesis 4 -- which it does when the chapter is finished.
+for (let stretch = 0; stretch < 20; stretch += 1) {
+  if (!refText().startsWith('Genesis 4')) break;
+  for (let i = 0; i < 3000; i += 1) {
+    const first = Number((/Genesis 4:(\d+)/.exec(refText()) ?? [])[1]);
+    const sky = skyColour();
+    if (Number.isInteger(first) && sky !== null) genesis4.push({ verse: first, sky });
+    const k = askedFor();
+    if (k === null) break;
+    press(k);
+    tick();
+  }
+  tick(2);
+  await takeCardForward();
+  await waitFor(() => askedFor() !== null);
+}
+const g4Skies = new Set(genesis4.map((g) => g.sky));
+const g4Verses = new Set(genesis4.map((g) => g.verse));
+ok(g4Verses.size > 2, 'the harness typed its way across Genesis 4',
+   `${g4Verses.size} stretches sampled`);
+ok(g4Skies.size > 1, 'GENESIS 4 CHANGES AS IT IS TYPED, RATHER THAN BEING ONE ROOM',
+   `${g4Skies.size} distinct skies over ${genesis4.length} frames`);
+const g4First = genesis4.length > 0 ? genesis4[0].sky : null;
+const g4Last = genesis4.length > 0 ? genesis4[genesis4.length - 1].sky : null;
+ok(g4First !== null && g4First !== g4Last,
+   'THE FIELD AT THE START IS NOT THE GROUND HE IS DRIVEN OUT ONTO',
+   `v1 ${g4First} / last ${g4Last}`);
+ok(g4First === ruthSky,
+   'and it opens in the same open country every unauthored chapter opens in',
+   `${g4First} vs ${ruthSky}`);
+ok(g4First !== abbeySky && g4Last !== abbeySky,
+   'and neither end of it is the abbey the owner found here',
+   `${g4First} / ${g4Last} / abbey ${abbeySky}`);
+
+// --- the crossing into the resurrection --------------------------------------
+//
+// docs/decisions/0012-the-route-must-not-skip-the-events.md: the route ran
+// creation, fall, I AM, the shepherd, forsaken, the crucifixion -- and then
+// Revelation 22. "For a route built as promise and fulfilment, the thing the
+// whole argument turns on is absent." John 20 is reached by two threads from the
+// two places the story began, and neither phrase was invented for it: `the first
+// day` is Genesis 1:5 and John 20:1 verbatim, in both shipped translations.
+//
+// What is asserted is that the newest crossing behaves exactly like the oldest
+// one. The warp is the same mechanism, so the only thing that can be wrong is
+// the data -- and the data is what was added.
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-map').click();
+tick(2);
+const graveRow = rowsOf('map-nodes').find((li) => String(li.children[0].textContent) === 'John 20');
+const toGrave = graveRow && graveRow.children.find((c) => c.tagName === 'BUTTON');
+ok(Boolean(graveRow), 'THE RESURRECTION IS ON THE MAP AT ALL, WHICH IS WHAT ADR 0012 IS ABOUT',
+   rowsOf('map-nodes').map(textOf).join(' / ').slice(0, 200));
+ok(Boolean(toGrave), 'and Genesis 1 being finished is what opens the thread into it',
+   graveRow ? textOf(graveRow) : '(John 20 is not on the map)');
+ok(rowsOf('map-threads').map(textOf).some((t) => t.includes('John 20') && t.includes('first day')),
+   'and the thread names the phrase the two passages share',
+   rowsOf('map-threads').map(textOf).filter((t) => t.includes('John 20')).join(' / ') || '(none)');
+
+if (toGrave) {
+  const PHRASE = 'the first day';
+  const want = [...PHRASE].filter((c) => c !== ' ').length;
+  const boldNow = () => calls.fillText.filter((c) => c.style.includes('bold 17px'));
+  const holdsPhrase = () => {
+    const bold = boldNow();
+    return bold.length >= want
+      && bold.slice(-want).map((c) => c.v).join('') === PHRASE.replace(/ /g, '');
+  };
+  toGrave.click();
+  const began = await waitFor(holdsPhrase);
+  ok(began, 'travelling it starts a crossing, and the echo is lit on the rail',
+     boldNow().map((c) => c.v).join('') || '(nothing held)');
+  const graveColumns = new Set();
+  const graveRibbons = new Set();
+  let graveHeld = 0;
+  for (let i = 0; i < 140; i++) {
+    tick();
+    const bold = boldNow();
+    if (bold.length < want) continue;
+    const phrase = bold.slice(-want);
+    if (phrase.map((c) => c.v).join('') !== PHRASE.replace(/ /g, '')) continue;
+    graveColumns.add(phrase.map((c) => Math.round(c.x * 1e6) / 1e6).join(','));
+    graveRibbons.add(calls.fillText.filter((c) => c.style.includes('17px')).length);
+    graveHeld += 1;
+  }
+  ok(graveHeld > 1, 'the crossing runs for more than one frame', `${graveHeld} frames`);
+  ok(graveColumns.size === 1,
+     'AND THE ECHO INTO JOHN 20 HOLDS STILL, EXACTLY LIKE EVERY OLDER THREAD',
+     `${graveColumns.size} distinct column sets: ${[...graveColumns].join(' | ')}`);
+  ok(graveRibbons.size > 1,
+     'while the ribbon under it changed, so something really was held across a cut',
+     `ribbon lengths: ${[...graveRibbons].join(', ')}`);
+  await waitFor(() => refText().startsWith('John 20'));
+  ok(refText().startsWith('John 20'), 'and it arrives at the resurrection', refText());
+
+  // She arrives in the dark and it changes under her: tomb through verse 15,
+  // garden from verse 16. Both ends are read off the sky the game painted.
+  const tombSky = skyColour();
+  stubEl('menu-open').click();
+  tick(2);
+  stubEl('menu-map').click();
+  tick(2);
+  const met = rowsOf('map-party').map(textOf);
+  ok(met.some((t) => t.includes('Mary Magdalene')) === false,
+     'and she has not joined yet, because the chapter is not finished',
+     met.join(' / ').slice(0, 160));
+  press('Escape');
+  tick(4);
+  ok(tombSky !== null && tombSky !== abbeySky && tombSky !== ruthSky,
+     'JOHN 20 OPENS IN THE TOMB, WHICH IS NEITHER THE DEFAULT NOR THE ABBEY',
+     `${tombSky} / default ${ruthSky} / abbey ${abbeySky}`);
+}
+
+// Back where the rest of the harness expects to be standing.
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-book').value = 'Genesis';
+stubEl('menu-chapter').value = '1';
+stubEl('menu-go').click();
+await waitFor(() => refText().startsWith('Genesis 1'));
+await waitFor(() => askedFor() !== null);
+tick(20);
+
 // --- the two presentations of the rail ---------------------------------------
 //
 // docs/decisions/0011-respect-reduced-motion.md. The owner reported a motion
@@ -1516,6 +1723,15 @@ ok(jargon === undefined, 'AND NOTHING SAYS A WORD ONLY THE SOURCE TREE KNOWS', j
 // input, and this is exactly the reload the player would get.
 const FINISHED = JSON.parse(await readFile(resolve(ROOT, 'data/routes/pilgrimage.json'), 'utf8'))
   .edges.flatMap((e) => [e.from, e.to]);
+// Not every node hands somebody over. Genesis 3 is the chapter everyone is
+// driven out of and nobody joins you in it, so a route finished end to end is
+// one figure short of a node per figure -- see
+// docs/design/11-followers.md#who-joins-after-what.
+const HAS_FIGURE = new Set(
+  JSON.parse(await readFile(resolve(ROOT, 'data/followers.json'), 'utf8'))
+    .followers.map((f) => f.passage),
+);
+const MET = [...new Set(FINISHED)].filter((ref) => HAS_FIGURE.has(ref)).length;
 store.set('scriptorium.progress', JSON.stringify({
   version: 6, stage: 1, translation: 'WEB', route: 'pilgrimage',
   position: { book: 'Genesis', chapter: 1, unit: 1 },
@@ -1536,7 +1752,7 @@ ok(capped.every((f) => f.x < SCRIBE_X && f.y + 16 <= RAIL_BAND_TOP),
    'and every one of them is still behind him and still out of the reading band',
    capped.map((f) => `${f.x},${f.y}`).join(' '));
 const overflow = calls.fillText.find((c) => /^\+\d+$/.test(c.v));
-ok(overflow !== undefined && Number(overflow.v.slice(1)) === new Set(FINISHED).size - CAP,
+ok(overflow !== undefined && Number(overflow.v.slice(1)) === MET - CAP,
    'AND THE ONES WHO WALKED ON AHEAD ARE COUNTED RATHER THAN FORGOTTEN',
    overflow ? overflow.v : '(no count on screen)');
 ok(overflow !== undefined && overflow.y + 4 < RAIL_BAND_TOP && overflow.y > 22,
@@ -1550,9 +1766,9 @@ tick(2);
 stubEl('menu-map').click();
 tick(2);
 const wholeParty = rowsOf('map-party').map(textOf);
-ok(wholeParty.length === new Set(FINISHED).size,
+ok(wholeParty.length === MET,
    'THE MAP NAMES EVERYONE, INCLUDING THE ONES THE SCREEN IS NOT SHOWING',
-   `${wholeParty.length} named, ${new Set(FINISHED).size} met`);
+   `${wholeParty.length} named, ${MET} met`);
 ok(/walk on ahead/.test(String(stubEl('map-party-note').textContent)),
    'and says why some of them are not on the screen',
    String(stubEl('map-party-note').textContent));

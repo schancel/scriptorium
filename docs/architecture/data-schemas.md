@@ -11,7 +11,9 @@ tables in `docs/design/` by `tools/build_from_docs.py` and must never be hand-ed
 | `data/items.json` | `docs/design/03-pacing.md` | yes |
 | `data/themes.json` | `docs/design/05-scenery-warps.md` | yes |
 | `data/scenes/bible.json` | `docs/design/05-scenery-warps.md` | yes |
+| `data/scenes/defaults.json` | `docs/design/05-scenery-warps.md` | yes |
 | `data/routes/pilgrimage.json` | `docs/design/04-route.md` | yes |
+| `data/followers.json` | `docs/design/11-followers.md` | yes |
 | `data/texts/**` | `tools/fetch_bible.py` | fetched |
 | `data/coverage.json` | `tools/build_wordlists.py` | measured |
 | `data/tunes/*.json` | hand-authored, or `tools/midi_to_tune.py` | no |
@@ -62,9 +64,23 @@ alone is ~200 KB, which is why nothing is bundled up front.
 
 `range` is `Book C`, `Book C-C`, or `Book C:V-V` for a chapter that moves faster than one
 scene can hold. A verse range wins over a chapter range covering the same ground, so
-chapter rows stay a useful default. Ranges of the same precision must not overlap. Any routed passage without a
-row resolves to `abbey`. A text with no scene file at all resolves entirely to `abbey`,
-which is the expected outcome for user-imported books.
+chapter rows stay a useful default. Ranges of the same precision must not overlap.
+
+**The fallback is per text, not one constant.** A passage with no row resolves to its
+text's default theme, and the defaults are their own generated table:
+
+```json
+{ "defaults": [ { "text": "bible", "theme": "hills",
+                  "why": "dry hills and wide sky: the ground most of the book actually happens on" } ] }
+```
+
+`theme` must name a theme `data/themes.json` carries. A text with no row here, and a text
+with no scene file at all, resolves entirely to `abbey` — which is the expected outcome
+for user-imported books and is unchanged. The Bible has a row because it is not that case:
+authored scenery covers 30 of its 1,189 chapters, so for 97.5% of the book the default
+*is* the game, and a stone cloister is the wrong picture of Ruth, Kings, the Psalms and
+Acts alike. See
+[the default is a property of the text](../design/05-scenery-warps.md#the-default-is-a-property-of-the-text-and-the-bibles-is-open-country).
 
 `held` is `"yes"` on a range where the camera does not translate and word progress moves
 the set piece instead, and `null` everywhere else — see

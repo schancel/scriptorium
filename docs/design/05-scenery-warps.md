@@ -21,7 +21,8 @@ A **theme** is the reusable bundle: palette, tileset, parallax layers, and tune.
 
 | id | palette | mood | tune |
 |---|---|---|---|
-| `abbey` | stone greys, candle amber | the default; cloister and library | `veni-creator` |
+| `abbey` | stone greys, candle amber | cloister and library; indoors, when the text says so | `veni-creator` |
+| `hills` | dry grass and olive, wide pale sky | open country: fields, flocks, the road between towns | `cwm-rhondda` |
 | `garden` | deep greens, gold light | Eden, before the fall | `wondrous-love` |
 | `desert` | ochre, bleached sky | wilderness and wandering | `cwm-rhondda` |
 | `sea` | blues, foam white | flood, parted waters, deep | `melita` |
@@ -49,6 +50,65 @@ mood. This one is white-gold on void black, with light gathering out of the dark
 carries the first day of Genesis 1, John 1's light in the darkness and the new creation
 equally well -- because all three *look* like a dawn. So it is `daybreak`, which says what
 is on the screen and settles the question the old name raised.
+
+## The default is a property of the text, and the Bible's is open country
+
+A scene map covers the passages somebody has authored. Everything else falls back, and
+until now the fallback was `abbey` for every text alike. Measured over the shipped canon:
+**1,159 of the Bible's 1,189 chapters — 97.5% — resolved to a stone cloister**, and 57 of
+its 66 books had no authored row at all. The owner found it by reading onward out of
+Genesis 1 and asking why Genesis 4 was *"a dungeon instead of a barren land"*.
+
+Genesis 4 was not an oversight. It was the rule everywhere the route does not go, and the
+route is the 2.5% that every test walks. A default nobody sees is a default nobody checks.
+
+**An abbey is the right neutral for an imported novel and the wrong one for Scripture.**
+For a Gutenberg book it is indoor, bookish and claims nothing — better a neutral library
+than a keyword heuristic confidently rendering a desert because a novel mentioned sand.
+But the Bible is overwhelmingly outdoors: fields, hills, wilderness, road, sea. Ruth is a
+barley field, Kings is hill country, the Psalms are pasture and enemies on the road, Acts
+is the road itself. Rendering all of that as a cloister is the same class of untruth the
+map screen was fixed for — asserting a place the text does not support.
+
+So the fallback is a **per-text** row rather than one constant:
+
+<!-- generates: data/scenes/defaults.json -->
+
+| text | theme | why |
+|---|---|---|
+| `bible` | `hills` | dry hills and wide sky: the ground most of the book actually happens on |
+
+A text with no row here keeps `abbey`, and so does a text with no scene file at all —
+which is exactly what an imported Gutenberg book has, so nothing about that case changes.
+
+**And the abbey becomes what it should always have been.** Not the world by accident, but
+a place the scribe is *in* when the text puts him there: a room with the doors shut, a
+psalm read indoors. It is still the theme of the cloister he is writing in. It is no
+longer the theme of Sinai, Jericho, Nod and the road to Emmaus by default.
+
+### Why `hills` and not a fourth kind of desert
+
+`desert` already exists and is not this. It is ochre under a bleached sky, and it is
+*wilderness* — the forty years, the place with nobody in it. Most of the Bible is not
+that. It is worked, inhabited country: a field with two brothers bringing offerings out
+of it, a threshing floor, a hillside with sheep on it, a road with towns at both ends.
+That is a different palette (dry grass and olive against a wide pale sky, not ochre
+against bleached white) and a different middle distance (scattered scrub, not more dunes).
+
+The two share a tune, and that is deliberate. `cwm-rhondda` is *"pilgrim through this
+barren land"*, this route is a pilgrimage, and country and wilderness are the same road
+under different weather — so walking out of Judah into the wilderness does not restart the
+music, which is the same argument the [tune-per-chapter rule](#verse-ranges) makes.
+
+Two new tiles, and the ground reused. `tile_ridge` is the far band: two crests of
+*unequal* height with a saddle between them, because this file already says of the wave
+that *"a slow single swell reads as a hill however blue you paint it"* — and the converse
+holds, so a horizon of identical humps reads as a desert whatever colour it is given.
+`tile_scrub` is the middle: low bushes standing apart with sky between them, which is what
+separates grazed country from the closed canopy of the garden. The floor is `tile_grass`,
+recoloured — dry grass and green grass are the same grass under a different light, which
+is the recolour argument this whole table is built on, and it is why the abbey, the temple
+and the tomb all stand on one slab of cut stone.
 
 ## A chapter is not one place
 
@@ -213,6 +273,69 @@ them. And it is why a descent into the earth is something the **page** does whil
 watches, not something he performs. He is illuminating it, which is what a scriptorium is
 for.
 
+### Genesis 4, which is where the default earns itself
+
+Genesis 4 is the chapter that exposed the abbey, so it is also the fairest test of what
+replaced it. Three beats, and the owner named all three: the field where they bring their
+offerings, the ground that will not yield after it has opened its mouth for his brother's
+blood, and Nod, east of Eden, where he settles as a fugitive and a wanderer.
+
+| range | theme | held | reads as |
+|---|---|---|---|
+| `Genesis 4:1-10` | `hills` | — | worked country: a keeper of sheep, a tiller of the ground, the offerings carried out to it, and the field they go into |
+| `Genesis 4:11-15` | `desert` | yes | cursed from the ground: it will not yield its strength to him, and the land bleaches while it is being said |
+| `Genesis 4:16-26` | `desert` | — | Nod, east of Eden, and the world scrolls again as he goes |
+
+**The boundary is verse 11, not verse 8.** The killing happens in the field and the field
+is still country; what turns the ground is the sentence passed on it — *"now you are
+cursed because of the ground, which has opened its mouth"*. So the palette eases from dry
+grass to ochre across the verse where the curse is spoken, and the ground goes barren
+under the player as he types the reason it does.
+
+**The middle beat is [held](#held-scenes-not-every-passage-is-a-journey) and the last is
+not**, which is exactly the shape Genesis 3 has: nobody travels while *"where is Abel your
+brother?"* is being asked, and verse 16 — he leaves, and lives in the land of Nod — is the
+one thing in the chapter that is movement. Genesis 3:24 and Genesis 4:16 are the same row
+written twice, which is the argument for the flag rather than for a mechanism.
+
+Nothing here has a set piece. Three themes and one flag carry the whole chapter, which is
+the point of having a default that is already the right kind of place: an authored chapter
+should mostly be saying *where*, and reach for a flourish only where the text does
+something a palette cannot.
+
+### John 20, a tomb that becomes a garden
+
+The [route reaches the resurrection](../decisions/0012-the-route-must-not-skip-the-events.md)
+now, and its chapter is the clearest case for verse resolution the game has after
+Genesis 1: it opens in the dark outside a grave and ends in a room with the doors shut,
+and in between a woman turns round and stops mistaking a garden for a graveyard.
+
+| range | theme | setpiece | reads as |
+|---|---|---|---|
+| `John 20` | `daybreak` | `light_from_dark` | the chapter as a whole, which is what the *tune* is keyed on |
+| `John 20:1-15` | `tomb` | `light_from_dark` | still dark, the stone gone, the linen lying — and light gathering along the ground as the verses are written |
+| `John 20:16-18` | `garden` | — | *"Jesus said to her, 'Mary.'"* The place does not move; what she is standing in changes |
+| `John 20:19-31` | `abbey` | — | evening, the same day, and the doors locked where the disciples were assembled |
+
+**The cut is on verse 16 because that is where she recognises him**, not on verse 15 where
+the word *gardener* appears. Verse 15 is the mistake — she takes him for the gardener and
+asks where the body has been carried — and rendering the garden there would be the scenery
+agreeing with the error. One verse later he says her name, and the palette has already been
+easing toward green for half the window, so the world arrives at the same moment she does.
+
+**The chapter row is `daybreak` and is never drawn**, exactly as Genesis 1's is. Three
+verse rows cover all thirty-one verses, so the chapter row's only jobs are to answer *what
+is John 20* on the map and to choose the hymn, which
+[follows the chapter and not the verse](#verse-ranges). `daybreak` is the right answer to
+both: this file already says the theme "carries the first day of Genesis 1, John 1's light
+in the darkness and the new creation equally well". A tune keyed on `tomb` would open the
+resurrection with a passion chorale and then hold it for thirty-one verses.
+
+**The last third is the abbey, and this is the first row in the table that means it.**
+Verses 19 to 31 are indoors: evening, a shut door, a room with people in it. That is what
+the theme is a picture of, and it can be used for it now that it is not also the picture of
+every chapter nobody has authored.
+
 ## Set pieces
 
 A **set piece** is a one-off scripted flourish for a specific passage — optional per
@@ -236,6 +359,9 @@ scene, so most passages need only a theme and the memorable ones can be special.
 | Genesis 3:7 | `garden` | `fig_leaves` | yes |
 | Genesis 3:8-23 | `garden` | `walking_in_the_garden` | yes |
 | Genesis 3:24 | `garden` | `flaming_sword` | — |
+| Genesis 4:1-10 | `hills` | — | — |
+| Genesis 4:11-15 | `desert` | — | yes |
+| Genesis 4:16-26 | `desert` | — | — |
 | Genesis 6-9 | `sea` | `rising_water` | — |
 | Genesis 22 | `mountain` | — | — |
 | Exodus 3 | `desert` | `burning_bush` | — |
@@ -255,6 +381,10 @@ scene, so most passages need only a theme and the memorable ones can be special.
 | John 8 | `temple` | `lamps_kindled` | — |
 | John 10 | `garden` | `gate_of_the_fold` | — |
 | John 19 | `mountain` | `darkness_at_noon` | — |
+| John 20 | `daybreak` | `light_from_dark` | — |
+| John 20:1-15 | `tomb` | `light_from_dark` | — |
+| John 20:16-18 | `garden` | — | — |
+| John 20:19-31 | `abbey` | — | — |
 | Revelation 22 | `garden` | `tree_of_life` | — |
 
 `held` marks a range in which the camera does not translate and the tableau carries the
@@ -286,6 +416,7 @@ answering rather than the player collecting:
 | John 10 | `gate_of_the_fold` | the gate of the sheepfold opens across the band and stays open |
 | Matthew 27, John 19 | `darkness_at_noon` | the palette drains to greyscale over the passage |
 | John 1 | `light_from_dark` | the void takes light as the verses are written |
+| John 20:1-15 | `light_from_dark` | the same flourish over a tomb: the dark drains off the band and light gathers along the ground, because she came while it was still dark |
 
 The five flourishes Genesis 3 is made of are all
 [held](#held-scenes-not-every-passage-is-a-journey) but the last, so in four of them the
@@ -306,8 +437,11 @@ drains the sea off and closes green over the ground; `swarming` fills the band w
 moving that were not there before. Set pieces are scripted, not procedural — there are few
 enough that hand-authoring each is cheaper than a system.
 
-Any passage on a route with no row here resolves to `abbey`. `make check` asserts every
-routed passage resolves to a theme and that no ranges overlap. Overlap is checked *within*
+Any passage with no row here resolves to its
+[text's default](#the-default-is-a-property-of-the-text-and-the-bibles-is-open-country) --
+`hills` for the Bible, `abbey` for a text with no default row and for a text with no
+scene file at all. `make check` asserts every routed passage resolves to a theme, that
+every default names a theme this game can draw, and that no ranges overlap. Overlap is checked *within*
 a precision: two chapter rows may not claim one chapter and two verse rows may not claim
 one verse, but a verse row is expected to sit inside a chapter row and wins where it does.
 

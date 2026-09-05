@@ -118,6 +118,7 @@ SHAPERS = {
     "data/curriculum.json": shape_curriculum,
     "data/routes/pilgrimage.json": shape_route,
     "data/scenes/bible.json": shape_scenes,
+    "data/scenes/defaults.json": shape_list("defaults"),
     "data/items.json": shape_list("items"),
     "data/themes.json": shape_list("themes"),
     "data/followers.json": shape_list("followers"),

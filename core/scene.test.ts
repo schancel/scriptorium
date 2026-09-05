@@ -680,9 +680,9 @@ const PIECE_CLOCKS: readonly number[] = [0, 1400]; // tuning-exempt: two art pha
  *
  * Where a flourish lands is a matter of geometry and not of colour -- every rect
  * it draws is clamped into the same band whatever the palette is -- so drawing
- * all eighteen in all twelve worlds is a hundred and fifty thousand frames to
- * assert one number twelve identical times. Cycling covers every world across
- * the test without multiplying it out.
+ * every flourish in every world is a hundred and fifty thousand frames to assert
+ * one number a dozen identical times. Cycling covers every world across the test
+ * without multiplying it out.
  */
 const THEME_ROTA: readonly string[] = [...WORLDS.keys()];
 

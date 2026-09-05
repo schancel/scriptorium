@@ -24,9 +24,9 @@
  *    names and sprite ids; `followerPoses` reads geometry and returns positions.
  *    Neither returns a number anything else in the game consumes, and there is
  *    no function in this file that takes a `DamageState`, a `Score` or a heart.
- *  - **A pose has five fields** -- two sprite ids, an x, a y and a frame -- and
- *    deliberately no sixth in which a bonus or a shield could be written. Same
- *    argument as `Strike` in `core/entities.ts`.
+ *  - **A pose has five fields** -- a body, a mark (or nothing), an x, a y and a
+ *    frame -- and deliberately no sixth in which a bonus or a shield could be
+ *    written. Same argument as `Strike` in `core/entities.ts`.
  *
  * ## Derived, never stored
  *
@@ -74,7 +74,16 @@ export interface FollowerRow {
   readonly who: string;
   readonly body: string;
   readonly cloth: string;
-  readonly mark: string;
+  /**
+   * The one thing the figure carries, or null for a figure carrying nothing.
+   *
+   * Null is authored, not missing. Mary Magdalene is empty-handed in every verse
+   * of John 20 -- the jar of spices is Luke's and Mark's, and in John the spices
+   * are Nicodemus's the evening before -- so drawing her with one would be the
+   * art asserting what the passage does not. See
+   * docs/design/11-followers.md#a-figure-may-carry-nothing.
+   */
+  readonly mark: string | null;
 }
 
 export interface Roster {
@@ -102,6 +111,18 @@ function asOneOf(value: unknown, allowed: readonly string[], what: string): stri
 }
 
 /**
+ * The same, but a blank cell is a figure carrying nothing rather than an error.
+ *
+ * Only `mark` may be blank, and only *blank*: a string that names no art is
+ * still a mistyped row and still throws, because a silhouette that quietly lost
+ * its staff reads to the player as the game forgetting who he met.
+ */
+function asOneOfOrNothing(value: unknown, allowed: readonly string[], what: string): string | null {
+  if (value === null || value === undefined) return null;
+  return asOneOf(value, allowed, what);
+}
+
+/**
  * Parse the roster file.
  *
  * Strict about the art ids for the same reason `core/route.ts` is strict about a
@@ -126,7 +147,7 @@ export function loadFollowers(parsed: unknown): Roster {
       who: asString(row['who'], `"${ref}".who`),
       body: asOneOf(row['body'], FOLLOWER_BODIES, `"${ref}".body`),
       cloth: asOneOf(row['cloth'], FOLLOWER_CLOTHS, `"${ref}".cloth`),
-      mark: asOneOf(row['mark'], FOLLOWER_MARKS, `"${ref}".mark`),
+      mark: asOneOfOrNothing(row['mark'], FOLLOWER_MARKS, `"${ref}".mark`),
     };
   });
   if (rows.length === 0) throw new Error('followers: no figures');
@@ -140,7 +161,8 @@ export interface Follower {
   readonly ref: string;
   readonly who: string;
   readonly bodyId: string;
-  readonly markId: string;
+  /** Null for a figure carrying nothing; see `FollowerRow.mark`. */
+  readonly markId: string | null;
 }
 
 function figureFor(row: FollowerRow): Follower {
@@ -148,7 +170,7 @@ function figureFor(row: FollowerRow): Follower {
     ref: row.ref,
     who: row.who,
     bodyId: followerBodyId(row.body, row.cloth),
-    markId: followerMarkId(row.mark),
+    markId: row.mark === null ? null : followerMarkId(row.mark),
   };
 }
 
@@ -187,7 +209,7 @@ export function party(roster: Roster, route: Route, state: MapState): readonly F
  * sentence in the strip under the rail, once, and is gone as he types on. See
  * docs/design/11-followers.md#arriving-with-a-line.
  *
- * Deadpan and formed from the roster, so eighteen of the nineteen need no
+ * Deadpan and formed from the roster, so nineteen of the twenty need no
  * authoring at all: the row's `who` with its first letter raised, and "walks
  * with you". `the shepherd` becomes "The shepherd walks with you."
  *
@@ -200,7 +222,7 @@ const ARRIVAL_JOKES: Readonly<Record<string, string>> = {
    * The owner asked for this twice and finds it funny, and it is his game.
    *
    * It is also the right joke, and the reason it is the *only* one: it lands
-   * because the other eighteen lines are flat, and one gag among nineteen
+   * because the other nineteen lines are flat, and one gag among twenty
    * deadpan arrivals is funnier than a gag every time. Adding a second entry to
    * this table would spend the first one.
    *
@@ -275,7 +297,8 @@ export interface FollowerGeometry {
  */
 export interface FollowerPose {
   readonly bodyId: string;
-  readonly markId: string;
+  /** Null for a figure carrying nothing: one fewer draw command, no placeholder. */
+  readonly markId: string | null;
   readonly x: number;
   readonly y: number;
   readonly frame: number;

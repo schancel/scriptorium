@@ -457,7 +457,7 @@ export interface FrameState {
    * A follower who has just joined, named in one sentence.
    *
    * Shares the coaching strip, and sits between the two: a first-run note is
-   * spent three times in a player's life, an arrival nineteen times, and a
+   * spent three times in a player's life, an arrival twenty times, and a
    * doorway stands open for the rest of its verse, so the rarer thing wins the
    * strip. The wording is `arrivalLine` in `core/followers.ts`, beside the
    * roster it is formed from.
@@ -1737,13 +1737,14 @@ function pushScene(
  *  - **Never in the reading band.** The figures are sixteen pixels tall with
  *    their feet on the same line the scribe's are on, which is the line the
  *    scenery band ends at.
- *  - **No speech, no icons, no numbers over heads.** Two sprites per figure --
- *    a body and the thing it carries -- and the one number on screen is the
- *    count of the figures that are *not* here, standing where the next of them
- *    would have been.
+ *  - **No speech, no icons, no numbers over heads.** At most two sprites per
+ *    figure -- a body and the thing it carries, and only the body for a figure
+ *    carrying nothing -- and the one number on screen is the count of the
+ *    figures that are *not* here, standing where the next of them would have
+ *    been.
  *
  * The mark is a second command rather than a second sheet of bespoke sprites,
- * which is what keeps nineteen figures down to three silhouettes and nineteen
+ * which is what keeps twenty figures down to four silhouettes and nineteen
  * small pictures. See the follower section of `core/sprites.ts`.
  */
 function pushFollowers(
@@ -1771,7 +1772,9 @@ function pushFollowers(
     if (!onScreen(x)) continue;
     const y = px(pose.y);
     cmds.push({ op: 'sprite', id: pose.bodyId, x, y, frame: pose.frame, theme });
-    cmds.push({ op: 'sprite', id: pose.markId, x, y, theme });
+    // A figure carrying nothing emits no second command at all, rather than a
+    // blank sprite: docs/design/11-followers.md#a-figure-may-carry-nothing.
+    if (pose.markId !== null) cmds.push({ op: 'sprite', id: pose.markId, x, y, theme });
   }
   if (line.unseen > 0) {
     // Where the next figure would have stood, on the ground line, in the
@@ -1900,7 +1903,7 @@ export function drawFrame(state: FrameState, rail: RailState, tuning: Tuning): D
   if (warp !== undefined) pushHeldEcho(cmds, warp);
   // One sentence, in the one strip reserved for one, and the rarer thing wins
   // it. A first-run note is spent three times in a player's life and never comes
-  // back; a follower arrives nineteen times; a doorway stands open for the rest
+  // back; a follower arrives twenty times; a doorway stands open for the rest
   // of its verse. docs/design/11-followers.md#arriving-with-a-line.
   const note = state.note;
   const arrival = state.arrival;

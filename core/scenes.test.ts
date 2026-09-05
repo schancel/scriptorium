@@ -22,6 +22,8 @@ import { fileURLToPath } from 'node:url';
 
 import {
   GENERIC_SCENE,
+  defaultThemeFor,
+  loadSceneDefaults,
   loadScenes,
   overlappingRanges,
   rowFor,
@@ -53,12 +55,15 @@ function loadDataFile(name: string): unknown {
   return JSON.parse(readFileSync(url, 'utf8')) as unknown;
 }
 
-const scenes: SceneMap = loadScenes(loadDataFile('scenes/bible.json'));
+const defaults = loadSceneDefaults(loadDataFile('scenes/defaults.json'));
+const scenes: SceneMap = loadScenes(loadDataFile('scenes/bible.json'), defaults);
+/** What an unauthored chapter of the Bible resolves to. Not the abbey. */
+const BIBLE_DEFAULT = scenes.defaultTheme;
 const route = loadRoute(loadDataFile('routes/pilgrimage.json'));
 const themes = new Set(loadThemes(loadDataFile('themes.json')).map((t) => t.id));
 const tuning: Tuning = loadTuning(loadDataFile('tuning.json'));
 
-const ROW_COUNT = 34; // tuning-exempt: rows in docs/design/05-scenery-warps.md#set-pieces
+const ROW_COUNT = 41; // tuning-exempt: rows in docs/design/05-scenery-warps.md#set-pieces
 
 /** The seven scenes Genesis 1 is authored as, first verse of each. */
 const GENESIS_1: readonly (readonly [number, string])[] = [
@@ -80,6 +85,7 @@ test('scene ranges do not overlap', () => {
 test('overlap detection has teeth', () => {
   const clashing: SceneMap = {
     text: 'bible',
+    defaultTheme: BIBLE_DEFAULT,
     rows: [
       ...scenes.rows,
       // tuning-exempt: chapter numbers in a fixture range
@@ -99,6 +105,7 @@ test('TWO VERSE ROWS CLAIMING ONE VERSE IS AN OVERLAP, AND A NESTED ONE IS NOT',
   assert.deepEqual(overlappingRanges(scenes), [], 'the real table nests, it does not clash');
   const clashing: SceneMap = {
     text: 'bible',
+    defaultTheme: BIBLE_DEFAULT,
     rows: [
       ...scenes.rows,
       // tuning-exempt: verse numbers in a fixture range
@@ -236,14 +243,52 @@ test('every Gospel passage the route names now carries a set piece', () => {
   }
 });
 
-test('a routed passage with no row is an abbey, not an error', () => {
-  assert.equal(rowFor(scenes, 'Leviticus 1'), null);
-  assert.equal(themeFor(scenes, 'Leviticus 1'), DEFAULT_THEME);
-  assert.equal(setpieceFor(scenes, 'Leviticus 1'), null);
-  assert.equal(themeFor(scenes, 'Genesis 4'), DEFAULT_THEME, 'between two authored ranges');
+test('AN UNAUTHORED CHAPTER IS OPEN COUNTRY, AND NO LONGER A STONE CLOISTER', () => {
+  // The measured problem this default exists for: 1,159 of the Bible's 1,189
+  // chapters had no authored row, so 97.5% of the book was a cloister -- and the
+  // only chapters any test walked were the authored 2.5%. The owner found it by
+  // reading on out of Genesis 1 and asking why Genesis 4 was "a dungeon instead
+  // of a barren land". These are chapters nothing in the table names, spread
+  // across law, history, wisdom, prophecy and the epistles on purpose.
+  const unauthored = [
+    'Leviticus 1', 'Ruth 2', '1 Kings 18', 'Psalm 84',
+    'Isaiah 40', 'Amos 1', 'Luke 15', 'Acts 9', 'Romans 8',
+  ];
+  for (const ref of unauthored) {
+    assert.equal(rowFor(scenes, ref), null, `${ref} is authored after all`);
+    assert.equal(themeFor(scenes, ref), BIBLE_DEFAULT, `${ref} did not take the default`);
+    assert.notEqual(themeFor(scenes, ref), DEFAULT_THEME, `${ref} is still an abbey`);
+    assert.equal(setpieceFor(scenes, ref), null);
+    assert.ok(WORLDS.has(themeFor(scenes, ref)), `${ref} -> a theme with no world`);
+  }
+  // The default is authored data, not a constant in this file.
+  assert.equal(BIBLE_DEFAULT, defaultThemeFor(defaults, 'bible'));
+  assert.notEqual(BIBLE_DEFAULT, DEFAULT_THEME);
+});
+
+test('a text that has chosen no default still falls back to the abbey', () => {
+  // The imported-book case, which must not move. `abbey` stays the answer for
+  // every text with no row of its own, and for a text with no scene file at all.
+  assert.equal(defaultThemeFor(defaults, 'moby-dick'), DEFAULT_THEME);
+  assert.equal(defaultThemeFor(null, 'bible'), DEFAULT_THEME);
+  const imported = loadScenes({ text: 'moby-dick', scenes: [{ range: 'Moby Dick 1', theme: 'sea' }] }, defaults);
+  assert.equal(imported.defaultTheme, DEFAULT_THEME);
+  assert.equal(themeFor(imported, 'Moby Dick 42'), DEFAULT_THEME);
+  assert.equal(themeFor(imported, 'Moby Dick 1'), 'sea', 'an authored row still wins');
+});
+
+test('a malformed defaults file is a load error, and a duplicate text is too', () => {
+  assert.throws(() => loadSceneDefaults({}), /no "defaults" array/);
+  assert.throws(() => loadSceneDefaults({ defaults: [{ text: 'bible' }] }), /theme is not a string/);
+  assert.throws(
+    () => loadSceneDefaults({ defaults: [{ text: 'bible', theme: 'sea' }, { text: 'bible', theme: 'void' }] }),
+    /two defaults claim/,
+  );
 });
 
 test('A TEXT WITH NO SCENE MAP IS AN ABBEY THROUGHOUT, AND THAT IS CORRECT', () => {
+  // Unchanged by the per-text default, and that is the point of making it per
+  // text: a Gutenberg import has no map, so it never reaches one.
   const imported = [
     'Moby Dick 1',
     'Moby Dick 42',
@@ -302,7 +347,9 @@ test('nothing else in the table stands still, so the world still travels', () =>
   // A flag that had leaked onto the ordinary rows would stop the game scrolling
   // everywhere and look exactly like a broken camera.
   const heldRows = scenes.rows.filter((row) => row.held).map((row) => row.range);
-  assert.deepEqual(heldRows, ['Genesis 3:1-5', 'Genesis 3:6', 'Genesis 3:7', 'Genesis 3:8-23']);
+  assert.deepEqual(heldRows, [
+    'Genesis 3:1-5', 'Genesis 3:6', 'Genesis 3:7', 'Genesis 3:8-23', 'Genesis 4:11-15',
+  ]);
   for (const [verse] of GENESIS_1) {
     assert.equal(sceneAtVerse(scenes, 'Genesis 1', verse, tuning).held, false);
   }
@@ -333,6 +380,87 @@ test('a text with no scene file has nothing held, like everything else', () => {
   assert.equal(GENERIC_SCENE.held, false);
   assert.equal(sceneFor(null, 'The Wind in the Willows 3').held, false);
   assert.equal(sceneAtVerse(null, 'The Wind in the Willows 3', 2, tuning).held, false);
+});
+
+test('GENESIS 4 CHANGES AS IT IS TYPED: THE FIELD, THE GROUND, AND NOD', () => {
+  // The chapter that exposed the abbey, and the fairest test of what replaced
+  // it. Three beats, in the owner's own order: the field where they bring their
+  // offerings, the ground that will not yield after it has opened its mouth for
+  // his brother's blood, and Nod, east of Eden.
+  const at = (verse: number) => sceneFor(scenes, `Genesis 4:${String(verse)}`);
+  assert.equal(at(3).theme, BIBLE_DEFAULT, 'the offerings are brought out of open country'); // tuning-exempt: a verse number from the scene table
+  assert.equal(at(8).theme, BIBLE_DEFAULT, 'and the field is still country when they go into it'); // tuning-exempt: a verse number from the scene table
+  assert.equal(at(12).theme, 'desert', 'the ground will not yield its strength'); // tuning-exempt: a verse number from the scene table
+  assert.equal(at(16).theme, 'desert', 'Nod, east of Eden'); // tuning-exempt: a verse number from the scene table
+
+  // The boundary is verse 11, where the curse is spoken -- not verse 8, where
+  // the killing happens. The field is a field until it is cursed.
+  assert.notEqual(at(10).theme, at(11).theme); // tuning-exempt: a verse number from the scene table
+  assert.equal(at(10).theme, at(1).theme); // tuning-exempt: a verse number from the scene table
+
+  // Held through the questioning, travelling again on the verse he leaves. The
+  // same shape as Genesis 3:24, which is the argument for a flag over a mechanism.
+  assert.equal(at(11).held, true); // tuning-exempt: a verse number from the scene table
+  assert.equal(at(15).held, true); // tuning-exempt: a verse number from the scene table
+  assert.equal(at(16).held, false, 'he leaves, and the world scrolls again'); // tuning-exempt: a verse number from the scene table
+  assert.equal(at(1).held, false);
+
+  // And the whole chapter is carried by themes and one flag: no set piece here.
+  for (const verse of [1, 8, 11, 16, 26]) { // tuning-exempt: sample verses
+    assert.equal(at(verse).setpiece, null);
+  }
+});
+
+test('the ground bleaches under the player as he types the reason it does', () => {
+  // The palette eases across verse 11 while the tiles cut at it, which is the
+  // whole of "between two scenes" applied to a chapter nobody had authored.
+  const at = (position: number) => sceneAtVerse(scenes, 'Genesis 4', position, tuning);
+  const before = at(10.9); // tuning-exempt: a position just short of the boundary
+  const after = at(11.1);  // tuning-exempt: a position just past it
+  assert.equal(before.theme, BIBLE_DEFAULT);
+  assert.equal(after.theme, 'desert');
+  assert.equal(before.blendTheme, 'desert');
+  assert.equal(after.blendTheme, BIBLE_DEFAULT);
+  assert.ok(before.blendMix > 0 && after.blendMix > 0);
+  // Far from the boundary nothing is moving, because nothing here is on a clock.
+  assert.equal(at(2).blendTheme, null);
+  assert.equal(at(20).blendTheme, null); // tuning-exempt: a verse number from the scene table
+});
+
+test('JOHN 20 IS A TOMB THAT BECOMES A GARDEN, ON THE VERSE SHE RECOGNISES HIM', () => {
+  // docs/decisions/0012-the-route-must-not-skip-the-events.md: "Its scene is
+  // tomb -> garden, changing under her as she recognises him, which is what
+  // verse-resolution scenery was built for."
+  const at = (verse: number) => sceneFor(scenes, `John 20:${String(verse)}`);
+  assert.equal(at(1).theme, 'tomb', 'she came while it was still dark');
+  assert.equal(at(15).theme, 'tomb', 'supposing him to be the gardener -- still the grave'); // tuning-exempt: a verse number from the scene table
+  assert.equal(at(16).theme, 'garden', '"Jesus said to her, Mary."'); // tuning-exempt: a verse number from the scene table
+  assert.equal(at(18).theme, 'garden'); // tuning-exempt: a verse number from the scene table
+  assert.equal(at(19).theme, 'abbey', 'evening, and the doors were locked'); // tuning-exempt: a verse number from the scene table
+
+  // The cut is on 16 and not on 15: verse 15 is the mistake, and a garden drawn
+  // there would be the scenery agreeing with it.
+  assert.notEqual(at(15).theme, at(16).theme); // tuning-exempt: a verse number from the scene table
+  assert.equal(at(1).setpiece, 'light_from_dark', 'the dark drains and light gathers');
+
+  // The chapter row is never drawn -- every verse is claimed by a finer row --
+  // but it is what the tune is keyed on, and it is not the tomb's.
+  assert.equal(themeFor(scenes, 'John 20'), 'daybreak');
+  assert.equal(setpieceFor(scenes, 'John 20'), 'light_from_dark');
+  for (let verse = 1; verse <= 31; verse += 1) { // tuning-exempt: verses in John 20
+    assert.notEqual(at(verse).theme, 'daybreak', 'the chapter row is a tune, not a picture');
+  }
+});
+
+test('the crossing into John 20 holds its echo, like every other thread', () => {
+  // Both threads into the resurrection land on a passage the scenery can draw,
+  // which is what a warp needs on the other side of the phase.
+  for (const ref of ['Genesis 2', 'John 20']) {
+    assert.ok(nodeRefs(route).includes(ref), `${ref} is not on the route`);
+    const theme = themeFor(scenes, ref);
+    assert.ok(themes.has(theme), `${ref} -> unknown theme ${theme}`);
+    assert.ok(WORLDS.has(theme));
+  }
 });
 
 test('every set piece the table names is implemented', () => {

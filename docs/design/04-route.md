@@ -13,16 +13,29 @@ later one does with it. Typing them back to back makes the connection land in a 
 reading them years apart never does.
 
 ```
-Genesis 1   creation ─────────────┐
-Genesis 3   the fall ─────────┐   │
-                              │   └──▶ John 1     "In the beginning was the Word"
-Exodus 3    I AM ─────────────┼──────▶ John 8     "before Abraham came into being, I AM"
-Psalm 23    the shepherd ─────┼──────▶ John 10    "I am the good shepherd"
-Psalm 22    "why have you ────┼──────▶ Matthew 27  quoted from the cross
-             forsaken me"     │
-Isaiah 53   the servant ──────┘
-                              └──────▶ Revelation 22   the tree of life, returned
+Genesis 1   creation ─────────┬──────▶ John 1        "In the beginning was the Word"
+                              ├──────▶ Genesis 2     "every living creature", named by the man
+                              └──────▶ John 20       "the first day", and it was still dark
+Genesis 3   the fall ─────────┬──────▶ Revelation 22  the tree of life, returned
+                              └──────▶ John 20        the garden, and the gardener
+Exodus 3    I AM ────────────────────▶ John 8        "before Abraham came into being, I AM"
+Psalm 23    the shepherd ────────────▶ John 10       "I am the good shepherd"
+Psalm 22    "why have you ───────────▶ Matthew 27     quoted from the cross
+             forsaken me"
 ```
+
+Two of those threads were added late and for the same reason
+([ADR 0012](../decisions/0012-the-route-must-not-skip-the-events.md)): the graph was
+authored from its *echoes*, echoes cluster on famous verses, and the events those verses
+are about had been left out. It reached the crucifixion and not the resurrection, and it
+stepped from Genesis 1 straight over Genesis 2 to the fall. Neither hole was visible from
+inside the route -- every edge in it was a real echo, and the check that verifies echoes
+cannot notice a passage nobody wrote an edge to.
+
+Nothing was invented to close them. `the first day` is Genesis 1:5 and John 20:1 verbatim
+in both shipped translations; `garden` stands in Genesis 3 and inside *"supposing him to
+be the gardener"* in John 20:15, which is where the word does its work; `every living
+creature` is made in Genesis 1:21 and named by the man in Genesis 2:19.
 
 Each edge appears on the map as a thread with a one-line note about the echo.
 
@@ -52,7 +65,10 @@ so the game is not editorialising, only showing what the text already does.
 | `i-am` | progression | Exodus 3 | John 8 | `I AM` | — | The name given at the bush, claimed at the temple |
 | `shepherd` | progression | Psalm 23 | John 10 | `shepherd` | — | The psalm's image, claimed in the first person |
 | `forsaken` | progression | Psalm 22 | Matthew 27 | `My God, my God` | — | Quoted from the cross, verbatim |
+| `living-creature` | progression | Genesis 1 | Genesis 2 | `every living creature` | — | Made in the first telling, named by the man in the second |
 | `tree-of-life` | progression | Genesis 3 | Revelation 22 | `tree of life` | — | The tree barred at the start, open at the end |
+| `first-day` | progression | Genesis 1 | John 20 | `the first day` | — | The new creation opens on the first day, in the dark, where Genesis opened |
+| `gardener` | progression | Genesis 3 | John 20 | `garden` | — | The garden where it went wrong, and the garden she took him for the gardener in |
 | `only-son` | flashback | John 19 | Genesis 22 | `your son` | `thy son` | A father, an only son, a hill — seen from the cross |
 | `serpent` | flashback | John 3 | Numbers 21 | `serpent` | — | John 3:14 cites the bronze serpent outright |
 | `three-days` | flashback | Matthew 12 | Jonah 1 | `three days and three nights` | — | Jesus names Jonah as the sign |
@@ -98,7 +114,7 @@ reload must not be a cheaper way to lose a room than walking out of one.
 ## Standing off the route
 
 A player can be in a chapter the graph does not name. The menu lets them jump anywhere,
-and reading straight on from Genesis 1 reaches Genesis 2, which is not a node.
+and reading straight on from Genesis 3 reaches Genesis 4, which is not a node.
 
 **The map must not claim they are somewhere they are not.** It previously fell back to the
 route's first entry, so someone in Genesis 2 was told *you are here* at Genesis 1 — a small
@@ -110,7 +126,7 @@ So when the current passage is not a node:
 - **No node is marked.** Nothing says *you are here*, because nothing on the map is where
   they are.
 - The map says plainly where they actually are, and that it is not on this route:
-  *You are reading Genesis 2, which is not on the Pilgrimage. Nothing is wrong — the
+  *You are reading Genesis 4, which is not on the Pilgrimage. Nothing is wrong — the
   route is a set of threads, not a fence.*
 - The last route node they completed stays marked as finished, so they can see where they
   left the threads and get back to one.

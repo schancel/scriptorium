@@ -52,7 +52,7 @@ import {
   type FrameState, type ReportMemory, type SceneCandle, type SceneState, type WarpView,
 } from '../../core/draw.js';
 import {
-  heldAt, loadScenes, sceneAtVerse, sceneFor as sceneAt,
+  heldAt, loadSceneDefaults, loadScenes, sceneAtVerse, sceneFor as sceneAt,
   type Scene, type SceneAt, type SceneMap,
 } from '../../core/scenes.js';
 import { setpieceState, type SetpieceState } from '../../core/setpieces.js';
@@ -1002,17 +1002,24 @@ async function boot(): Promise<void> {
   }
 
   /**
-   * The authored scene map, parsed by `core/scenes.ts`.
+   * The authored scene map, parsed by `core/scenes.ts`, and the per-text default
+   * the passages it does not name fall back to.
+   *
+   * Both are fetched inside one `try` on purpose: the ranges without the default
+   * would put 97.5% of the Bible back in a cloister, which is the exact bug the
+   * defaults table exists to fix, and it would do it silently. Either file
+   * failing means no scene map, which means the abbey throughout *and* a
+   * fallback banner -- one visible degraded mode instead of two, one of which
+   * looked like working software.
    *
    * Unreachable or malformed, it is `null` and every passage wears the abbey --
-   * which is the documented fallback and not a degraded mode, since that is
-   * exactly what an imported Gutenberg book gets. It still announces itself:
-   * a silent fallback is indistinguishable from working software, and this one
-   * would cost the game every theme and therefore every tune.
+   * which is what an imported Gutenberg book gets and not a degraded mode for
+   * it, but is a degraded mode here, so it announces itself.
    */
   let scenes: SceneMap | null = null;
   try {
-    scenes = loadScenes(await fetchJson('data/scenes/bible.json'));
+    const defaults = loadSceneDefaults(await fetchJson('data/scenes/defaults.json'));
+    scenes = loadScenes(await fetchJson('data/scenes/bible.json'), defaults);
   } catch {
     usingFallback(DATA_NAMES.scenery);
   }

@@ -77,8 +77,8 @@ function chapterUnits(edition: string, ref: string): readonly string[] | null {
 }
 
 /** Facts about the table, not tunables: changing one would make a claim wrong. */
-const EDGE_COUNT = 10;        // tuning-exempt: rows in docs/design/04-route.md#edges
-const PROGRESSION_COUNT = 5;  // tuning-exempt: likewise
+const EDGE_COUNT = 13;        // tuning-exempt: rows in docs/design/04-route.md#edges
+const PROGRESSION_COUNT = 8;  // tuning-exempt: likewise
 const FLASHBACK_COUNT = 5;    // tuning-exempt: likewise
 
 test('the real route file parses, with both kinds of edge', () => {
@@ -176,19 +176,23 @@ test('a progression destination unlocks when its origin is completed', () => {
 });
 
 test('THE MAP MARKS NO NODE WHEN THE PLAYER IS NOT ON ONE', () => {
-  // docs/design/04-route.md#standing-off-the-route. Reading straight on from
-  // Genesis 1 reaches Genesis 2, which the graph does not name -- and the map
-  // used to answer that by marking Genesis 1, telling a player he was somewhere
-  // he was not. A fresh map marks nothing either, for the same reason.
+  // docs/design/04-route.md#standing-off-the-route. Reading straight on out of
+  // Genesis 3 reaches Genesis 4, which the graph does not name -- and the map
+  // used to answer that by marking the route's first entry, telling a player he
+  // was somewhere he was not. A fresh map marks nothing either, for the same
+  // reason. (The example used to be Genesis 2, which ADR 0012 made a node.)
   const fresh = createMap(route);
   assert.equal(mapView(route, fresh).filter((n) => n.current).length, 0);
   assert.equal(standingOffRoute(route, fresh), null, 'nowhere yet is not off the route');
 
-  const off = arriveAt(completePassage(fresh, 'Genesis 1'), 'Genesis 2');
+  const off = arriveAt(completePassage(fresh, 'Genesis 1'), 'Genesis 4');
   assert.equal(mapView(route, off).filter((n) => n.current).length, 0);
-  assert.equal(standingOffRoute(route, off), 'Genesis 2', 'and it can say where he is');
+  assert.equal(standingOffRoute(route, off), 'Genesis 4', 'and it can say where he is');
   // The thread he left is still there to get back to.
   assert.equal(mapView(route, off).find((n) => n.ref === 'Genesis 1')?.completed, true);
+  // And Genesis 2 is now *on* the route, so reading straight on out of Genesis 1
+  // no longer walks off it at the first step. That is what ADR 0012 bought.
+  assert.equal(standingOffRoute(route, arriveAt(fresh, 'Genesis 2')), null);
 
   const on = arriveAt(off, 'John 1');
   assert.deepEqual(mapView(route, on).filter((n) => n.current).map((n) => n.ref), ['John 1']);

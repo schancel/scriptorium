@@ -86,6 +86,24 @@
       "held": null
     },
     {
+      "range": "Genesis 4:1-10",
+      "theme": "hills",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "Genesis 4:11-15",
+      "theme": "desert",
+      "setpiece": null,
+      "held": "yes"
+    },
+    {
+      "range": "Genesis 4:16-26",
+      "theme": "desert",
+      "setpiece": null,
+      "held": null
+    },
+    {
       "range": "Genesis 6-9",
       "theme": "sea",
       "setpiece": "rising_water",
@@ -197,6 +215,30 @@
       "range": "John 19",
       "theme": "mountain",
       "setpiece": "darkness_at_noon",
+      "held": null
+    },
+    {
+      "range": "John 20",
+      "theme": "daybreak",
+      "setpiece": "light_from_dark",
+      "held": null
+    },
+    {
+      "range": "John 20:1-15",
+      "theme": "tomb",
+      "setpiece": "light_from_dark",
+      "held": null
+    },
+    {
+      "range": "John 20:16-18",
+      "theme": "garden",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "John 20:19-31",
+      "theme": "abbey",
+      "setpiece": null,
       "held": null
     },
     {

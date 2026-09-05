@@ -8,7 +8,7 @@
       "mark": "shoot"
     },
     {
-      "passage": "Genesis 3",
+      "passage": "Genesis 2",
       "who": "Eve",
       "body": "gowned",
       "cloth": "robe",
@@ -125,6 +125,13 @@
       "body": "hooded",
       "cloth": "robe",
       "mark": "linen"
+    },
+    {
+      "passage": "John 20",
+      "who": "Mary Magdalene",
+      "body": "gowned",
+      "cloth": "light",
+      "mark": null
     },
     {
       "passage": "Revelation 22",

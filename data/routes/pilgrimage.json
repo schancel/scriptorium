@@ -38,6 +38,15 @@
       "note": "Quoted from the cross, verbatim"
     },
     {
+      "id": "living-creature",
+      "kind": "progression",
+      "from": "Genesis 1",
+      "to": "Genesis 2",
+      "echo": "every living creature",
+      "echo_kjv": null,
+      "note": "Made in the first telling, named by the man in the second"
+    },
+    {
       "id": "tree-of-life",
       "kind": "progression",
       "from": "Genesis 3",
@@ -45,6 +54,24 @@
       "echo": "tree of life",
       "echo_kjv": null,
       "note": "The tree barred at the start, open at the end"
+    },
+    {
+      "id": "first-day",
+      "kind": "progression",
+      "from": "Genesis 1",
+      "to": "John 20",
+      "echo": "the first day",
+      "echo_kjv": null,
+      "note": "The new creation opens on the first day, in the dark, where Genesis opened"
+    },
+    {
+      "id": "gardener",
+      "kind": "progression",
+      "from": "Genesis 3",
+      "to": "John 20",
+      "echo": "garden",
+      "echo_kjv": null,
+      "note": "The garden where it went wrong, and the garden she took him for the gardener in"
     },
     {
       "id": "only-son",

@@ -18,6 +18,21 @@
  * that returns the generic scene, not an error path, and nothing in this file
  * looks at a single character of the passage's prose.
  *
+ * ## The fallback belongs to the text, not to this module
+ *
+ * An authored table covers thirty of the Bible's 1,189 chapters, so for 97.5% of
+ * the book the *fallback* is the game. It used to be `abbey` for every text
+ * alike, which made a stone cloister the picture of Ruth, Kings, the Psalms and
+ * Acts -- and nobody noticed for as long as the tests only ever walked the route,
+ * which is the authored 2.5%.
+ *
+ * So a scene map carries a `defaultTheme`, read from `data/scenes/defaults.json`
+ * and compiled from the same doc as the ranges. The Bible's is `hills`, open
+ * country. A text with no row there keeps `abbey`, and so does a text with no
+ * scene file at all -- the Gutenberg case is untouched, which is the point of
+ * making this per text rather than changing one constant. See
+ * docs/design/05-scenery-warps.md#the-default-is-a-property-of-the-text-and-the-bibles-is-open-country.
+ *
  * ## Ranges
  *
  * A range is `Book C`, `Book C-C` or `Book C:V-V`, parsed by `core/corpus.ts` so
@@ -97,7 +112,22 @@ export interface SceneMap {
   /** Which text the map is for: `bible`, or the id of an imported book. */
   readonly text: string;
   readonly rows: readonly SceneRow[];
+  /**
+   * What a passage with no row resolves to, for *this* text.
+   *
+   * `DEFAULT_THEME` unless the defaults table names one, which is what keeps an
+   * imported book in the abbey while the Bible stands in open country.
+   */
+  readonly defaultTheme: string;
 }
+
+/** The per-text fallbacks, keyed by text id. One row per text that has chosen. */
+export interface SceneDefaults {
+  readonly byText: ReadonlyMap<string, string>;
+}
+
+/** No defaults file: every text falls back the way it always did. */
+export const NO_SCENE_DEFAULTS: SceneDefaults = { byText: new Map<string, string>() };
 
 /** What a level needs to know about where it is set. */
 export interface Scene {
@@ -108,10 +138,18 @@ export interface Scene {
 }
 
 /**
- * The documented fallback: "any passage on a route with no row here resolves to
- * `abbey`", and a text with no scene file at all resolves entirely to it.
+ * The scene for a text with no map at all -- the imported Gutenberg book, whose
+ * every chapter is a neutral library and correctly so.
+ *
+ * A text that *has* a map falls back to that map's own `defaultTheme` instead,
+ * which is `DEFAULT_THEME` only when nothing in the defaults table claims it.
  */
 export const GENERIC_SCENE: Scene = { theme: DEFAULT_THEME, setpiece: null, held: false };
+
+/** The scene a map with no row for a passage produces. Its text's default. */
+function defaultSceneOf(map: SceneMap): Scene {
+  return { theme: map.defaultTheme, setpiece: null, held: false };
+}
 
 /**
  * The only value the `held` column may carry, besides nothing.
@@ -161,7 +199,26 @@ function bookOf(citation: string): Span {
  *         nothing at all, which would look exactly like a missing row -- an
  *         abbey where the author asked for a sea -- so it is a load error.
  */
-export function loadScenes(parsed: unknown): SceneMap {
+export function loadSceneDefaults(parsed: unknown): SceneDefaults {
+  const doc = asRecord(parsed, 'parsed file');
+  const raw = doc['defaults'];
+  if (!Array.isArray(raw)) throw new Error('scenes: parsed file has no "defaults" array');
+  const byText = new Map<string, string>();
+  for (const [index, entry] of raw.entries()) {
+    const row = asRecord(entry, `defaults[${String(index)}]`);
+    const text = asString(row['text'], `defaults[${String(index)}].text`);
+    if (byText.has(text)) throw new Error(`scenes: two defaults claim text "${text}"`);
+    byText.set(text, asString(row['theme'], `default for "${text}".theme`));
+  }
+  return { byText };
+}
+
+/** The theme a text falls back to. `DEFAULT_THEME` when it has not chosen one. */
+export function defaultThemeFor(defaults: SceneDefaults | null, text: string): string {
+  return defaults?.byText.get(text) ?? DEFAULT_THEME;
+}
+
+export function loadScenes(parsed: unknown, defaults: SceneDefaults | null = null): SceneMap {
   const doc = asRecord(parsed, 'parsed file');
   const rawRows = doc['scenes'];
   if (!Array.isArray(rawRows)) throw new Error('scenes: parsed file has no "scenes" array');
@@ -196,7 +253,8 @@ export function loadScenes(parsed: unknown): SceneMap {
       held: held === HELD,
     };
   });
-  return { text: asString(doc['text'], 'text'), rows };
+  const text = asString(doc['text'], 'text');
+  return { text, rows, defaultTheme: defaultThemeFor(defaults, text) };
 }
 
 // --- resolution -------------------------------------------------------------
@@ -234,12 +292,18 @@ export function rowFor(map: SceneMap | null, citation: string): SceneRow | null 
 
 /**
  * The scene for a passage. Never throws for want of a row and never returns
- * null: a passage with no row is an abbey, and so is every passage of a text
- * with no scene map. That is the documented outcome for an imported book.
+ * null.
+ *
+ * A passage with no row wears its text's default -- open country in the Bible,
+ * the abbey in an imported book -- and a text with no scene map at all is an
+ * abbey throughout, which is the documented outcome for an imported book. The
+ * two cases are separate on purpose: one is a text that has chosen and has no
+ * row here, the other is a text that has never been authored at all.
  */
 export function sceneFor(map: SceneMap | null, citation: string): Scene {
+  if (map === null) return GENERIC_SCENE;
   const row = rowFor(map, citation);
-  if (row === null) return GENERIC_SCENE;
+  if (row === null) return defaultSceneOf(map);
   return { theme: row.theme, setpiece: row.setpiece, held: row.held };
 }
 

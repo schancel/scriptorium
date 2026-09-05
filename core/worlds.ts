@@ -3,7 +3,7 @@
  *
  * @doc docs/design/05-scenery-warps.md#themes
  *
- * `docs/design/05-scenery-warps.md` names twelve themes and describes each in a
+ * `docs/design/05-scenery-warps.md` names thirteen themes and describes each in a
  * sentence -- "stone greys, candle amber", "ochre, bleached sky". `data/themes.json`
  * is compiled from that table and carries the prose and the tune. This module is
  * the picture: for each of those ids, the sixteen colours the art roles in
@@ -17,8 +17,8 @@
  * `PALETTE_ROLES` order. So the *same sixteen pixels* of `tile_stone` read as
  * cloister grey in the abbey and as ochre in the wilderness, and the scribe's
  * habit takes the light of wherever he is standing, with no second tileset and
- * no per-theme art. Twelve themes cost twelve rows of colour here rather than
- * twelve copies of every sprite.
+ * no per-theme art. Thirteen themes cost thirteen rows of colour here rather than
+ * thirteen copies of every sprite.
  *
  * Colours are 24-bit RGB integers rather than CSS strings, for the reason the
  * display list gives: a Flutter painter reads the same integer a Canvas renderer
@@ -144,7 +144,7 @@ function makeWorld(id: string, ink: ThemeInk, far: string, mid: string, ground: 
 }
 
 /**
- * The twelve themes, in the order docs/design/05-scenery-warps.md lists them.
+ * The thirteen themes, in the order docs/design/05-scenery-warps.md lists them.
  *
  * Each row chooses eleven colours and three tiles: what stands in the far
  * distance, what stands in the middle, and what the scribe walks on.
@@ -159,8 +159,8 @@ function makeWorld(id: string, ink: ThemeInk, far: string, mid: string, ground: 
  * and the sea rolls, and no palette turns an arch into a wave.
  *
  * So no two themes stack the same three tiles, and `worlds.test.ts` asserts it.
- * That assertion is the reason the tiles exist: twelve palettes over one
- * silhouette is twelve lightings of the same room.
+ * That assertion is the reason the tiles exist: thirteen palettes over one
+ * silhouette is thirteen lightings of the same room.
  *
  * `void` is the hardest case the table has: a world whose whole point is that
  * there is nothing to see in it still has to differ between the horizon and the
@@ -176,6 +176,25 @@ export const WORLDS: ReadonlyMap<string, World> = new Map(
       groundTop: 0x5b5566, groundBody: 0x36323f,
       // The cloister: an arcade in the distance, cut stone underfoot.
     }, 'tile_arch', 'tile_stone', 'tile_stone'),
+
+    makeWorld('hills', {
+      outline: 0x231e12, shade: 0x7e93ac, mid: 0x6e7a46, light: 0xb0a25e, highlight: 0xf6f0d6,
+      robe: 0x9a6b3e, robeShade: 0x5e3f22, accent: 0xd9a33a, flame: 0xfff0bc,
+      groundTop: 0xc2ab63, groundBody: 0x877541,
+      // Open country, and the Bible's default: a ridge of two unequal crests on
+      // the horizon, scrub standing apart in the middle distance, dry grass
+      // underfoot. It is the widest sky in the table -- `shade` is the palest
+      // colour any theme gives it -- because the one thing every outdoor chapter
+      // of this book has in common is that there is a great deal of sky in it.
+      //
+      // The floor is the garden's own grass tile, recoloured from lush to straw.
+      // That is the recolour argument the whole table rests on: dry grass and
+      // green grass are the same grass under a different light, the way the
+      // abbey, the temple and the tomb are one slab of cut stone. What could not
+      // be recoloured is the *shape* of the distance -- a horizon of identical
+      // humps is a desert whatever colour it is given -- so the two tiles that
+      // are new here are the two that carry the silhouette.
+    }, 'tile_ridge', 'tile_scrub', 'tile_grass'),
 
     makeWorld('garden', {
       outline: 0x0f1a10, shade: 0x1f3a22, mid: 0x2f5c33, light: 0x4c8c46, highlight: 0xd8f0b0,
@@ -370,10 +389,16 @@ function blendedWorld(id: string): World | null {
 }
 
 /**
- * The documented fallback. "Any passage on a route with no row here resolves to
- * `abbey`", and a user-loaded Gutenberg book gets the abbey throughout -- a
- * neutral library rather than a keyword heuristic confidently rendering a desert
- * because a novel mentioned sand.
+ * The fallback of last resort: a text with no default of its own.
+ *
+ * That is a user-loaded Gutenberg book, and for that case the abbey is still
+ * exactly right -- a neutral library rather than a keyword heuristic confidently
+ * rendering a desert because a novel mentioned sand. It is no longer what an
+ * unauthored *Bible* chapter gets: the fallback is a per-text row now, the Bible
+ * chose `hills`, and the reasoning is in
+ * docs/design/05-scenery-warps.md#the-default-is-a-property-of-the-text-and-the-bibles-is-open-country.
+ * It is also what `worldFor` returns for a theme id it cannot resolve at all,
+ * which is a different question with the same honest answer.
  */
 export const DEFAULT_THEME = 'abbey';
 

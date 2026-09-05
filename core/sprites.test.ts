@@ -56,7 +56,7 @@ const SOLID_TILES: readonly string[] = [
  * through is the whole point: a ridge line is the shape of what it leaves out.
  */
 const DISTANCE_TILES: readonly string[] = [
-  'tile_dune', 'tile_wave', 'tile_peak', 'tile_roofs',
+  'tile_dune', 'tile_ridge', 'tile_scrub', 'tile_wave', 'tile_peak', 'tile_roofs',
   'tile_pillars', 'tile_arch', 'tile_foliage', 'tile_cloud',
   'tile_swell', 'tile_stars',
 ];
@@ -450,6 +450,80 @@ test('the dune crests once in the cell and troughs at the seam', () => {
   // that stopped short at the seam would run as a row of steps.
   assert.equal(topOf('tile_dune', 0), topOf('tile_dune', SPRITE_SIZE - 1));
   assert.equal(crests('tile_dune'), 1);
+});
+
+test('THE RIDGE HAS TWO CRESTS OF UNEQUAL HEIGHT, WHICH IS WHAT A DUNE HAS NOT', () => {
+  // The far band of the Bible's default scenery, so this is the most-looked-at
+  // tile in the game. Its whole job is to not be the desert: a dune crests once
+  // in the middle of every cell, and a horizon of identical humps reads as
+  // wilderness whatever palette it is given.
+  assert.equal(toAscii(art('tile_ridge'), 0), [
+    '................',
+    '................',
+    '................',
+    '.........GG.....',
+    '........GGGGG...',
+    '...GG..GGGGGGG..',
+    '..GGGGGGGGGGGGG.',
+    'GGGGGGGGGGGGGGGG',
+    'gggggggggggggggg',
+    'gggggggggggggggg',
+    'ggggGGGGgggggggg',
+    'gggggggggggggggg',
+    'gggggggggggggggg',
+    'gggggggggggGGGgg',
+    'gggggggggggggggg',
+    'gggggggggggggggg',
+  ].join('\n'));
+
+  // A summit, a lower shoulder, and a saddle between the two -- three different
+  // heights across one cell, where the dune has one.
+  const summit = topOf('tile_ridge', 9);   // tuning-exempt: a column of the art above
+  const shoulder = topOf('tile_ridge', 3); // tuning-exempt: a column of the art above
+  const saddle = topOf('tile_ridge', 6);   // tuning-exempt: a column of the art above
+  assert.ok(summit < shoulder, 'both crests are the same height, which is a dune');
+  assert.ok(shoulder < saddle, 'there is no dip between them');
+
+  // Tiles repeat, so the shape has to meet its own left and right edge.
+  assert.equal(topOf('tile_ridge', 0), topOf('tile_ridge', SPRITE_SIZE - 1));
+  assert.notEqual(toAscii(art('tile_ridge'), 0), toAscii(art('tile_dune'), 0));
+});
+
+test('scrub stands apart, where the canopy closes over', () => {
+  // The middle band of open country, and the whole of what tells it from the
+  // garden: `tile_foliage` is a closed canopy with chinks of sky in it, and this
+  // is discrete masses with daylight all the way to the ground between them.
+  assert.equal(toAscii(art('tile_scrub'), 0), [
+    '................',
+    '................',
+    '................',
+    '................',
+    '.....LL.........',
+    '....LMMM....LL..',
+    '...MMMMMM..LMMM.',
+    '...MMMMMM..MMMM.',
+    '....MMMM...MMMM.',
+    '.....KK.....MM..',
+    '.....KK.....KK..',
+    '.....KK.....KK..',
+    '................',
+    '................',
+    '................',
+    '................',
+  ].join('\n'));
+
+  // Sky reaches the bottom of the cell between the two bushes, which is the
+  // difference from a canopy; and the stems are `outline`, because `shade` is
+  // the sky and a stem drawn in it would be a bush floating.
+  const gap = SPRITE_SIZE - 7; // tuning-exempt: a column between the two bushes
+  assert.equal(topOf('tile_scrub', gap), SPRITE_SIZE, 'the bushes have grown together');
+  assert.ok(toAscii(art('tile_scrub'), 0).includes(ink('outline')), 'nothing holds them up');
+  assert.ok(inked('tile_scrub', 0) < inked('tile_foliage', 0), 'as dense as a canopy');
+
+  // Both edge columns are empty, so nothing straddles the seam and two bushes
+  // stay two bushes however many times the cell repeats.
+  assert.equal(topOf('tile_scrub', 0), SPRITE_SIZE);
+  assert.equal(topOf('tile_scrub', SPRITE_SIZE - 1), SPRITE_SIZE);
 });
 
 test('waves crest more often than dunes, and carry foam where they break', () => {
@@ -1114,7 +1188,7 @@ test('the ink lands as a blot and then spreads, and it is ink rather than fire',
 // --- the followers ----------------------------------------------------------
 //
 // docs/design/11-followers.md#art-without-ten-bespoke-sprites. Nineteen figures
-// walk behind the scribe and there are no nineteen bespoke sprites: four body
+// walk behind the scribe and there are no twenty bespoke sprites: four body
 // silhouettes, each recoloured into three cloths from the theme's own palette,
 // and one small mark apiece laid over the top. The mark is what the eye reads;
 // the body is shared with the scribe, so they look like people walking with him.
