@@ -14,6 +14,7 @@
 import { CANON } from '../../core/corpus.js';
 import { countStretches } from '../../core/draw.js';
 import type { FingerRow, GateView, Trend, WorstKey } from '../../core/draw.js';
+import { isMotionSetting, type MotionSetting } from '../../core/motion.js';
 import { OPENING } from '../../core/onboarding.js';
 import type { HistoryEntry, Promotion } from '../../core/progress.js';
 import type { Finger, KeyboardLayout, Thumb } from '../../core/types.js';
@@ -45,6 +46,16 @@ export interface OverlayHandlers {
    * exposes is a switch that does not exist.
    */
   setCloud(enabled: boolean): void;
+  /**
+   * The player chose a presentation of the rail.
+   *
+   * ADR 0011 requires this switch to exist alongside the operating system's own,
+   * and `auto` -- which follows the system -- is what a record arrives with. The
+   * other two are here because the aftereffect can reach somebody who has never
+   * had reason to turn the system setting on, and because a machine is not a
+   * person: he may want it on one and not another.
+   */
+  setMotion(setting: MotionSetting): void;
   /**
    * The player set their own stage.
    *
@@ -124,6 +135,16 @@ export interface MenuView {
   readonly spaceThumb: Thumb;
   /** Whether the blot-cloud is armed. See `OverlayHandlers.setCloud`. */
   readonly cloudEnabled: boolean;
+  /** Which presentation of the rail is chosen. See `OverlayHandlers.setMotion`. */
+  readonly motion: MotionSetting;
+  /**
+   * What the operating system is currently asking for.
+   *
+   * Said out loud beside the control, because `auto` is the default and a player
+   * on it has no other way to find out which of the two he is getting. A setting
+   * whose effect cannot be observed is a setting nobody can trust.
+   */
+  readonly systemReduced: boolean;
   /** The stage the player is on, and every stage they could choose instead. */
   readonly stage: number;
   readonly stages: readonly { readonly stage: number; readonly description: string }[];
@@ -312,6 +333,8 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const layoutSelect = need('menu-layout', HTMLSelectElement);
   const thumbSelect = need('menu-thumb', HTMLSelectElement);
   const cloudSelect = need('menu-cloud', HTMLSelectElement);
+  const motionSelect = need('menu-motion', HTMLSelectElement);
+  const motionNote = need('menu-motion-note', HTMLParagraphElement);
   const stageSelect = need('menu-stage-select', HTMLSelectElement);
   const gildingSelect = need('menu-gilding', HTMLSelectElement);
   const editionNext = need('menu-edition-next', HTMLParagraphElement);
@@ -487,6 +510,10 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     layoutSelect.value = view.layout;
     thumbSelect.value = view.spaceThumb;
     cloudSelect.value = view.cloudEnabled ? 'on' : 'off';
+    motionSelect.value = view.motion;
+    motionNote.textContent = view.systemReduced
+      ? 'Your system is asking for reduced movement.'
+      : 'Your system is not asking for reduced movement.';
     gildingSelect.value = view.gilding ? 'on' : 'off';
     renderStages(view);
     errorLine.textContent = '';
@@ -954,6 +981,10 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   });
   cloudSelect.addEventListener('change', () => {
     handlers.setCloud(cloudSelect.value !== 'off');
+  });
+  motionSelect.addEventListener('change', () => {
+    const chosen = motionSelect.value;
+    handlers.setMotion(isMotionSetting(chosen) ? chosen : 'auto');
   });
   gildingSelect.addEventListener('change', () => {
     handlers.setGilding(gildingSelect.value === 'on');

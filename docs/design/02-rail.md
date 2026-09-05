@@ -44,6 +44,19 @@ including through long greyed runs and at every line boundary. Any drift defeats
 whole purpose, and drift is easy to introduce accidentally when handling wrapping, so it
 is checked rather than eyeballed.
 
+### Two presentations, one column
+
+The rail has two presentations and the invariant above holds in both. In the reduced one
+the ribbon **steps** to the cursor's column instead of easing toward it, so it is on that
+column on every frame rather than a quarter of a second after each keystroke -- which
+makes the invariant stronger there, not weaker.
+
+That is the *only* thing that changes about the rail. The cursor stays nailed to the focal
+x, the focal guide stays where it is, and the space affordance below is drawn identically.
+Reduced motion removes the approach to the target and never the target.
+See [motion and comfort](12-motion-and-comfort.md), which is also where the reasoning for
+`rail_scroll_lerp` having a second value lives.
+
 ## The space affordance
 
 Space is live from stage 0, both thumbs rest on it, and it is the most-pressed key in

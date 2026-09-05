@@ -54,7 +54,10 @@ alone is ~200 KB, which is why nothing is bundled up front.
 
 ```json
 { "text": "bible",
-  "scenes": [ { "range": "Exodus 14", "theme": "sea", "setpiece": "parted_walls" } ] }
+  "scenes": [ { "range": "Exodus 14", "theme": "sea", "setpiece": "parted_walls",
+                "held": null },
+              { "range": "Genesis 3:1-5", "theme": "garden",
+                "setpiece": "serpent_in_the_branches", "held": "yes" } ] }
 ```
 
 `range` is `Book C`, `Book C-C`, or `Book C:V-V` for a chapter that moves faster than one
@@ -63,6 +66,13 @@ chapter rows stay a useful default. Ranges of the same precision must not overla
 row resolves to `abbey`. A text with no scene file at all resolves entirely to `abbey`,
 which is the expected outcome for user-imported books.
 
+`held` is `"yes"` on a range where the camera does not translate and word progress moves
+the set piece instead, and `null` everywhere else — see
+[held scenes](../design/05-scenery-warps.md#held-scenes-not-every-passage-is-a-journey).
+`"yes"` is the only truthy value the loader accepts; anything else is a load error rather
+than a quietly unheld scene, because a flag that failed open would look exactly like a
+scene nobody had marked.
+
 ## Progress
 
 Browser local storage, exportable to a file. Written by
@@ -70,7 +80,7 @@ Browser local storage, exportable to a file. Written by
 `core/progress.ts`.
 
 ```json
-{ "version": 6, "stage": 3, "translation": "WEB", "route": "pilgrimage",
+{ "version": 7, "stage": 3, "translation": "WEB", "route": "pilgrimage",
   "layout": "ansi", "spaceThumb": "rt",
   "position": { "book": "Genesis", "chapter": 1, "unit": 7 },
   "completed": ["Genesis 1"],
@@ -82,7 +92,7 @@ Browser local storage, exportable to a file. Written by
                  "wpm": 14.2, "accuracy": 0.97, "promoted": false } ],
   "gilding": false, "gildOffered": false,
   "firstRun": false, "notesSeen": ["greyed", "wrong", "space"],
-  "cloudEnabled": true }
+  "cloudEnabled": true, "motion": "auto" }
 ```
 
 `position` is the bookmark: the translation is `translation`, and `unit` is the
@@ -132,6 +142,14 @@ player instead. It is stored rather than held for the session for the same reaso
 on at every reload is one the player has to find again every evening. Like `gilding` it
 touches nothing else — not the stage, not the window, not the gate.
 
+`motion` is which of the two presentations of the rail the player has asked for:
+`"auto"` follows the operating system's `prefers-reduced-motion`, `"full"` and `"reduced"`
+override it in either direction. Stored for the same reason `cloudEnabled` is — it is a
+fact about the person at the keyboard, and about his eyes rather than his typing — and it
+decides nothing else in the game. See
+[motion and comfort](../design/12-motion-and-comfort.md#how-it-is-reached) and
+[ADR 0011](../decisions/0011-respect-reduced-motion.md).
+
 `promoted` marks the session that opened the gate. The history view needs it: the
 sessions *after* a promotion are slower, because a new stage lights up more of the page,
 and an unexplained dip in the curve is the single most likely reason a beginner concludes
@@ -149,6 +167,8 @@ not optional.
 | 4 | added `firstRun` and `notesSeen` | every version 3 field is carried across unchanged — stage, translation, route, layout, `spaceThumb`, position, `completed`, `keyStats`, `recent`, the whole history, `gilding` and `gildOffered`. The two new fields default to *already done*: `firstRun` to false and `notesSeen` to every note. That is the only correct default, because a stored record is by definition one somebody has already been playing, and starting to explain the game to a player three weeks in would be worse than never having explained it at all. Nothing is dropped. |
 | 5 | added `discovered` | every version 4 field is carried across unchanged. `discovered` defaults to empty, which is the only honest default: nothing recorded a found room before the field existed, so the game does not know of any. It costs the player nothing — a flashback is optional by construction, and re-finding one is the same walk it was the first time. Nothing is dropped. |
 | 6 | added `cloudEnabled` | every version 5 field is carried across unchanged — stage, translation, route, layout, `spaceThumb`, position, `completed`, `discovered`, `keyStats`, `recent`, the whole history, `gilding`, `gildOffered`, `firstRun` and `notesSeen`. `cloudEnabled` defaults to `true`, and it is read as true unless the stored value is explicitly `false`. That is exactly what a version 5 record meant: the switch was held for the session only, so every session that record ever had began with the cloud armed. Defaulting it off would silently remove the game's only pressure from every player who has ever played it. Nothing is dropped. |
+
+| 7 | added `motion` | every version 6 field is carried across unchanged. `motion` defaults to `"auto"`, which is the setting a version 6 record was already getting in effect: nothing consulted `prefers-reduced-motion` at all, so the player had never been asked and had never chosen. Defaulting to `"auto"` is the only value that can start honouring the operating system for the people who had already told it, without overriding a choice anybody made. An unrecognised stored value reads as `"auto"` for the same reason. Nothing is dropped. |
 
 `core/progress.ts` defaults every field individually rather than trusting the stored
 blob, so a partially corrupt record loses the corrupt field and keeps the history.

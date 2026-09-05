@@ -51,6 +51,36 @@ alone.
    That is a pass of its own, not a row edit.
 
 
+10. **How still "frozen" should be.** `reduced_parallax` is 0, so in reduced motion the
+    scenery layers do not move at all and only the monsters, candles and the scribe's own
+    walk say the world is going anywhere. The ADR allows "frozen or near-frozen" and the
+    near-frozen version is one number: raise it to about 0.1 and the far layer creeps.
+    Frozen was chosen because the layers are the strongest half of the stimulus, but it is
+    a judgement about how the world reads, and it should be looked at rather than argued.
+    → `docs/design/07-tuning.md`, `docs/design/12-motion-and-comfort.md#what-reduced-motion-changes`
+11. **The reduced ribbon steps a cell, not a word.** The instruction was "a word at a
+    time"; the fixed reading column makes that impossible for the *ribbon*, because there
+    is exactly one offset per cursor index and a word-sized step would leave the caret over
+    the wrong character for the keystrokes in between. So the ribbon steps a cell and the
+    *world* steps a word, which is where the word was always the unit. Written up in
+    `docs/design/12-motion-and-comfort.md#a-word-at-a-time-and-what-the-fixed-column-does-to-that`.
+    Worth a look on the screen: it is discrete either way, and the only question is whether
+    a 12px jump per keystroke reads as calm or as busy.
+12. **Reading mode in reduced motion is a stutter.** Its offset is deliberately fractional
+    so the page glides; floored to whole characters it advances 15 times a second at the
+    opening pace and faster as the ramp climbs. It is the honest translation of "no
+    continuous motion" and it may simply be unpleasant. The alternative is to leave reading
+    mode gliding and say so in the menu, which is worse for exactly the person the setting
+    is for. → `docs/design/12-motion-and-comfort.md#reading-mode-steps-as-well`
+13. **Genesis 3:24 keeps the garden theme.** Being driven out is the one verse of the
+    chapter that travels, and it could equally have cut to `desert` for its last verse --
+    the ground he was taken from, and the palette easing out of the green over the final
+    two verses. It stays `garden` because a theme change on a single closing verse is a
+    bigger claim than the staging licence covers, and because the flourish already says it.
+    One cell in a table if you want the other reading.
+    → `docs/design/05-scenery-warps.md#genesis-3-authored-as-the-chapter-it-is`
+
+
 ## Agreed, specified, not yet built
 
 All of these came out of the owner playing it. Each has its reasoning written down in the
@@ -83,6 +113,36 @@ place named, so none of this depends on remembering a conversation.
 
 ## Built since the last pass
 
+- **Reduced motion, honoured automatically and reachable in the menu.** The rail is close
+  to a laboratory stimulus for motion adaptation -- a held fixation, continuous
+  unidirectional scroll, three parallax layers at differing rates, for as long as anyone
+  will practise -- and nothing in the game consulted `prefers-reduced-motion`. It does
+  now, and there is a **Movement** switch beside it with three states: follow the system
+  (the default), full, reduced. In the reduced presentation the ribbon **steps** to the
+  cursor's column instead of easing toward it, the parallax freezes outright, set-piece
+  and crossing animation is eased down rather than removed, and reading mode advances a
+  character at a time. The fixed reading column is untouched in both, and the cursor-x
+  invariant is asserted in both, in `core/rail.test.ts` and again in the smoke harness.
+  Detection is in `platform/web/`; `core/motion.ts` receives it as state.
+  → `docs/design/12-motion-and-comfort.md`, `docs/decisions/0011-respect-reduced-motion.md`
+- **Held scenes, and Genesis 3 authored as the chapter it is.** A scene row may be `held`:
+  the camera does not translate and the same completed words advance the *tableau*
+  instead. Genesis 3 is five beats -- the serpent in the branches, the fruit taken, fig
+  leaves, something moving in the garden at the cool of the day, and being driven out with
+  a flaming sword turning behind them -- and only the last one travels. The camera counts
+  *travelled* words rather than typed ones, so the world does not lurch when a hold ends,
+  and no monster is placed inside one. Every one of the five stays behind and above the
+  rail, which the smoke harness checks on the real frames.
+  → `docs/design/05-scenery-warps.md#held-scenes-not-every-passage-is-a-journey`
+- **The sound comes back after a backgrounded tab.** *"Sound had been working when I
+  turned it on. Now it's not at all."* A browser suspends an `AudioContext` when its tab
+  goes to the background, and the open path was guarded on "have we opened one before" --
+  so after one alt-tab nothing ever resumed it and the game was silent for the rest of the
+  evening with the toggle still reading on. The guard is now "a context exists *and is
+  running*", with no flag beside it that could latch, and `visibilitychange` resumes it
+  without needing a keystroke. The smoke harness suspends the device and asserts the music
+  comes back both ways.
+  → `docs/design/09-music.md#a-suspended-context-is-a-backgrounded-tab-not-an-error`
 - **The game says verses and chapters, and invents nothing.** `part 4/9` is gone from
   every surface: the HUD, the report card's title, the menu, the history and the map all
   name the stretch by its citation — `Genesis 1:12-14`. The owner: *"Why not verses and

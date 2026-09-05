@@ -27,6 +27,7 @@
 import type { GateResult, Key, KeyStat, KeyboardLayout, Stage, Thumb, Tuning } from './types.js';
 import { evaluateGate, stageAt } from './curriculum.js';
 import { median } from './typing.js';
+import { isMotionSetting, type MotionSetting } from './motion.js';
 import { NOTE_ORDER, type NoteId } from './onboarding.js';
 import { tuningValue } from './tuning.js';
 
@@ -40,7 +41,7 @@ import { tuningValue } from './tuning.js';
  *
  * See the version table in docs/architecture/data-schemas.md#progress.
  */
-export const SCHEMA_VERSION = 6;   // tuning-exempt: a schema version, not a tunable
+export const SCHEMA_VERSION = 7;   // tuning-exempt: a schema version, not a tunable
 
 // --- the record -------------------------------------------------------------
 
@@ -163,6 +164,25 @@ export interface Progress {
    * exactly like `gilding`, and it is stored for the same reason.
    */
   readonly cloudEnabled: boolean;
+  /**
+   * Which presentation of the rail the player has asked for.
+   *
+   * `auto` -- the default -- follows the operating system's
+   * `prefers-reduced-motion`, which is the setting people with vestibular
+   * disorders and migraine turn on precisely so that software will stop sliding
+   * things past them. `full` and `reduced` override it in either direction,
+   * because somebody may want it on one machine and not another, and because the
+   * motion aftereffect that produced
+   * docs/decisions/0011-respect-reduced-motion.md reached a player who had never
+   * had any reason to turn the system setting on.
+   *
+   * Stored rather than held for the session for exactly the reason
+   * `cloudEnabled` is: it is a fact about the person at the keyboard -- here
+   * about his eyes rather than his typing -- and a switch that comes back at
+   * every reload is one he has to find again every evening. It decides nothing
+   * else: not the stage, not the gate, not the score.
+   */
+  readonly motion: MotionSetting;
 }
 
 /** Genesis 1:1. The first verse of the first chapter of the first book. */
@@ -187,6 +207,7 @@ export const DEFAULT_PROGRESS: Progress = {
   firstRun: true,
   notesSeen: [],
   cloudEnabled: true,
+  motion: 'auto',
 };
 
 // --- migration --------------------------------------------------------------
@@ -247,6 +268,11 @@ function migrateNotes(value: unknown): readonly NoteId[] {
   if (!Array.isArray(value)) return NOTE_ORDER;
   const stored: readonly unknown[] = value;
   return NOTE_ORDER.filter((id) => stored.includes(id));
+}
+
+/** The stored motion setting, or `auto` for anything this build cannot read. */
+function migrateMotion(value: unknown): MotionSetting {
+  return typeof value === 'string' && isMotionSetting(value) ? value : 'auto';
 }
 
 function migrateHistory(value: unknown): readonly HistoryEntry[] {
@@ -318,6 +344,13 @@ export function migrate(parsed: unknown): Progress {
     // it off would silently remove the only pressure in the game from every
     // player who has ever played it.
     cloudEnabled: parsed['cloudEnabled'] !== false,
+    // `auto` unless the record names one of the other two, which is what a
+    // version 6 record was getting in effect: nothing consulted the system
+    // setting at all, so the player had never been asked and had never chosen.
+    // It is the only default that can start honouring the operating system for
+    // the people who had already told it, without overriding a choice anybody
+    // made -- and an unreadable value falls back to it for the same reason.
+    motion: migrateMotion(parsed['motion']),
   };
 }
 
@@ -528,7 +561,7 @@ export function withDiscovered(progress: Progress, ref: string): Progress {
   return { ...progress, discovered: [...progress.discovered, ref] };
 }
 
-// --- the two switches the player owns ---------------------------------------
+// --- the three switches the player owns -------------------------------------
 
 /**
  * Turn gilding on or off.
@@ -558,6 +591,19 @@ export function setGilding(progress: Progress, gilding: boolean): Progress {
  */
 export function setCloudEnabled(progress: Progress, cloudEnabled: boolean): Progress {
   return { ...progress, cloudEnabled };
+}
+
+/**
+ * Choose which presentation of the rail the player gets.
+ *
+ * The third switch he owns, and the only one that is about his eyes rather than
+ * his typing. Like the other two it is stored, it is reached only from the menu,
+ * and it moves nothing else: `auto` is the default and honours the operating
+ * system without anybody having to find this control at all.
+ * See docs/decisions/0011-respect-reduced-motion.md.
+ */
+export function setMotion(progress: Progress, motion: MotionSetting): Progress {
+  return { ...progress, motion };
 }
 
 /**

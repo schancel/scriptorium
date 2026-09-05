@@ -88,6 +88,11 @@ def main() -> int:
     for s in scenes["scenes"]:
         if s["theme"] not in themes:
             errors.append(f"scenes: {s['range']} uses unknown theme {s['theme']!r}")
+        # A held range is one the camera does not translate across. `yes` or
+        # nothing: a flag that failed open would look exactly like a row nobody
+        # had marked. See docs/design/05-scenery-warps.md#held-scenes-not-every-passage-is-a-journey
+        if s.get("held") not in (None, "yes"):
+            errors.append(f"scenes: {s['range']} has an unreadable held flag {s.get('held')!r}")
         try:
             book, a, b, v, vb = parse_range(s["range"])
         except ValueError as ex:

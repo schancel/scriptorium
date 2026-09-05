@@ -253,6 +253,77 @@ test(`the ribbon eases toward its target, never past it, and settles exactly`, (
   assert.equal(rail.targetOffset, target);
 });
 
+// --- the two presentations of the rail ---------------------------------------
+//
+// docs/design/12-motion-and-comfort.md. The reduced presentation removes the
+// *approach* to the target and nothing else, so the claim to hold is that the
+// reading column is unchanged in both -- and, in the reduced one, exact on every
+// frame rather than only once the ease has settled.
+
+test(`REDUCED MOTION STEPS THE RIBBON: NO FRAME IS EVER BETWEEN TWO POSITIONS`, () => {
+  const target = focalX(VIRTUAL_W, TUNING) - SPACED.length * CELL_W;
+  const rail = stepRail(createRail(0), target, TUNING, true);
+  assert.equal(rail.offset, target, `a reduced ribbon is on its target immediately`);
+  assert.equal(rail.targetOffset, target);
+  // And from anywhere, including the frame after the setting was changed
+  // mid-slide, which is the one case a lerp would have taken a quarter of a
+  // second to answer.
+  const mid = stepRail({ offset: target / 2, targetOffset: target }, target, TUNING, true);
+  assert.equal(mid.offset, target);
+});
+
+test(`the full presentation is untouched: it still eases, exactly as it did`, () => {
+  const target = focalX(VIRTUAL_W, TUNING) - SPACED.length * CELL_W;
+  const eased = stepRail(createRail(0), target, TUNING);
+  assert.notEqual(eased.offset, target, `the smooth ribbon still takes its time`);
+  // Explicitly, not by default: an omitted argument and a false one are the same
+  // frame, or every existing caller would have quietly changed presentation.
+  assert.deepEqual(stepRail(createRail(0), target, TUNING, false), eased);
+});
+
+test(`THE READING COLUMN IS THE SAME COLUMN IN BOTH PRESENTATIONS`, () => {
+  // The invariant docs/decisions/0011-respect-reduced-motion.md refuses to trade
+  // away: "the fixed reading position is unchanged -- it is the point of the
+  // rail, it is not the cause". Typed a glyph at a time through a whole chapter,
+  // in each presentation, reading the caret off the display list.
+  const target = focalX(VIRTUAL_W, TUNING);
+  for (const reduced of [false, true]) {
+    let rail = createRail(layoutRail(SPACED, 0, VIRTUAL_W, TUNING).offset);
+    for (let cursor = 0; cursor <= SPACED.length; cursor++) {
+      const to = layoutRail(SPACED, cursor, VIRTUAL_W, TUNING).offset;
+      rail = stepRail(rail, to, TUNING, reduced);
+      const carets = caretsOf(drawFrame(frame(SPACED, cursor), rail, TUNING));
+      assert.equal(carets.length, 1);
+      assert.equal(carets[0]?.x1, target,
+        `caret drifted at cursor ${cursor} with reduced=${String(reduced)}`);
+    }
+  }
+});
+
+test(`and reduced, the glyph under it is on that column on every single frame`, () => {
+  // Stronger than the claim above, and only true of the stepped presentation:
+  // the ribbon is never caught between two positions, so the character being
+  // asked for is drawn on the focal column even on the frame the keystroke
+  // landed. That is the property that removes the motion signal entirely.
+  const target = focalX(VIRTUAL_W, TUNING);
+  let rail = createRail(layoutRail(SPACED, 0, VIRTUAL_W, TUNING).offset);
+  let checked = 0;
+  for (let cursor = 0; cursor < SPACED.length; cursor++) {
+    rail = stepRail(rail, layoutRail(SPACED, cursor, VIRTUAL_W, TUNING).offset, TUNING, true);
+    const g = SPACED[cursor];
+    if (g === undefined || g.ch === ` ` || g.ch === `\n`) continue;
+    const cmds = drawFrame(frame(SPACED, cursor), rail, TUNING);
+    const onFocal = cmds.filter(
+      (c): c is Extract<DrawCmd, { op: `text` }> =>
+        c.op === `text` && c.style.startsWith(`rail-`) && c.x === target,
+    );
+    assert.equal(onFocal.length, 1, `nothing on the focal column at cursor ${cursor}`);
+    assert.equal(onFocal[0]?.value, g.ch);
+    checked += 1;
+  }
+  assert.ok(checked > SPACED.length / 2, `the sweep read ${String(checked)} characters`);
+});
+
 // --- the space affordance ---------------------------------------------------
 
 /**

@@ -74,6 +74,18 @@ export interface SceneRow {
   readonly lastVerse: number | null;
   readonly theme: string;
   readonly setpiece: string | null;
+  /**
+   * True where the camera does not translate and the tableau carries the passage.
+   *
+   * One column on the table and the whole of a held scene: "the serpent and the
+   * woman are talking. Nothing about that conversation travels, and sliding a
+   * landscape past it is the game insisting on movement the text does not have."
+   * The set piece is already a function of progress through this row's own
+   * verses, so what a held row changes is which of the two things a completed
+   * word moves -- the world, or the picture standing in it.
+   * See docs/design/05-scenery-warps.md#held-scenes-not-every-passage-is-a-journey.
+   */
+  readonly held: boolean;
 }
 
 /** True for a `Book C:V-V` row. The finer precision, and it wins. */
@@ -91,13 +103,23 @@ export interface SceneMap {
 export interface Scene {
   readonly theme: string;
   readonly setpiece: string | null;
+  /** True where the world stands still and the set piece moves instead. */
+  readonly held: boolean;
 }
 
 /**
  * The documented fallback: "any passage on a route with no row here resolves to
  * `abbey`", and a text with no scene file at all resolves entirely to it.
  */
-export const GENERIC_SCENE: Scene = { theme: DEFAULT_THEME, setpiece: null };
+export const GENERIC_SCENE: Scene = { theme: DEFAULT_THEME, setpiece: null, held: false };
+
+/**
+ * The only value the `held` column may carry, besides nothing.
+ *
+ * The table is markdown and its cells are words, so the flag is the word the
+ * column is headed with rather than a boolean the compiler would have to invent.
+ */
+const HELD = 'yes';
 
 function asRecord(value: unknown, what: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -155,6 +177,13 @@ export function loadScenes(parsed: unknown): SceneMap {
     if (setpiece !== null && setpiece !== undefined && typeof setpiece !== 'string') {
       throw new Error(`scenes: range "${range}" has a non-string setpiece`);
     }
+    // `yes` or nothing, and anything else is a load error rather than a quietly
+    // unheld scene. A flag that failed open would look exactly like a row nobody
+    // had marked, which is the one thing a hand-authored table must not do.
+    const held = row['held'];
+    if (held !== null && held !== undefined && held !== HELD) {
+      throw new Error(`scenes: range "${range}" has an unreadable held flag`);
+    }
     return {
       range,
       book: span.book,
@@ -164,6 +193,7 @@ export function loadScenes(parsed: unknown): SceneMap {
       lastVerse: span.lastVerse,
       theme: asString(row['theme'], `range "${range}".theme`),
       setpiece: typeof setpiece === 'string' ? setpiece : null,
+      held: held === HELD,
     };
   });
   return { text: asString(doc['text'], 'text'), rows };
@@ -210,7 +240,7 @@ export function rowFor(map: SceneMap | null, citation: string): SceneRow | null 
 export function sceneFor(map: SceneMap | null, citation: string): Scene {
   const row = rowFor(map, citation);
   if (row === null) return GENERIC_SCENE;
-  return { theme: row.theme, setpiece: row.setpiece };
+  return { theme: row.theme, setpiece: row.setpiece, held: row.held };
 }
 
 /** Shorthand for the half of a scene most passages need. */
@@ -285,6 +315,14 @@ export function overlappingRanges(map: SceneMap): readonly (readonly [string, st
 export interface SceneAt {
   readonly theme: string;
   readonly setpiece: string | null;
+  /**
+   * True where the camera does not translate.
+   *
+   * Read off the row under the cursor rather than off the chapter's, so a
+   * chapter can stand still for the conversation in it and travel again on the
+   * verse where somebody is put out of a garden.
+   */
+  readonly held: boolean;
   /** The theme the palette is easing between this one and, or null. */
   readonly blendTheme: string | null;
   /** How far it has eased, 0 at a settled scene and 0.5 at the boundary. */
@@ -309,6 +347,7 @@ function settled(scene: Scene, progress: number | null): SceneAt {
   return {
     theme: scene.theme,
     setpiece: scene.setpiece,
+    held: scene.held,
     blendTheme: null,
     blendMix: 0,
     sceneProgress: progress,
@@ -384,8 +423,19 @@ export function sceneAtVerse(
   return {
     theme: here.theme,
     setpiece: here.setpiece,
+    held: here.held,
     blendTheme: other.theme,
     blendMix: Math.min(HALF, Math.max(0, mix)),
     sceneProgress: within,
   };
+}
+
+/**
+ * Whether a passage stands still.
+ *
+ * The question a caller placing monsters or advancing a camera asks, so neither
+ * has to know that a scene is a record with three fields in it.
+ */
+export function heldAt(map: SceneMap | null, citation: string): boolean {
+  return sceneFor(map, citation).held;
 }

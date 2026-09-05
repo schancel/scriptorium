@@ -67,8 +67,32 @@ export function layoutRail(
  * within a single virtual pixel stops the offset asymptoting forever, which would
  * otherwise leave sub-pixel jitter under a still cursor for the rest of the
  * passage.
+ *
+ * ## `reduced` is the whole of the reduced presentation of the rail
+ *
+ * With it, the ribbon does not interpolate: it is on its target on every frame,
+ * so the picture changes position only on the keystroke that moved the cursor
+ * and holds perfectly still in between. That is
+ * docs/design/12-motion-and-comfort.md#what-reduced-motion-changes, and it is one
+ * branch because there was only ever one thing to remove -- the *continuous*
+ * part. The cursor's column is untouched in both presentations, and in the
+ * reduced one it is exact on every frame rather than merely at rest, because
+ * `offset` is assigned rather than approached.
+ *
+ * The step is one cell rather than one word, and
+ * docs/design/12-motion-and-comfort.md#a-word-at-a-time-and-what-the-fixed-column-does-to-that
+ * is why: there is exactly one offset per cursor index, so a ribbon that moved
+ * only at word boundaries would leave the caret standing over the wrong
+ * character for the keystrokes in between. What is a word at a time is the
+ * world, which is where it always was.
  */
-export function stepRail(rail: RailState, targetOffset: number, tuning: Tuning): RailState {
+export function stepRail(
+  rail: RailState,
+  targetOffset: number,
+  tuning: Tuning,
+  reduced = false,
+): RailState {
+  if (reduced) return { offset: targetOffset, targetOffset };
   const delta = targetOffset - rail.offset;
   if (Math.abs(delta) < 1) return { offset: targetOffset, targetOffset };
   return { offset: rail.offset + delta * (tuning['rail_scroll_lerp'] ?? 1), targetOffset };

@@ -1,6 +1,6 @@
 # Motion and comfort
 
-**Implemented by:** `core/rail.ts`, `core/draw.ts`, `platform/web/main.ts`
+**Implemented by:** `core/motion.ts`, `core/rail.ts`, `core/lectio.ts`, `core/draw.ts`, `platform/web/main.ts`
 
 ## What happened
 
@@ -67,3 +67,79 @@ player it is built for is meant to be here for weeks.
 The effect described above is benign and passes. But it is a reason to stop for a while
 when it appears, and the software should never make someone choose between practising and
 being comfortable.
+
+## How it is reached
+
+Three states, and the default is the one the operating system was already told.
+
+| setting | what it does |
+|---|---|
+| **Follow the system** | On when the browser reports `prefers-reduced-motion: reduce`, off when it does not, and it changes the moment the system setting does. This is the default. |
+| **Full** | The smooth presentation, whatever the system says. |
+| **Reduced** | The stepped presentation, whatever the system says. |
+
+The last two are not a redundancy. Someone may want it on one machine and not on
+another, and -- the case that produced this document -- the effect can reach a player who
+has never had any reason to turn the system setting on. The owner had not.
+
+**The choice is remembered**, on the [progress record](../architecture/data-schemas.md#progress)
+beside `cloudEnabled` and for exactly the same reason: a switch that comes back at every
+reload is one he has to find again every evening, which is the same as not having it.
+
+Detection lives in `platform/web/`, which asks `matchMedia` and listens for the answer
+changing. `core/` is handed the result as state and never asks anything, so a Dart port
+asks its own platform the same question and every rule below stays where it is.
+
+## What reduced motion changes
+
+| | full | reduced |
+|---|---|---|
+| the ribbon | eases toward the cursor's column over about 267 ms | steps to it, in one frame, with no positions in between |
+| the world | eases one stride per completed word | steps a stride per word, and settles in about four frames |
+| the parallax layers | scroll at their own authored depths | frozen: `reduced_parallax` multiplies every depth, and it is 0 |
+| flame, smoke, swell, drift | run at their authored periods | slowed by `reduced_anim_scale`, because a set piece is brief and worth keeping |
+| a crossing | 1.4 seconds of two worlds dissolving, both sliding | the same 1.4 seconds, with neither side sliding |
+| reading mode | glides at a fractional character offset | steps a whole character at a time |
+| the fixed reading column | unchanged | unchanged |
+
+Nothing is removed. Every set piece still runs, every crossing still crosses, the scribe
+still walks when the world moves and every verse still looks like the place it is set in.
+What goes is *continuous* motion, which is the only part of it the eye adapts to.
+
+### A word at a time, and what the fixed column does to that
+
+The instruction above is "a word at a time", and the ribbon steps a *cell* at a time.
+That is not a softening of it; it is what the fixed reading position costs, and it is
+worth stating plainly because the next person to read this will otherwise try to fix it.
+
+The cursor is pinned to the focal column, so the ribbon's offset is
+`focalX - cursor * CELL_W` and there is exactly one offset per cursor index. A ribbon that
+moved only once per word would leave the caret standing over the wrong character for the
+five keystrokes in between -- which is not a reduced presentation of the rail, it is a
+different rail, and it gives away the one thing
+[the rail](02-rail.md#the-focal-guide) exists for.
+
+So the unit a *word* is the unit of is the **world**, which is where it always was: the
+camera advances one stride per completed word and in reduced motion it steps rather than
+glides. The ribbon takes the smallest step that keeps the caret honest. Both are discrete,
+which is the property that matters -- an image that changes position instantly, on a
+keystroke the player made, presents nothing for the motion detectors to adapt to. A slide
+does.
+
+### Reading mode steps as well
+
+[Reading](02-rail.md#reading-mode) is the one mode whose whole content is a continuously
+sliding page, and its offset is deliberately fractional so that the text glides rather
+than stutters. In reduced motion that offset is floored to a whole character, so the page
+advances a character at a time at whatever pace the ramp has reached. It is a stutter, and
+it is the honest translation: the mode is still there, still ramps, still asks nothing,
+and it no longer slides.
+
+### Held scenes are the same mechanism seen twice
+
+A [held scene](05-scenery-warps.md#held-scenes-not-every-passage-is-a-journey) does not
+translate the camera at all, because nothing in the passage travels. That is an authoring
+decision about the text and not an accessibility feature, and it lands in the same place:
+a stretch of the session with no lateral scroll in it. A long sitting acquires a rhythm of
+travelling and standing still, and the standing-still parts are rest whether or not the
+player has ever opened this menu.

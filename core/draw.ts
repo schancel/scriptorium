@@ -51,6 +51,7 @@ import {
   followerPoses,
   type FollowerLine,
 } from './followers.js';
+import { parallaxScale } from './motion.js';
 import { setpieceParam, type SetpieceId, type SetpieceState } from './setpieces.js';
 import { CANDLE_UNLIT_FRAME, SPRITE_SIZE } from './sprites.js';
 import { blendThemeId, roleIndex, worldFor, type ParallaxLayer, type World } from './worlds.js';
@@ -290,6 +291,21 @@ const PIECE = {
   swellLift: 4,      // tuning-exempt: art -- how far a swell moves the surface
   glowAlpha: 0.3,    // tuning-exempt: art -- how far a light warms a whole band
   emberFloor: 0.4,   // tuning-exempt: art -- a wick that is never quite out
+  // Genesis 3. Every one of these is a fraction of the drop from the top of the
+  // band to the ground line, or a width in virtual px, and all of them live
+  // above that ground line: "keep every one of them behind and above the rail.
+  // A serpent in the branches is atmosphere; a serpent near the words is a
+  // distraction." The clamp in `bandRect` guarantees the second half of that;
+  // these numbers are what keeps the first.
+  canopyH: 0.3,      // tuning-exempt: art -- how far down the band a canopy hangs
+  boughAt: 0.34,     // tuning-exempt: art -- where the bough crosses, under the canopy
+  boughH: 4,         // tuning-exempt: art -- how thick the bough is
+  leanTo: 0.32,      // tuning-exempt: art -- how far below the bough a serpent may lean
+  serpentW: 3,       // tuning-exempt: art -- the serpent, in virtual px
+  trunkW: 6,         // tuning-exempt: art -- a trunk, in virtual px
+  fruitSize: 4,      // tuning-exempt: art -- one fruit
+  treeW: 4,          // tuning-exempt: art -- a tree in the middle distance
+  bladeW: 7,         // tuning-exempt: art -- the sword at its broadest, turning
 } as const;
 
 /** The art role the sky behind the parallax takes; every theme supplies one. */
@@ -380,6 +396,24 @@ export interface FrameState {
    * existing frame is byte-for-byte what it was.
    */
   readonly scene?: SceneState;
+  /**
+   * Draw this frame with the motion reduced.
+   *
+   * Absent means the full presentation, which is what every frame in the game
+   * used to be, and absent produces byte-for-byte the display list it always
+   * did. Present and true, the parallax layers stop shifting -- `reduced_parallax`
+   * multiplies their authored depths and it is zero -- and nothing else about
+   * the picture changes: same bands, same set pieces, same ground line, same
+   * focal column.
+   *
+   * It arrives as *state* rather than being asked for, because
+   * `prefers-reduced-motion` is a question only a platform can answer and
+   * `core/` never asks a platform anything. The rest of the presentation is not
+   * here: the ribbon's step is in `core/rail.ts` and the world's is in the
+   * platform's frame loop, because that is where each of those already lived.
+   * See docs/design/12-motion-and-comfort.md#what-reduced-motion-changes.
+   */
+  readonly reduced?: boolean;
   /**
    * The company walking behind the scribe: everyone whose passage he has
    * finished, and everyone whose room he has found.
@@ -1442,6 +1476,87 @@ function setpieceArt(
         PIECE.moteSize + PIECE.moteSize, PIECE.moteSize, p('flock'));
       break;
     }
+    case 'serpent_in_the_branches': {
+      // Above, in the branches, and it stays there. The canopy and the bough are
+      // fixed -- a tree that moved would read as weather -- and the only thing
+      // the completed words move is how far along the bough the serpent has come
+      // and how far below it it leans. `leanTo` is a fraction of the drop to the
+      // ground, well short of it: the text does not put the serpent on the ground
+      // until verse 14, and the ground is where the scribe is walking.
+      const canopyBot = SCENE.top + rise * PIECE.canopyH;
+      const boughY = SCENE.top + rise * PIECE.boughAt;
+      const from = layout.scribeX + PIECE.bushInset - M.vw;
+      bandRect(back, theme, 'light', from, SCENE.top, M.vw, canopyBot - SCENE.top, PIECE.waterAlpha);
+      bandRect(back, theme, 'outline', from, boughY, M.vw, PIECE.boughH, 1);
+      // Along the bough first, then leaning off it. Both are the same word count
+      // read twice, which is what makes the tableau player-paced.
+      const along = M.vw * p('coil');
+      bandRect(back, theme, 'accent', from + M.vw - along, boughY - PIECE.serpentW,
+        along, PIECE.serpentW, 1);
+      const drop = rise * PIECE.leanTo * p('lean');
+      bandRect(back, theme, 'accent',
+        from + M.vw - along + PIECE.moteDrift * p('sway'), boughY + PIECE.boughH,
+        PIECE.serpentW, drop, 1);
+      break;
+    }
+    case 'fruit_taken': {
+      // The tree stands still and one fruit leaves it. Nothing else in the frame
+      // moves, because nothing else in the verse does.
+      const canopyBot = SCENE.top + rise * PIECE.canopyH;
+      const x = layout.scribeX + PIECE.bushInset;
+      bandRect(back, theme, 'light', x - PIECE.fireW, SCENE.top,
+        PIECE.fireW + PIECE.fireW, canopyBot - SCENE.top, PIECE.waterAlpha);
+      bandRect(back, theme, 'outline', x, canopyBot, PIECE.trunkW, ground - canopyBot, 1);
+      // Still on the bough, fading as it is taken.
+      bandRect(back, theme, 'blood', x - PIECE.fireW, canopyBot - PIECE.fruitSize,
+        PIECE.fruitSize, PIECE.fruitSize, p('ripe'));
+      // And the one that is taken, coming down out of the canopy.
+      const fallen = canopyBot + (ground - PIECE.fruitSize - canopyBot) * p('taken');
+      bandRect(back, theme, 'blood', x + PIECE.trunkW + PIECE.moteDrift * p('sway'), fallen,
+        PIECE.fruitSize, PIECE.fruitSize, 1);
+      break;
+    }
+    case 'fig_leaves': {
+      // Leaves closing along the ground, one after another -- `inTurn`, the same
+      // line the lamps and the baskets use, because sewing them together happens
+      // in an order and a slider being dragged does not.
+      const step = M.vw / PIECE.motes;
+      const h = PIECE.lintelH + (PIECE.fireH - PIECE.lintelH) * p('sewn');
+      bandRect(back, theme, 'light', 0, ground - PIECE.lintelH, M.vw, PIECE.lintelH, p('cover'));
+      for (let i = 0; i < PIECE.motes; i += 1) {
+        bandRect(back, theme, 'light', i * step + step / 2 + PIECE.moteDrift * p('sway'),
+          ground - h, PIECE.fireW, h, inTurn(p('cover'), i));
+      }
+      break;
+    }
+    case 'walking_in_the_garden': {
+      // The cool of the day: the light goes out of the band, the trees stir, and
+      // a shade gathers along the ground. Nobody is drawn. The text says they
+      // *heard*, and a figure walking in the garden would be the scenery making a
+      // claim the passage does not.
+      const step = M.vw / PIECE.motes;
+      for (let i = 0; i < PIECE.motes; i += 1) {
+        bandRect(back, theme, 'outline', i * step + PIECE.moteDrift * p('stir'),
+          SCENE.top, PIECE.treeW, rise, PIECE.waterAlpha);
+      }
+      bandRect(back, theme, 'shade', 0, ground - PIECE.glowH, M.vw, PIECE.glowH, p('hidden'));
+      veil(front, theme, 'shade', p('cool'));
+      break;
+    }
+    case 'flaming_sword': {
+      // The one verse of the chapter that travels, so this plays over a world
+      // that has started scrolling again. The way back closes behind him, and the
+      // blade turns every way -- which is a width rather than a rotation, because
+      // a bar that narrows to a line and opens out again is what a turning blade
+      // looks like from one side.
+      const x = layout.scribeX - PIECE.bushInset;
+      const h = rise * p('closed');
+      bandRect(back, theme, 'outline', x, ground - h, PIECE.wallW, h, 1);
+      const w = 1 + PIECE.bladeW * p('turn');
+      bandRect(front, theme, 'flame', x + PIECE.wallW / 2 - w / 2, ground - rise * PIECE.leanTo,
+        w, rise * PIECE.leanTo, PIECE.emberFloor + (1 - PIECE.emberFloor) * p('flame'));
+      break;
+    }
     case 'tree_of_life': {
       const h = PIECE.glowH * p('leaves');
       bandRect(back, theme, 'light', 0, SCENE.top, M.vw, h, p('leaves'));
@@ -1470,6 +1585,7 @@ function pushScene(
   scene: SceneState,
   followers: FollowerLine,
   tuning: Tuning,
+  reduced: boolean,
 ): void {
   const world = worldFor(scene.theme);
   // The tiles, the layer geometry and the ground line all come from the world
@@ -1490,11 +1606,16 @@ function pushScene(
     color: roleIndex(SKY_ROLE), theme,
   });
 
+  // A layer lags the camera by its own depth; the ground alone keeps up. In
+  // reduced motion every depth is multiplied by `reduced_parallax`, which is
+  // zero, so the layers hold still: several fields moving at differing rates is
+  // the strongest half of the stimulus and the least load-bearing part of the
+  // picture. docs/design/12-motion-and-comfort.md#what-reduced-motion-changes
+  const depth = parallaxScale(tuning, reduced);
   for (const layer of world.parallax) {
     const y = px(projY(projection, layer.y));
     const h = Math.max(1, Math.round(projH(projection, layer.h)));
-    // A layer lags the camera by its own depth; the ground alone keeps up.
-    const shift = wrapToTile(scene.cameraX * layer.factor);
+    const shift = wrapToTile(scene.cameraX * layer.factor * depth);
     cmds.push({
       op: 'tile', id: layer.tileId, x: px(-shift), y, w: M.vw + SPRITE_SIZE, h,
       alpha: SCENE.layerAlphaBase + SCENE.layerAlphaSpan * layer.factor,
@@ -1678,7 +1799,12 @@ function pushFollowers(
  * on the rail is the thing that must not move, and the way to guarantee that is
  * to draw nothing near it.
  */
-function pushWarpWorld(cmds: DrawCmd[], warp: WarpView): void {
+function pushWarpWorld(
+  cmds: DrawCmd[],
+  warp: WarpView,
+  tuning: Tuning,
+  reduced: boolean,
+): void {
   if (warp.worldMix <= 0) return;
   const world = worldFor(warp.toTheme);
   const theme = world.id;
@@ -1690,7 +1816,11 @@ function pushWarpWorld(cmds: DrawCmd[], warp: WarpView): void {
   for (const layer of world.parallax) {
     const y = px(projY(projection, layer.y));
     const h = Math.max(1, Math.round(projH(projection, layer.h)));
-    const shift = wrapToTile(warp.cameraX * layer.factor);
+    // The arriving world holds still too, or a crossing would be the one place
+    // in the game where a reduced presentation still slid three layers past a
+    // fixed gaze point. The crossfade itself is untouched: it is 1.4 seconds,
+    // it is what the crossing *is*, and it is not what anybody adapted to.
+    const shift = wrapToTile(warp.cameraX * layer.factor * parallaxScale(tuning, reduced));
     cmds.push({
       op: 'tile', id: layer.tileId, x: px(-shift), y, w: M.vw + SPRITE_SIZE, h,
       alpha: (SCENE.layerAlphaBase + SCENE.layerAlphaSpan * layer.factor) * warp.worldMix,
@@ -1757,11 +1887,12 @@ function pushNotice(cmds: DrawCmd[], lines: readonly string[]): void {
 export function drawFrame(state: FrameState, rail: RailState, tuning: Tuning): DrawCmd[] {
   const cmds: DrawCmd[] = [];
   cmds.push({ op: 'rect', x: 0, y: 0, w: M.vw, h: M.vh, color: pal('bg') });
+  const reduced = state.reduced === true;
   if (state.scene !== undefined) {
-    pushScene(cmds, state.scene, state.followers ?? EMPTY_LINE, tuning);
+    pushScene(cmds, state.scene, state.followers ?? EMPTY_LINE, tuning, reduced);
   }
   const warp = state.warp;
-  if (warp !== undefined) pushWarpWorld(cmds, warp);
+  if (warp !== undefined) pushWarpWorld(cmds, warp, tuning, reduced);
   pushHud(cmds, state, tuning);
   pushRail(cmds, state, rail, tuning);
   // After the rail, so nothing of either ribbon can be drawn over the phrase

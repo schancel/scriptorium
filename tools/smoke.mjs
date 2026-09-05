@@ -27,7 +27,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const calls = { fillText: [], lines: [], fills: [], sprites: [], fillRect: 0, stroke: 0, ready: null };
+const calls = {
+  fillText: [], lines: [], fills: [], sprites: [], clips: [], fillRect: 0, stroke: 0, ready: null,
+};
 // Every (verse, sky colour) the game has drawn while standing in Genesis 1.
 // The scenery is the one thing in the game a unit test can only ever see as a
 // display list: `core/scenes.test.ts` proves the *resolver* returns seven
@@ -53,7 +55,13 @@ class Ctx2D {
   restore() { this._clipped = (this._clips ?? []).pop() === true; }
   clearRect() {}
   fillRect(x, y, w, h) { calls.fillRect += 1; calls.fills.push({ x, y, w, h, color: this.fillStyle }); }
-  beginPath() {} rect() {} clip() { this._clipped = true; }
+  // The clip rect is the only place a *parallax* band's position surfaces:
+  // `canvas_renderer.ts` fills one by clipping to the command's rect and
+  // repeating a 16x16 image inside it, so the rect's x is the layer's scroll
+  // phase and nothing else in the frame produces one. That is what makes
+  // "the parallax froze" an assertion rather than a screenshot.
+  beginPath() {} rect(x, y, w, h) { this._rect = { x, y, w, h }; }
+  clip() { this._clipped = true; if (this._rect) calls.clips.push(this._rect); }
   // The caret and the focal guide are lines, and "the eyes never move" is a
   // claim about exactly where they are drawn -- so they are recorded rather
   // than counted.
@@ -134,6 +142,9 @@ globalThis.document = {
     return el;
   },
   body: { classList: { add: (c) => { calls.ready = c; }, remove() {}, toggle() {} } },
+  // A backgrounded tab is a real state of a real browser, and the game has to
+  // come back from it. See the audio recovery assertions below.
+  visibilityState: 'visible',
   addEventListener: (t, h) => { (listeners[t] ??= []).push(h); },
   removeEventListener: (t, h) => { listeners[t] = (listeners[t] ?? []).filter((f) => f !== h); },
   querySelectorAll: () => [],
@@ -163,7 +174,7 @@ globalThis.localStorage = {
 // `web_audio.ts` leans on it: `connect` returns its destination, because the
 // noise voice chains `noise.connect(filter).connect(gain)`, and an AudioParam
 // carries the full schedule API.
-const audio = { contexts: 0, started: 0, notes: 0 };
+const audio = { contexts: 0, started: 0, notes: 0, ctx: null };
 function shimParam(value = 0) {
   return {
     value,
@@ -178,6 +189,7 @@ class AudioCtxShim {
   constructor() {
     this.state = 'suspended'; this.currentTime = 0; this.destination = {}; this.sampleRate = 48000;
     audio.contexts += 1;
+    audio.ctx = this;
   }
   createGain() { return shimNode({ gain: shimParam(1) }); }
   createOscillator() {
@@ -257,6 +269,7 @@ function sampleScene() {
 
 const frameNow = () => {
   calls.fillText = []; calls.lines = []; calls.fills = []; calls.sprites = [];
+  calls.clips = [];
   step(1000 + frames * 16);
   sampleScene();
 };
@@ -425,6 +438,7 @@ let clock = 5000;
 function tick(n = 1) {
   for (let i = 0; i < n; i++) {
     calls.fillText = []; calls.lines = []; calls.fills = []; calls.sprites = [];
+    calls.clips = [];
     step(clock += 16);
     sampleScene();
   }
@@ -1163,6 +1177,263 @@ if (doorway !== undefined) {
      'A SKIPPED FLASHBACK NEVER GATES THE EXIT: the chapter finishes without it',
      `after ${past + 1} more parts`);
 }
+
+// --- a held scene ------------------------------------------------------------
+//
+// "The serpent and the woman are talking. Nothing about that conversation
+// travels, and sliding a landscape past it is the game insisting on movement the
+// text does not have." Genesis 3 is authored as five beats, four of them held,
+// and the claim to prove is a pair: the camera does not translate, and the same
+// completed words still move the tableau.
+//
+// The parallax phase is the observable for the camera. `canvas_renderer.ts`
+// fills a layer by clipping to the command's rect and repeating one 16x16 image
+// inside it, so the clip rect's x *is* how far that layer has scrolled -- and it
+// is the only place in the frame that number appears.
+// docs/design/05-scenery-warps.md#held-scenes-not-every-passage-is-a-journey
+
+/** Where the parallax layers stand this frame, innermost first. */
+const layerPhase = () => calls.clips.map((c) => c.x).join(',');
+
+/**
+ * How far the serpent has leaned down out of the branches, in virtual px.
+ *
+ * A rect three pixels wide, in the scenery band, and the only one: it is the
+ * serpent hanging off the bough, and its height is a pure function of how much
+ * of the conversation has been written. No clock touches it -- the swaying is in
+ * its *x* -- which is what makes "the tableau advances on typed words" separable
+ * from "something on the screen is flickering".
+ */
+const serpentLean = () => {
+  const bars = calls.fills.filter(
+    (f) => f.w === 3 && f.y > 22 && f.y + f.h <= RAIL_BAND_TOP,
+  );
+  if (bars.length === 0) return 0;
+  // The lower of the two is the one hanging *below* the bough. The other is the
+  // serpent's length along the bough itself, which is three pixels tall and
+  // whose width is what grows -- the two are told apart by height rather than by
+  // width, because each of them passes through three pixels on the way past.
+  return bars.reduce((low, f) => (f.y > low.y ? f : low), bars[0]).h;
+};
+
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-book').value = 'Genesis';
+stubEl('menu-chapter').value = '3';
+stubEl('menu-go').click();
+await waitFor(() => refText().startsWith('Genesis 3'));
+tick(30);
+
+ok(refText().startsWith('Genesis 3:1'), 'the game opens at the top of Genesis 3', refText());
+
+const heldPhases = new Set();
+const heldSerpent = [];
+let heldTyped = 0;
+for (let i = 0; i < 400; i++) {
+  heldPhases.add(layerPhase());
+  heldSerpent.push(serpentLean());
+  const k = askedFor();
+  if (k === null) break;
+  press(k); heldTyped += 1; tick(2);
+}
+heldPhases.add(layerPhase());
+heldSerpent.push(serpentLean());
+
+ok(heldTyped >= 60, 'the harness typed its way into the conversation',
+   `${heldTyped} keys`);
+ok(heldPhases.size === 1,
+   'A HELD SCENE DOES NOT TRANSLATE THE CAMERA, HOWEVER MUCH IS TYPED',
+   `${heldPhases.size} parallax positions: ${[...heldPhases].slice(0, 3).join(' | ')}`);
+ok(heldSerpent[heldSerpent.length - 1] > heldSerpent[0],
+   'AND THE SAME TYPED WORDS ADVANCE THE TABLEAU INSTEAD',
+   `the serpent leaned ${heldSerpent[0]}px to ${heldSerpent[heldSerpent.length - 1]}px`);
+ok(heldSerpent.every((h, i) => i === 0 || h >= heldSerpent[i - 1]),
+   'and it only ever leans further in, never back',
+   `${heldSerpent[0]} .. ${heldSerpent[heldSerpent.length - 1]}`);
+
+// Nothing on a clock: frames without a keystroke leave the tableau exactly where
+// the last word left it. Same rule as the rest of the game
+// (docs/decisions/0004-idle-threat-not-speed-timer.md), and the reason a held
+// scene is a rest rather than a cutscene.
+const restingAt = serpentLean();
+tick(120);
+ok(serpentLean() === restingAt,
+   'and nothing in a held scene moves while the player is thinking',
+   `${restingAt} -> ${serpentLean()}`);
+
+// The staging rule, checked where it matters: behind and above the rail. A
+// serpent near the words would be competing with the one thing on screen the
+// player is there to read.
+const genesis3Band = calls.fills.filter(
+  (f) => f.y >= 22 && f.y < RAIL_BAND_TOP && f.h > 0 && f.w > 0,
+);
+ok(genesis3Band.length > 1 && genesis3Band.every((f) => f.y + f.h <= RAIL_BAND_TOP),
+   'AND EVERY PART OF THE TABLEAU STAYS ABOVE THE READING BAND',
+   `${genesis3Band.length} shapes, lowest ${Math.max(...genesis3Band.map((f) => f.y + f.h))}`);
+
+// And the observable has teeth: a chapter that is *not* held scrolls under the
+// same measurement. Without this, a parallax that had simply stopped working
+// would pass every assertion above.
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-book').value = 'Genesis';
+stubEl('menu-chapter').value = '1';
+stubEl('menu-go').click();
+await waitFor(() => refText().startsWith('Genesis 1'));
+tick(20);
+
+const travelPhases = new Set();
+let travelTyped = 0;
+for (let i = 0; i < 40; i++) {
+  travelPhases.add(layerPhase());
+  const k = askedFor();
+  if (k === null) break;
+  press(k); travelTyped += 1; tick(3);
+}
+ok(travelPhases.size > 1,
+   'while an ordinary chapter still scrolls, so the measurement means something',
+   `${travelPhases.size} parallax positions over ${travelTyped} keys`);
+
+// --- the two presentations of the rail ---------------------------------------
+//
+// docs/decisions/0011-respect-reduced-motion.md. The owner reported a motion
+// aftereffect that followed him out of the game and into a terminal, and nothing
+// in the game consulted `prefers-reduced-motion`. Both presentations are driven
+// here, because "two presentations of the rail to keep working, and the smoke
+// test must drive both" is a consequence the ADR wrote down.
+
+/** Every glyph on the rail that is not sitting exactly on the focal grid. */
+const offGrid = () => rail().filter((c) => ((c.x - FOCAL) % CELL + CELL) % CELL !== 0);
+
+/** Type a few keys, sampling the frame *immediately* after each one. */
+function driveRail(keys) {
+  const columns = new Set();
+  const slid = [];
+  let typed = 0;
+  for (let i = 0; i < keys; i++) {
+    const k = askedFor();
+    if (k === null) break;
+    press(k); typed += 1;
+    // One frame, not a settled eight: the whole difference between the two
+    // presentations lives in the frames a smooth ribbon spends in between.
+    for (let f = 0; f < 4; f++) {
+      tick(1);
+      slid.push(offGrid().length);
+      const caret = caretX();
+      if (caret !== null) columns.add(caret);
+    }
+  }
+  return { typed, columns, slid };
+}
+
+const smooth = driveRail(10);
+ok(smooth.typed >= 6, 'the smooth presentation took the keys it asked for',
+   `${smooth.typed} keys`);
+ok(smooth.slid.some((n) => n > 0),
+   'the smooth ribbon really does slide, so the next assertion is not vacuous',
+   `${smooth.slid.filter((n) => n > 0).length} of ${smooth.slid.length} frames mid-slide`);
+ok(smooth.columns.size === 1 && smooth.columns.has(FOCAL),
+   'and the reading column does not move while it slides',
+   [...smooth.columns].join(', '));
+
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-motion').value = 'reduced';
+stubEl('menu-motion').dispatchEvent({ type: 'change' });
+await waitFor(() => record().motion === 'reduced');
+stubEl('menu-resume').click();
+await waitFor(() => askedFor() !== null);
+tick(4);
+
+ok(record().motion === 'reduced',
+   'THE MOTION SWITCH IS IN THE MENU AND IS REMEMBERED, NOT ONLY THE SYSTEM SETTING',
+   String(record().motion));
+
+const steppedPhases = new Set();
+const stepped = driveRail(10);
+steppedPhases.add(layerPhase());
+for (let i = 0; i < 10; i++) {
+  const k = askedFor();
+  if (k === null) break;
+  press(k); tick(3);
+  steppedPhases.add(layerPhase());
+}
+
+ok(stepped.typed >= 6, 'the stepped presentation is a way to play, not a way to stop',
+   `${stepped.typed} keys`);
+ok(stepped.slid.every((n) => n === 0),
+   'REDUCED MOTION STEPS THE RIBBON: NO FRAME IS CAUGHT BETWEEN TWO POSITIONS',
+   `${stepped.slid.filter((n) => n > 0).length} of ${stepped.slid.length} frames mid-slide`);
+ok(stepped.columns.size === 1 && stepped.columns.has(FOCAL),
+   'AND THE READING COLUMN IS THE SAME COLUMN IT IS IN THE OTHER PRESENTATION',
+   [...stepped.columns].join(', '));
+ok(steppedPhases.size === 1,
+   'AND THE PARALLAX STOPS DEAD, WHICH IS THE HALF THAT ADAPTS THE EYE',
+   `${steppedPhases.size} parallax positions: ${[...steppedPhases].slice(0, 3).join(' | ')}`);
+
+// Back, because a setting that cannot be turned off is not a setting -- and
+// because everything after this expects the game it had.
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-motion').value = 'auto';
+stubEl('menu-motion').dispatchEvent({ type: 'change' });
+await waitFor(() => record().motion === 'auto');
+stubEl('menu-resume').click();
+await waitFor(() => askedFor() !== null);
+const backPhases = new Set();
+for (let i = 0; i < 20; i++) {
+  backPhases.add(layerPhase());
+  const k = askedFor();
+  if (k === null) break;
+  press(k); tick(3);
+}
+ok(record().motion === 'auto' && backPhases.size > 1,
+   'and it goes back the way it came, with the world moving again',
+   `${backPhases.size} parallax positions`);
+
+// --- the sound comes back after a backgrounded tab ---------------------------
+//
+// "Sound had been working when I turned it on. Now it's not at all." A browser
+// suspends an AudioContext when its tab goes to the background, and the open
+// path latched on "we have opened one before" -- so after one alt-tab nothing
+// ever resumed it and the game was silent for the rest of the evening with the
+// toggle still reading on. Every existing test passed while this was broken.
+// docs/design/09-music.md#a-suspended-context-is-a-backgrounded-tab-not-an-error
+ok(audio.ctx !== null && audio.ctx.state === 'running',
+   'the audio device is open and running before the tab is backgrounded',
+   audio.ctx === null ? '(no context)' : String(audio.ctx.state));
+
+// Backgrounded: exactly what a browser does, and not an error.
+audio.ctx.state = 'suspended';
+const silentFrom = audio.notes;
+tick(60);
+ok(audio.notes === silentFrom, 'a suspended device schedules nothing, as the browser intends',
+   `${audio.notes - silentFrom} notes`);
+
+// He comes back and types. A keystroke is a user gesture, so resuming inside the
+// input handler is allowed -- and it is the same door the first keystroke used.
+const typedKey = askedFor();
+if (typedKey !== null) press(typedKey);
+await waitFor(() => audio.ctx.state === 'running', 20);
+tick(120);
+ok(audio.ctx.state === 'running', 'TYPING AGAIN RESUMES THE DEVICE INSTEAD OF LATCHING IT OFF',
+   String(audio.ctx.state));
+ok(audio.notes > silentFrom, 'AND THE MUSIC IS ACTUALLY SOUNDING AGAIN, NOT MERELY ENABLED',
+   `${audio.notes - silentFrom} notes since it was suspended`);
+
+// And without a keystroke at all: the tab coming back to the foreground is
+// enough, which is what a player alt-tabbing back from a terminal actually does.
+audio.ctx.state = 'suspended';
+const backFrom = audio.notes;
+globalThis.document.visibilityState = 'visible';
+for (const handler of listeners.visibilitychange ?? []) handler({ type: 'visibilitychange' });
+await waitFor(() => audio.ctx.state === 'running', 20);
+tick(120);
+ok((listeners.visibilitychange ?? []).length > 0,
+   'the game is listening for the tab coming back at all');
+ok(audio.ctx.state === 'running' && audio.notes > backFrom,
+   'AND COMING BACK TO THE TAB BRINGS THE SOUND BACK WITH NO KEYSTROKE AT ALL',
+   `${audio.notes - backFrom} notes, device ${String(audio.ctx.state)}`);
 
 // --- the voice ---------------------------------------------------------------
 //

@@ -49,6 +49,11 @@ export type SetpieceId =
   | 'waters_divided'
   | 'land_from_water'
   | 'swarming'
+  | 'serpent_in_the_branches'
+  | 'fruit_taken'
+  | 'fig_leaves'
+  | 'walking_in_the_garden'
+  | 'flaming_sword'
   | 'rising_water'
   | 'burning_bush'
   | 'blood_on_doorposts'
@@ -69,6 +74,11 @@ export const SETPIECE_IDS: readonly SetpieceId[] = [
   'waters_divided',
   'land_from_water',
   'swarming',
+  'serpent_in_the_branches',
+  'fruit_taken',
+  'fig_leaves',
+  'walking_in_the_garden',
+  'flaming_sword',
   'rising_water',
   'burning_bush',
   'blood_on_doorposts',
@@ -130,6 +140,7 @@ const FLAME_MS = 220;               // tuning-exempt: art timing, a flame's flic
 const SMOKE_MS = 1700;              // tuning-exempt: art timing, smoke rolling
 const SWELL_MS = 2600;              // tuning-exempt: art timing, a sea's swell
 const DRIFT_MS = 3100;              // tuning-exempt: art timing, manna drifting down
+const TURN_MS = 900;                // tuning-exempt: art timing, a blade turning every way
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
@@ -162,6 +173,64 @@ const SCRIPTS: Readonly<Record<SetpieceId, Script>> = {
     light: progress,
     dark: 1 - progress,
     shimmer: wave(input.elapsedMs, SMOKE_MS),
+  }),
+
+  /**
+   * Genesis 3:1-5: the serpent, above, in the branches.
+   *
+   * `lean` is how far down the bough it has come as the conversation runs, and
+   * it stops short of 1 in the drawing rather than here -- it never reaches the
+   * ground, because the text does not put it there until verse 14 and because
+   * the ground is where the scribe is walking. `coil` gathers, so it is a shape
+   * in a tree before it is a thing leaning out of one.
+   */
+  serpent_in_the_branches: (input, progress) => ({
+    lean: progress,
+    coil: gathering(progress),
+    sway: wave(input.elapsedMs, DRIFT_MS),
+  }),
+
+  /** Genesis 3:6: the tree stands, and one fruit leaves the bough. */
+  fruit_taken: (input, progress) => ({
+    taken: progress,
+    ripe: 1 - progress,
+    sway: wave(input.elapsedMs, DRIFT_MS),
+  }),
+
+  /** Genesis 3:7: leaves close along the ground, one after another. */
+  fig_leaves: (input, progress) => ({
+    cover: progress,
+    sewn: gathering(progress),
+    sway: wave(input.elapsedMs, DRIFT_MS),
+  }),
+
+  /**
+   * Genesis 3:8-23: the cool of the day, and something moving in the garden.
+   *
+   * `cool` is the light going out of the day and `stir` is the trees moving.
+   * There is deliberately no parameter for a figure: the text says they *heard*,
+   * and a flourish that drew somebody walking in the garden would be the scenery
+   * making a claim the passage does not.
+   */
+  walking_in_the_garden: (input, progress) => ({
+    cool: progress,
+    hidden: gathering(progress),
+    stir: wave(input.elapsedMs, SMOKE_MS),
+  }),
+
+  /**
+   * Genesis 3:24: the way back closes, and a blade turns every way.
+   *
+   * `turn` is a wave rather than progress because turning every way is what the
+   * sword *does* rather than something it finishes doing -- the same reason
+   * `consumed` is pinned at zero in the burning bush. This is the one row of
+   * Genesis 3 that is not held, so it plays over a world that has started
+   * scrolling again.
+   */
+  flaming_sword: (input, progress) => ({
+    closed: progress,
+    turn: wave(input.elapsedMs, TURN_MS),
+    flame: wave(input.elapsedMs, FLAME_MS),
   }),
 
   /** Genesis 6-9: the level itself rises with the water. */

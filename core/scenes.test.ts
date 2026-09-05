@@ -58,7 +58,7 @@ const route = loadRoute(loadDataFile('routes/pilgrimage.json'));
 const themes = new Set(loadThemes(loadDataFile('themes.json')).map((t) => t.id));
 const tuning: Tuning = loadTuning(loadDataFile('tuning.json'));
 
-const ROW_COUNT = 29; // tuning-exempt: rows in docs/design/05-scenery-warps.md#set-pieces
+const ROW_COUNT = 34; // tuning-exempt: rows in docs/design/05-scenery-warps.md#set-pieces
 
 /** The seven scenes Genesis 1 is authored as, first verse of each. */
 const GENESIS_1: readonly (readonly [number, string])[] = [
@@ -83,7 +83,7 @@ test('overlap detection has teeth', () => {
     rows: [
       ...scenes.rows,
       // tuning-exempt: chapter numbers in a fixture range
-      { range: 'Genesis 3-6', book: 'Genesis', first: 3, last: 6, firstVerse: null, lastVerse: null, theme: 'storm', setpiece: null }, // tuning-exempt: chapter numbers in a fixture range
+      { range: 'Genesis 3-6', book: 'Genesis', first: 3, last: 6, firstVerse: null, lastVerse: null, theme: 'storm', setpiece: null, held: false }, // tuning-exempt: chapter numbers in a fixture range
     ],
   };
   const clashes = overlappingRanges(clashing).map((pair) => pair.join(' + '));
@@ -102,7 +102,7 @@ test('TWO VERSE ROWS CLAIMING ONE VERSE IS AN OVERLAP, AND A NESTED ONE IS NOT',
     rows: [
       ...scenes.rows,
       // tuning-exempt: verse numbers in a fixture range
-      { range: 'Genesis 1:4-7', book: 'Genesis', first: 1, last: 1, firstVerse: 4, lastVerse: 7, theme: 'storm', setpiece: null }, // tuning-exempt: verse numbers in a fixture range
+      { range: 'Genesis 1:4-7', book: 'Genesis', first: 1, last: 1, firstVerse: 4, lastVerse: 7, theme: 'storm', setpiece: null, held: false }, // tuning-exempt: verse numbers in a fixture range
     ],
   };
   const clashes = overlappingRanges(clashing).map((pair) => pair.join(' + '));
@@ -256,6 +256,83 @@ test('A TEXT WITH NO SCENE MAP IS AN ABBEY THROUGHOUT, AND THAT IS CORRECT', () 
     assert.equal(themeFor(null, ref), DEFAULT_THEME);
     assert.equal(setpieceFor(null, ref), null);
   }
+});
+
+// --- held scenes --------------------------------------------------------------
+
+/** Genesis 3, as the table authors it: the first verse of each beat, and its flag. */
+const GENESIS_3: readonly (readonly [number, string, boolean])[] = [
+  [1, 'serpent_in_the_branches', true], // tuning-exempt: verse numbers from the scene table
+  [6, 'fruit_taken', true],             // tuning-exempt: verse numbers from the scene table
+  [7, 'fig_leaves', true],              // tuning-exempt: verse numbers from the scene table
+  [8, 'walking_in_the_garden', true],   // tuning-exempt: verse numbers from the scene table
+  [24, 'flaming_sword', false],         // tuning-exempt: verse numbers from the scene table
+];
+
+test('GENESIS 3 IS AUTHORED AS THE CHAPTER IT IS, AND ONLY ITS LAST VERSE TRAVELS', () => {
+  // "The serpent and the woman are talking. Nothing about that conversation
+  // travels." Four beats standing still and one that goes somewhere, which is
+  // the shape of the chapter rather than a preference about scrolling.
+  for (const [verse, piece, held] of GENESIS_3) {
+    const at = sceneFor(scenes, `Genesis 3:${String(verse)}`);
+    assert.equal(at.setpiece, piece, `Genesis 3:${String(verse)} is the wrong flourish`);
+    assert.equal(at.held, held, `Genesis 3:${String(verse)} holds the wrong way`);
+    assert.equal(at.theme, 'garden', 'the whole chapter is one place');
+  }
+  assert.equal(GENESIS_3.filter(([, , held]) => held).length, 4); // tuning-exempt: four beats of five
+});
+
+test('the hold is read off the verse under the cursor, never off the chapter', () => {
+  // The chapter row `Genesis 2-3` is not held and must not become held: a
+  // question about "Genesis 3" is a question about the chapter as a whole, and
+  // the beats inside it are not an answer to it. What moves the camera is the
+  // verse the player is standing in.
+  assert.equal(sceneFor(scenes, 'Genesis 3').held, false);
+  assert.equal(sceneFor(scenes, 'Genesis 2').held, false);
+  for (const [verse, , held] of GENESIS_3) {
+    assert.equal(sceneAtVerse(scenes, 'Genesis 3', verse, tuning).held, held);
+  }
+  // And mid-verse, because the camera asks on every frame and the cursor spends
+  // almost all of its life between two whole verse numbers.
+  assert.equal(sceneAtVerse(scenes, 'Genesis 3', 3.5, tuning).held, true); // tuning-exempt: mid-verse
+  assert.equal(sceneAtVerse(scenes, 'Genesis 3', 24.5, tuning).held, false); // tuning-exempt: mid-verse
+});
+
+test('nothing else in the table stands still, so the world still travels', () => {
+  // A flag that had leaked onto the ordinary rows would stop the game scrolling
+  // everywhere and look exactly like a broken camera.
+  const heldRows = scenes.rows.filter((row) => row.held).map((row) => row.range);
+  assert.deepEqual(heldRows, ['Genesis 3:1-5', 'Genesis 3:6', 'Genesis 3:7', 'Genesis 3:8-23']);
+  for (const [verse] of GENESIS_1) {
+    assert.equal(sceneAtVerse(scenes, 'Genesis 1', verse, tuning).held, false);
+  }
+});
+
+test('an unreadable held flag is a load error, not a quietly unheld scene', () => {
+  // The same rule as a backwards range: a flag that failed open would look
+  // exactly like a row nobody had marked, and nothing would ever say so.
+  assert.throws(
+    () => loadScenes({
+      text: 'x',
+      scenes: [{ range: 'Genesis 1', theme: 'garden', setpiece: null, held: 'true' }],
+    }),
+    /unreadable held flag/,
+  );
+  // Absent and null both mean a scene that travels, which is what every row
+  // meant before the column existed.
+  for (const value of [null, undefined]) {
+    const map = loadScenes({
+      text: 'x',
+      scenes: [{ range: 'Genesis 1', theme: 'garden', setpiece: null, held: value }],
+    });
+    assert.equal(map.rows[0]?.held, false);
+  }
+});
+
+test('a text with no scene file has nothing held, like everything else', () => {
+  assert.equal(GENERIC_SCENE.held, false);
+  assert.equal(sceneFor(null, 'The Wind in the Willows 3').held, false);
+  assert.equal(sceneAtVerse(null, 'The Wind in the Willows 3', 2, tuning).held, false);
 });
 
 test('every set piece the table names is implemented', () => {

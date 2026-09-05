@@ -492,6 +492,43 @@
       the game is fully playable without it.
     </p>
 
+    <!-- ADR 0011. The rail holds the eyes still and slides the world past them,
+         which is most of why it works and all of why it can leave someone with a
+         motion aftereffect after a long sitting. The owner got one and had never
+         had any reason to turn the system setting on, so this is here as well as
+         being read off the system. docs/design/12-motion-and-comfort.md -->
+    <h3>Movement</h3>
+    <div class="row">
+      <label>Movement
+        <select id="menu-motion">
+          <option value="auto">Follow your system setting</option>
+          <option value="full">Full &mdash; the page slides</option>
+          <option value="reduced">Reduced &mdash; the page steps</option>
+        </select>
+      </label>
+    </div>
+    <p class="dim" id="menu-motion-note"></p>
+    <p class="dim">
+      The words slide past a point that never moves, and the scenery behind them
+      slides at three different speeds. After a long sitting that can leave things
+      drifting for a few minutes afterwards &mdash; still text seeming to wave, a
+      stopped screen seeming to slide. It is harmless and it passes, but it is a
+      reason to stop, and nobody should have to choose between practising and
+      being comfortable.
+    </p>
+    <p class="dim">
+      With movement reduced the page <b>steps</b> forward instead of sliding, the
+      scenery behind it holds still, and the flourishes over a passage run
+      gently rather than stopping. Where you read does not change: the letter you
+      are typing stays in the column it has always been in. Nothing is removed
+      &mdash; every passage still looks like the place it is set in, and every
+      chapter still plays what it plays.
+    </p>
+    <p class="dim">
+      Your operating system has a setting for this, and following it is the
+      default. Set it here instead if you want it on one machine and not another.
+    </p>
+
     <h3>Your hands</h3>
     <div class="row">
       <button id="menu-hands" type="button">Show the report card</button>

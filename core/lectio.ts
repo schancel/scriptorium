@@ -143,9 +143,24 @@ export function lectioCursor(state: LectioState): number {
  * The ribbon offset for this frame: the same geometry `core/rail.ts` uses for
  * typing, with a fractional cursor. The focal x is untouched, which is the
  * invariant docs/design/02-rail.md#the-focal-guide requires of every mode.
+ *
+ * `reduced` floors the offset to a whole character, so the page advances a
+ * character at a time instead of gliding. This is the one mode in the game whose
+ * entire content is a continuously sliding page, which makes it the strongest
+ * stimulus in it -- so the fractional offset the section above defends is exactly
+ * what has to go when the player has asked for reduced motion. It becomes a
+ * stutter, and that is the honest translation: the mode still runs, still ramps,
+ * still asks nothing, and no longer slides.
+ * See docs/design/12-motion-and-comfort.md#reading-mode-steps-as-well.
  */
-export function lectioOffset(state: LectioState, viewportW: number, tuning: Tuning): number {
-  return focalX(viewportW, tuning) - state.charOffset * CELL_W;
+export function lectioOffset(
+  state: LectioState,
+  viewportW: number,
+  tuning: Tuning,
+  reduced = false,
+): number {
+  const at = reduced ? Math.floor(state.charOffset) : state.charOffset;
+  return focalX(viewportW, tuning) - at * CELL_W;
 }
 
 /** True once the ribbon has run off the end of the passage. */

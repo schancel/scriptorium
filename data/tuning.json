@@ -59,7 +59,10 @@
     "scene_blend_verses": 2,
     "follower_spacing_px": 20,
     "follower_line_max": 6,
-    "follower_walk_ms": 120
+    "follower_walk_ms": 120,
+    "reduced_parallax": 0,
+    "reduced_anim_scale": 0.35,
+    "reduced_camera_lerp": 0.5
   },
   "meta": {
     "grey_snap_ms": {
@@ -301,6 +304,18 @@
     "follower_walk_ms": {
       "unit": "ms",
       "description": "Frame duration of a follower's two-frame walk, and the stagger between one figure and the next, so the line does not march in lockstep. It matches the scribe's own stride because they are walking with him."
+    },
+    "reduced_parallax": {
+      "unit": "ratio",
+      "description": "What the parallax layers' own depths are multiplied by in [reduced motion](12-motion-and-comfort.md#what-reduced-motion-changes). Zero freezes them, which is the intended value: three layers scrolling at differing rates is the strongest part of the stimulus and the least load-bearing part of the picture. Raise it toward 1 for a near-freeze if a frozen world ever reads as broken rather than as still."
+    },
+    "reduced_anim_scale": {
+      "unit": "ratio",
+      "description": "What a set piece's own clock is multiplied by in reduced motion -- flame, smoke, swell, drift, and the flicker of a candle. Eased down rather than removed: a flourish is brief, it is what the passage looks like, and a picture that stopped entirely would be losing the scenery to fix the scrolling."
+    },
+    "reduced_camera_lerp": {
+      "unit": "fraction",
+      "description": "How much of the remaining distance the world closes each frame in reduced motion, against `rail_scroll_lerp`'s quarter. Half settles a stride in about four frames, which reads as a step rather than a slide and still leaves the scribe long enough to be seen walking. At 1 the world teleports and he never walks."
     }
   },
   "_generated_from": "docs/design/07-tuning.md"

@@ -43,7 +43,7 @@ import { classify } from './illumination.js';
 import type { BlotCloud, DamageState, DrawCmd, Glyph, Key, Score, Tuning } from './types.js';
 
 /** The rows data/tuning.json carries that any of this path reads. */
-const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20, report_trend_parts: 20, report_finger_min_hits: 12, report_reach_ratio: 2.0, report_key_min_attempts: 12, report_worst_key_rate: 0.12, smudge_max: 100, smudge_per_error_base: 12, smudge_per_error_step: 1, smudge_decay_per_key: 3, hearts_start: 3, hearts_max: 5, idle_base_ms: 8000, idle_step_ms: 400, idle_floor_ms: 3000, cloud_approach_ms: 2500, cloud_smudge: 25, monster_burst_ms: 320, strike_reach: 36, stomp_ms: 460, ink_ms: 420, strike_hop_px: 12, strike_contact_px: 7, strike_bounce_ratio: 0.6, strike_nib_arc_px: 14, strike_rise_travel: 0.7 }; // tuning-exempt: test fixture mirroring data/tuning.json
+const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20, report_trend_parts: 20, report_finger_min_hits: 12, report_reach_ratio: 2.0, report_key_min_attempts: 12, report_worst_key_rate: 0.12, smudge_max: 100, smudge_per_error_base: 12, smudge_per_error_step: 1, smudge_decay_per_key: 3, hearts_start: 3, hearts_max: 5, idle_base_ms: 8000, idle_step_ms: 400, idle_floor_ms: 3000, cloud_approach_ms: 2500, cloud_smudge: 25, monster_burst_ms: 320, strike_reach: 36, stomp_ms: 460, ink_ms: 420, strike_hop_px: 12, strike_contact_px: 7, strike_bounce_ratio: 0.6, strike_nib_arc_px: 14, strike_rise_travel: 0.7, reduced_parallax: 0, reduced_anim_scale: 0.35, reduced_camera_lerp: 0.5 }; // tuning-exempt: test fixture mirroring data/tuning.json
 
 const FRAME_MS = 16; // tuning-exempt: test fixture, a frame at 60Hz
 const HOUR_MS = 3600000; // tuning-exempt: the length of the simulated trace
@@ -714,6 +714,75 @@ test('a set piece never moves the reading column', () => {
     const piece = setpieceState(id, { elapsedMs: 1400, progress: 0.5 }); // tuning-exempt: mid-passage
     const cmds = drawFrame(frame(3, { scene: scene({ setpiece: piece }) }), createRail(0), TUNING); // tuning-exempt: a cursor
     assert.equal(caretX(cmds), target, `${id} moved the caret`);
+  }
+});
+
+// --- the two presentations of the world --------------------------------------
+//
+// docs/design/12-motion-and-comfort.md#what-reduced-motion-changes. The parallax
+// is the strongest half of the stimulus -- several fields at differing rates --
+// and the least load-bearing part of the picture, so it is what freezes.
+
+/** Where every parallax band was drawn this frame, in paint order. */
+function tileXs(cmds: readonly DrawCmd[]): number[] {
+  return cmds.filter((c) => c.op === 'tile').map((c) => (c.op === 'tile' ? c.x : 0));
+}
+
+/** A camera that has travelled, in strides a player could actually have typed. */
+const TRAVELLED: readonly number[] = [0, 24, 96, 240, 601]; // tuning-exempt: test fixture, strides of world
+
+test('REDUCED MOTION FREEZES THE PARALLAX: THE LAYERS DO NOT SHIFT AT ALL', () => {
+  for (const theme of WORLDS.keys()) {
+    let first: string | null = null;
+    for (const cameraX of TRAVELLED) {
+      const cmds = drawFrame(
+        frame(0, { scene: scene({ theme, cameraX }), reduced: true }),
+        createRail(0),
+        TUNING,
+      );
+      const xs = JSON.stringify(tileXs(cmds));
+      assert.notEqual(xs, '[]', `${theme} drew no parallax at all`);
+      if (first === null) first = xs;
+      assert.equal(xs, first, `${theme} slid its layers at cameraX ${String(cameraX)}`);
+    }
+  }
+});
+
+test('and the full presentation still scrolls them, at their own depths', () => {
+  // Or the test above would be asserting nothing: a world whose layers never
+  // moved in either presentation would pass it and be broken.
+  const at = (cameraX: number): string => JSON.stringify(tileXs(drawFrame(
+    frame(0, { scene: scene({ cameraX }) }), createRail(0), TUNING,
+  )));
+  const moved = TRAVELLED.filter((cameraX) => at(cameraX) !== at(0));
+  assert.ok(moved.length >= TRAVELLED.length - 1, 'the smooth world stopped scrolling');
+});
+
+test('a reduced frame changes nothing else about the picture', () => {
+  // Not a degraded mode: same bands, same ground line, same set pieces, same
+  // sprites, same colours. The only difference in the whole display list is
+  // where the parallax bands sit, and at a camera of zero there is not even that.
+  for (const theme of WORLDS.keys()) {
+    const still = scene({ theme, cameraX: 0 });
+    assert.deepEqual(
+      drawFrame(frame(3, { scene: still, reduced: true }), createRail(0), TUNING), // tuning-exempt: a cursor
+      drawFrame(frame(3, { scene: still }), createRail(0), TUNING), // tuning-exempt: a cursor
+      `${theme} drew a different world for a reduced frame`,
+    );
+  }
+});
+
+test('the reading column is the same column in a reduced frame', () => {
+  const target = focalX(VIRTUAL_W, TUNING);
+  for (const cameraX of TRAVELLED) {
+    for (const reduced of [false, true]) {
+      const cmds = drawFrame(
+        frame(3, { scene: scene({ cameraX }), reduced }), // tuning-exempt: a cursor
+        createRail(0),
+        TUNING,
+      );
+      assert.equal(caretX(cmds), target, `the caret moved with reduced=${String(reduced)}`);
+    }
   }
 });
 

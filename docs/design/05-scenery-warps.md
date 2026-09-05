@@ -1,6 +1,6 @@
 # Scenery, set pieces and warps
 
-**Implemented by:** `core/scenes.ts`, `core/setpieces.ts`, `core/worlds.ts`, `core/sprites.ts`, `core/warp.ts`, `core/draw.ts`
+**Implemented by:** `core/scenes.ts`, `core/setpieces.ts`, `core/motion.ts`, `core/worlds.ts`, `core/sprites.ts`, `core/warp.ts`, `core/draw.ts`
 
 ## Scenery is authored, not inferred
 
@@ -143,13 +143,68 @@ not have.
 entirely player-paced, still nothing on a clock, still driven by the same completed words
 -- what changes is what those words move.
 
-Two things fall out of this that are worth stating.
+It is one column on the scene rows, `held`, and it changes exactly one thing: a word
+finished inside a held range does not advance the camera. Everything else is already
+built. A [set piece](#set-pieces) is a pure function of progress through the range it
+decorates, so the tableau it draws is *already* moved by completed words and by nothing
+else -- which is why a held scene needs a flag rather than a mechanism.
+
+Three consequences, and all three are worth having in writing.
+
+**The world does not lurch when the hold ends.** The camera is a function of *travelled*
+words rather than of all words: a word typed while the scene is held is not travelled, and
+the count of them is subtracted for the rest of the passage. So the scribe resumes from
+where he was standing rather than jumping forward by everything that happened while the
+serpent was talking. `core/motion.ts` holds that arithmetic, and it is the same module
+that holds reduced motion, because they are the same question asked twice.
+
+**No monsters stand in a held scene.** A monster's world position is derived from the
+position the camera will have reached when its word is finished, and in a held range the
+camera never reaches it -- so it would be felled off the right-hand edge of the screen,
+which is a reward the player never sees. There are none placed there instead. That is also
+the right picture: a skeleton in Eden during the temptation is the platformer talking over
+the passage.
 
 **It is the natural rest.** A held scene has no lateral scroll at all, and lateral scroll
 is the largest contributor to the motion aftereffect described in
 [motion and comfort](12-motion-and-comfort.md). So the passages that most want to stand
 still are also the ones that give the eyes a break, and a long session acquires a rhythm
-of travelling and stopping rather than one unbroken slide.
+of travelling and stopping rather than one unbroken slide. Held scenes and
+[reduced motion](12-motion-and-comfort.md#what-reduced-motion-changes) are the same
+mechanism seen twice: one is authored per passage because of what the text is doing, the
+other is chosen by the player because of what his eyes are doing, and both end in the same
+line of arithmetic.
+
+### Genesis 3, authored as the chapter it is
+
+Genesis 1 needed [verse ranges](#verse-ranges) because it moves through seven places.
+Genesis 3 needs them for the opposite reason: it is a conversation, a decision and its
+consequence, and only the last verse of it goes anywhere at all. Five beats, four of them
+held:
+
+| range | held | reads as |
+|---|---|---|
+| `Genesis 3:1-5` | yes | the serpent, above in the branches, leaning further down the bough as it talks |
+| `Genesis 3:6` | yes | the tree, and one fruit leaving the bough |
+| `Genesis 3:7` | yes | fig leaves closing along the ground, one after another |
+| `Genesis 3:8-23` | yes | the light cooling toward evening and something moving among the trees |
+| `Genesis 3:24` | — | driven out: the way behind them closes, and a flaming sword turns |
+
+**The serpent is in the branches, and stays there.** Above the rail and behind the scribe,
+where the whole of the scenery band is -- a serpent near the words is not atmosphere, it
+is a distraction from the one thing on screen the player is meant to be reading. It is not
+on the ground because the ground is where the scribe is walking, and because the curse in
+verse 14 is the first time the text puts it there; before that it is in the tree it is
+talking about.
+
+**Nothing draws a figure for the voice in verse 8.** The text says they *heard*, and what
+the tableau moves is the light and the trees. A flourish that put a person in the garden
+would be the scenery making a claim the passage does not.
+
+**The last verse travels, and it is the only one that does.** Being driven out is the one
+thing in the chapter that is movement, so it is the one row without the flag -- the world
+starts scrolling again on the verse where they are put out of the garden, and the
+gate closing and the sword turning happen behind the scribe as he goes.
 
 **The scribe never becomes anyone.** He is a novice copying a manuscript, in every book,
 including the Gospels -- the owner asked, and the answer matters. It is why followers
@@ -165,37 +220,47 @@ scene, so most passages need only a theme and the memorable ones can be special.
 
 <!-- generates: data/scenes/bible.json -->
 
-| range | theme | setpiece |
-|---|---|---|
-| Genesis 1 | `daybreak` | `light_from_dark` |
-| Genesis 1:1-2 | `void` | — |
-| Genesis 1:3-5 | `daybreak` | `light_from_dark` |
-| Genesis 1:6-8 | `sea` | `waters_divided` |
-| Genesis 1:9-13 | `garden` | `land_from_water` |
-| Genesis 1:14-19 | `firmament` | — |
-| Genesis 1:20-25 | `sea` | `swarming` |
-| Genesis 1:26-31 | `garden` | — |
-| Genesis 2-3 | `garden` | — |
-| Genesis 6-9 | `sea` | `rising_water` |
-| Genesis 22 | `mountain` | — |
-| Exodus 3 | `desert` | `burning_bush` |
-| Exodus 12 | `city` | `blood_on_doorposts` |
-| Exodus 14 | `sea` | `parted_walls` |
-| Exodus 16-17 | `desert` | `manna` |
-| Exodus 19-20 | `mountain` | `smoke_and_fire` |
-| Numbers 21 | `desert` | — |
-| Psalm 22-23 | `abbey` | — |
-| Isaiah 53 | `abbey` | — |
-| Jonah 1-2 | `storm` | `swallowed` |
-| Matthew 12 | `city` | `bruised_reed` |
-| Matthew 27 | `tomb` | `darkness_at_noon` |
-| John 1 | `daybreak` | `light_from_dark` |
-| John 3 | `city` | `lifted_up` |
-| John 6 | `desert` | `loaves_multiplied` |
-| John 8 | `temple` | `lamps_kindled` |
-| John 10 | `garden` | `gate_of_the_fold` |
-| John 19 | `mountain` | `darkness_at_noon` |
-| Revelation 22 | `garden` | `tree_of_life` |
+| range | theme | setpiece | held |
+|---|---|---|---|
+| Genesis 1 | `daybreak` | `light_from_dark` | — |
+| Genesis 1:1-2 | `void` | — | — |
+| Genesis 1:3-5 | `daybreak` | `light_from_dark` | — |
+| Genesis 1:6-8 | `sea` | `waters_divided` | — |
+| Genesis 1:9-13 | `garden` | `land_from_water` | — |
+| Genesis 1:14-19 | `firmament` | — | — |
+| Genesis 1:20-25 | `sea` | `swarming` | — |
+| Genesis 1:26-31 | `garden` | — | — |
+| Genesis 2-3 | `garden` | — | — |
+| Genesis 3:1-5 | `garden` | `serpent_in_the_branches` | yes |
+| Genesis 3:6 | `garden` | `fruit_taken` | yes |
+| Genesis 3:7 | `garden` | `fig_leaves` | yes |
+| Genesis 3:8-23 | `garden` | `walking_in_the_garden` | yes |
+| Genesis 3:24 | `garden` | `flaming_sword` | — |
+| Genesis 6-9 | `sea` | `rising_water` | — |
+| Genesis 22 | `mountain` | — | — |
+| Exodus 3 | `desert` | `burning_bush` | — |
+| Exodus 12 | `city` | `blood_on_doorposts` | — |
+| Exodus 14 | `sea` | `parted_walls` | — |
+| Exodus 16-17 | `desert` | `manna` | — |
+| Exodus 19-20 | `mountain` | `smoke_and_fire` | — |
+| Numbers 21 | `desert` | — | — |
+| Psalm 22-23 | `abbey` | — | — |
+| Isaiah 53 | `abbey` | — | — |
+| Jonah 1-2 | `storm` | `swallowed` | — |
+| Matthew 12 | `city` | `bruised_reed` | — |
+| Matthew 27 | `tomb` | `darkness_at_noon` | — |
+| John 1 | `daybreak` | `light_from_dark` | — |
+| John 3 | `city` | `lifted_up` | — |
+| John 6 | `desert` | `loaves_multiplied` | — |
+| John 8 | `temple` | `lamps_kindled` | — |
+| John 10 | `garden` | `gate_of_the_fold` | — |
+| John 19 | `mountain` | `darkness_at_noon` | — |
+| Revelation 22 | `garden` | `tree_of_life` | — |
+
+`held` marks a range in which the camera does not translate and the tableau carries the
+passage instead -- one column, and the whole of
+[held scenes](#held-scenes-not-every-passage-is-a-journey). Blank is the ordinary case and
+means the world scrolls, which is what every row meant before the column existed.
 
 A set piece produces **named scalars in 0..1 and no draw commands**; `core/draw.ts` turns
 those into rects inside the scenery band, and nowhere else. Ten little renderers, each
@@ -221,6 +286,18 @@ answering rather than the player collecting:
 | John 10 | `gate_of_the_fold` | the gate of the sheepfold opens across the band and stays open |
 | Matthew 27, John 19 | `darkness_at_noon` | the palette drains to greyscale over the passage |
 | John 1 | `light_from_dark` | the void takes light as the verses are written |
+
+The five flourishes Genesis 3 is made of are all
+[held](#held-scenes-not-every-passage-is-a-journey) but the last, so in four of them the
+tableau is the only thing moving on the screen:
+
+| passage | setpiece | what the world does |
+|---|---|---|
+| Genesis 3:1-5 | `serpent_in_the_branches` | a bough stands across the top of the band and the serpent along it leans further down as the conversation runs -- never onto the ground, and never near the words |
+| Genesis 3:6 | `fruit_taken` | the tree stands still and one fruit leaves the bough, down and out of the canopy |
+| Genesis 3:7 | `fig_leaves` | leaves close along the ground one after another until the band's floor is covered |
+| Genesis 3:8-23 | `walking_in_the_garden` | the light cools toward evening, the trees stir, and a shade gathers over them -- something moving in the garden, and nobody drawn |
+| Genesis 3:24 | `flaming_sword` | the way behind them closes and a blade turns every way in front of it, while the world scrolls again for the first time in the chapter |
 
 `rising_water` physically raises the level as the flood does. `parted_walls` stands the
 sea up on either side of the rail. `darkness_at_noon` drains the palette to greyscale

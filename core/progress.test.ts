@@ -21,6 +21,7 @@ import {
   recordSession,
   replayFirstRun,
   setCloudEnabled,
+  setMotion,
   setGilding,
   setStage,
   shouldOfferGilding,
@@ -377,6 +378,41 @@ test('the blot-cloud switch survives a reload, and moves nothing else', () => {
   // And back on again, the same way.
   const on = migrate(JSON.parse(JSON.stringify(setCloudEnabled(off, true))) as unknown);
   assert.equal(on.cloudEnabled, true);
+});
+
+test('THE MOTION SETTING SURVIVES A RELOAD, AND MOVES NOTHING ELSE', () => {
+  // The third switch the player owns, and the only one about his eyes. Stored
+  // for the same reason the cloud is: a switch that comes back at every reload
+  // is one he has to find again every evening.
+  // docs/decisions/0011-respect-reduced-motion.md
+  const before = play(withPosition(DEFAULT_PROGRESS, SOMEWHERE), stat(perKey, 1, fastMs));
+  assert.equal(before.motion, 'auto', 'a new record follows the operating system');
+
+  const reducedRecord = setMotion(before, 'reduced');
+  assert.equal(reducedRecord.motion, 'reduced');
+  assert.deepEqual({ ...reducedRecord, motion: before.motion }, before,
+    'choosing a presentation moved something other than the presentation');
+
+  const reloaded = migrate(JSON.parse(JSON.stringify(reducedRecord)) as unknown);
+  assert.deepEqual(reloaded, reducedRecord, 'the reload lost the setting');
+
+  // And back the other way, including the explicit full setting -- which must
+  // survive as itself rather than collapsing into the default, or a player who
+  // wants the smooth ribbon on a machine whose system setting is on could not
+  // ask for it twice.
+  const full = migrate(JSON.parse(JSON.stringify(setMotion(reducedRecord, 'full'))) as unknown);
+  assert.equal(full.motion, 'full');
+});
+
+test('a record from before the setting existed follows the operating system', () => {
+  // `auto` is what a version 6 record was getting in effect: nothing consulted
+  // the system setting at all, so the player had never been asked and had never
+  // chosen. It is the only default that starts honouring the system for the
+  // people who had already told it without overriding anybody's choice.
+  assert.equal(migrate(V2_RECORD).motion, 'auto');
+  assert.equal(migrate({ ...DEFAULT_PROGRESS, motion: undefined }).motion, 'auto');
+  // A hand-edited record cannot invent a fourth presentation.
+  assert.equal(migrate({ ...DEFAULT_PROGRESS, motion: 'sometimes' }).motion, 'auto');
 });
 
 test('the gilding mode survives a reload', () => {

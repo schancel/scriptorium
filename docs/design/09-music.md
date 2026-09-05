@@ -189,3 +189,30 @@ no sound and holds no audio device.
 
 The toggle stays exactly where it was. It is how the sound goes *off*, which is the
 direction it was always more likely to be wanted in, and the choice is remembered.
+
+### A suspended context is a backgrounded tab, not an error
+
+Opening the device once, on the first keystroke, introduced a bug that looked exactly like
+the sound having stopped existing. The owner: *"Sound had been working when I turned it on.
+Now it's not at all."*
+
+A browser **suspends an `AudioContext` when its tab goes to the background**, and resumes
+nothing on the way back. That is normal and expected behaviour, not a failure. But the
+open path had a latch in it -- once the device had been opened, it returned early for ever
+-- so nothing ever called `resume()` again, and `play()` drops every event on a context
+that is not running. Alt-tab to a terminal and back, and the game was silent for the rest
+of the evening with the toggle still reading *on*.
+
+Two rules, and the second is the one that was missing:
+
+- **Opening the device is idempotent, not once-only.** The guard is "a context exists
+  *and is running*", never "we have opened one before". Resuming from inside the input
+  handler is legitimate for the same reason opening it there was: a keystroke is a user
+  gesture.
+- **The tab coming back to the foreground resumes it**, so the sound returns without the
+  player having to type. `platform/web/main.ts` listens for `visibilitychange`.
+
+And a failed resume must leave the state able to try again rather than latching, which is
+precisely the trap the first version fell into. The smoke test drives it: start the audio,
+suspend the context the way a backgrounded tab does, type, and assert notes are scheduled
+again. Every existing test passed while this was broken.

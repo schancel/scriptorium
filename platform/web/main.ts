@@ -44,11 +44,15 @@ import { classify } from '../../core/illumination.js';
 import { applyKey, atEnd, createTypingState, gildScore, score, tick } from '../../core/typing.js';
 import { CELL_W, createRail, layoutRail, stepRail } from '../../core/rail.js';
 import {
+  animScale, cameraLerp, isHeldWord, reducedMotion, travelledTotal, travelledWords,
+  type MotionSetting,
+} from '../../core/motion.js';
+import {
   VIRTUAL_W, drawFrame, reportAdvice, reportCard, reportNote, reportTrend, sceneLayout,
   type FrameState, type ReportMemory, type SceneCandle, type SceneState, type WarpView,
 } from '../../core/draw.js';
 import {
-  loadScenes, sceneAtVerse, sceneFor as sceneAt,
+  heldAt, loadScenes, sceneAtVerse, sceneFor as sceneAt,
   type Scene, type SceneAt, type SceneMap,
 } from '../../core/scenes.js';
 import { setpieceState, type SetpieceState } from '../../core/setpieces.js';
@@ -113,6 +117,7 @@ import {
   recordSession,
   replayFirstRun,
   setCloudEnabled,
+  setMotion,
   setGilding,
   setStage,
   shouldOfferGilding,
@@ -433,6 +438,45 @@ function wordProgress(breaks: readonly number[], cursor: number, count: number):
   return done + fraction;
 }
 
+/**
+ * For every word in the ribbon, whether the verse it sits in stands still.
+ *
+ * A held scene does not translate the camera -- "the serpent and the woman are
+ * talking. Nothing about that conversation travels" -- and the unit the camera
+ * counts is the word, so held-ness has to be answered per word before anything
+ * can be placed or moved. Built once, when the level is built, because the scene
+ * table cannot change under a passage.
+ *
+ * The verse is read off `verseAt` at the word's *first* glyph, which is the same
+ * map the ribbon was built with, so a word cannot be assigned to a verse it does
+ * not begin in. Answers are cached per verse: a stretch is three verses and sixty
+ * words, and parsing the same citation sixty times would be sixty parses.
+ * See docs/design/05-scenery-warps.md#held-scenes-not-every-passage-is-a-journey.
+ */
+function heldWords(
+  breaks: readonly number[],
+  verseAt: readonly number[],
+  scenes: SceneMap | null,
+  book: string,
+  chapter: number,
+): boolean[] {
+  const out: boolean[] = [];
+  const seen = new Map<number, boolean>();
+  let start = 0;
+  for (let word = 0; word <= breaks.length; word += 1) {
+    const verse = verseAt[Math.min(start, verseAt.length - 1)] ?? 0;
+    let held = seen.get(verse);
+    if (held === undefined) {
+      held = verse > 0
+        && heldAt(scenes, `${book} ${String(chapter)}:${String(verse)}`);
+      seen.set(verse, held);
+    }
+    out.push(held);
+    start = (breaks[word] ?? start) + 1;
+  }
+  return out;
+}
+
 /** Words between one monster and the next: the spacing above, in strides. */
 const WORDS_PER_MONSTER = Math.max(1, Math.round(MONSTER_SPACING / WORLD_STRIDE));
 
@@ -466,6 +510,7 @@ function placeMonsters(
   groundY: number,
   scribeX: number,
   reach: number,
+  held: readonly boolean[],
 ): Entity[] {
   const count = wordCount === 0 ? 0 : Math.max(1, Math.floor(wordCount / WORDS_PER_MONSTER));
   const rolls = draws(seed, Math.max(1, count) * DRAWS_PER_MONSTER);
@@ -480,7 +525,17 @@ function placeMonsters(
       wordCount - 1,
       i * WORDS_PER_MONSTER + Math.floor(jitter * WORDS_PER_MONSTER),
     );
-    const x = Math.round((word + 1) * WORLD_STRIDE + scribeX + reach);
+    // Nothing stands in a held scene. The camera never reaches a word inside
+    // one, so a monster anchored there would be felled somewhere off the right
+    // of the screen -- a reward the player is never shown. The roll is still
+    // drawn and still discarded, so which monsters the rest of the stretch gets
+    // does not depend on where the held verses are.
+    if (isHeldWord(held, word)) continue;
+    // Where the camera will actually *be* when that word is finished, which is
+    // the travelled distance rather than the word count. Without this a monster
+    // after a held stretch would stand a conversation's worth of world too far
+    // to the right, and the blow would have nothing under it.
+    const x = Math.round((travelledWords(held, word) + 1) * WORLD_STRIDE + scribeX + reach);
     const y = groundY - SPRITE_SIZE - (kind === 'bat' ? BAT_LIFT : 0);
     out.push(createEntity(`${kind}-${String(i)}`, kind, x, y, phase * PHASE_SPREAD_MS, -1, word));
   }
@@ -688,7 +743,15 @@ interface Level {
    * stream and redecorate the level.
    */
   dropRng: number;
-  /** Where the world has got to. A pure function of words completed, eased. */
+  /**
+   * For every word in the ribbon, whether it sits in a scene that stands still.
+   *
+   * Fixed for the level's life, because the scene table is. Everything that
+   * moves with the camera -- its target, where the monsters were placed, where
+   * the far checkpoint stands -- is measured through it.
+   */
+  readonly held: readonly boolean[];
+  /** Where the world has got to. A pure function of words travelled, eased. */
   cameraX: number;
   /** Accumulated animation time, for art that flickers rather than moves. */
   animMs: number;
@@ -730,9 +793,22 @@ function versePosition(level: Level): number {
   return verse + (Math.min(level.typing.cursor, last) - first) / span;
 }
 
-/** Where the camera wants to be: one stride per word behind the cursor. */
+/**
+ * Where the camera wants to be: one stride per *travelled* word behind the
+ * cursor.
+ *
+ * Travelled rather than typed, because a word finished inside a held scene moves
+ * the tableau instead of the world. Subtracting them as they happen is what
+ * stops the world lurching when the hold ends: the alternative -- freezing the
+ * camera and releasing it -- would jump a whole conversation's worth of
+ * landscape in one frame.
+ * See docs/design/05-scenery-warps.md#held-scenes-not-every-passage-is-a-journey.
+ */
 function cameraTarget(level: Level): number {
-  return wordProgress(level.breaks, level.typing.cursor, level.glyphs.length) * WORLD_STRIDE;
+  return travelledWords(
+    level.held,
+    wordProgress(level.breaks, level.typing.cursor, level.glyphs.length),
+  ) * WORLD_STRIDE;
 }
 
 function candlesOf(level: Level): SceneCandle[] {
@@ -1112,6 +1188,46 @@ async function boot(): Promise<void> {
 
   let progress: Progress = loadProgress();
 
+  // --- how much of the picture is allowed to move ---------------------------
+  //
+  // `prefers-reduced-motion` is an operating-system setting people with
+  // vestibular disorders and migraine turn on so that software stops sliding
+  // things past them, and it is asked here because a browser is the only thing
+  // that can answer it. `core/motion.ts` decides what to do with the answer;
+  // this file only reports what the machine says, which is the whole of
+  // "detection belongs in platform/web" in
+  // docs/decisions/0011-respect-reduced-motion.md.
+
+  /** True while the operating system is asking for reduced motion. */
+  let systemReduced = false;
+  try {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    systemReduced = query.matches;
+    // Listened to rather than sampled once, because the most likely moment for
+    // somebody to turn this on is *while playing the thing that made him want
+    // it*, and a game that only noticed at the next reload would look like it
+    // had ignored him.
+    query.addEventListener('change', (event: MediaQueryListEvent) => {
+      systemReduced = event.matches;
+    });
+  } catch {
+    // A browser without `matchMedia` has told us nothing, which is not the same
+    // as having told us no: the menu still reaches both presentations, and the
+    // default simply falls through to the full one.
+  }
+
+  /**
+   * Whether this frame is drawn with the motion reduced.
+   *
+   * Asked once per frame and handed to everything that eases: the ribbon, the
+   * camera, the scenery's own clock and the display list. Nothing caches it,
+   * because both halves of it can change between one frame and the next -- the
+   * player from the menu, the system from its own settings panel.
+   */
+  function reduced(): boolean {
+    return reducedMotion(progress.motion, systemReduced);
+  }
+
   /**
    * The first-run coach: which of the three notes have been spent, and which
    * one -- if any -- is under the rail right now.
@@ -1170,8 +1286,11 @@ async function boot(): Promise<void> {
     const scene = sceneAt(scenes, ref);
     const layout = sceneLayout(scene.theme, tuning);
     const breaks = wordBreaks(glyphs);
-    // One stride per word, and the part's far candle stands at the end of them.
-    const span = (breaks.length + 1) * WORLD_STRIDE;
+    const held = heldWords(breaks, verseAt, scenes, book.title, chapter);
+    // One stride per *travelled* word, and the part's far candle stands at the
+    // end of them. A stretch that is half conversation is half as long a walk,
+    // and its second checkpoint has to stand where the walk actually ends.
+    const span = travelledTotal(held) * WORLD_STRIDE;
     const where = `${book.title} ${String(chapter)} ${String(chunkIndex)}`;
     const seed = seedFrom(where);
 
@@ -1213,15 +1332,18 @@ async function boot(): Promise<void> {
       // Resuming mid-part, the monsters whose words are already behind the
       // cursor are gone: he beat them before he closed the tab, and re-fighting
       // them would make a checkpoint cost something it is not supposed to cost.
+      held,
       monsters: placeMonsters(
-        seed, breaks.length, layout.groundY, layout.scribeX, strikeReachPx(tuning),
+        seed, breaks.length, layout.groundY, layout.scribeX, strikeReachPx(tuning), held,
       ).filter((m) => m.word === null || m.word >= wordsDone(breaks, typing.cursor)),
       scribe: createEntity('scribe', 'scribe', layout.scribeX, layout.groundY - SPRITE_SIZE),
       strikes: [],
       dropRng: seedFrom(`${where} drops`),
       // The camera opens where the cursor already is, so resuming mid-part does
       // not scroll the whole passage past the player before it settles.
-      cameraX: wordProgress(breaks, typing.cursor, glyphs.length) * WORLD_STRIDE,
+      cameraX: travelledWords(
+        held, wordProgress(breaks, typing.cursor, glyphs.length),
+      ) * WORLD_STRIDE,
       animMs: 0,
     };
   }
@@ -1784,6 +1906,11 @@ async function boot(): Promise<void> {
     return {
       frame: {
         mode: 'level' as Mode,
+        // The crossfade keeps its 1.4 seconds; what stops is both worlds'
+        // parallax sliding under it, which would otherwise make a crossing the
+        // one place a reduced presentation still slid three layers past a fixed
+        // gaze point.
+        reduced: reduced(),
         ref: `${w.plan.from}  \u2192  ${w.plan.to}`,
         stage: level.stage,
         glyphs,
@@ -2007,13 +2134,18 @@ async function boot(): Promise<void> {
   }
 
   function readingFrame(r: Reading): { frame: FrameState; rail: RailState } {
-    const offset = lectioOffset(r.state, VIRTUAL_W, tuning);
+    // Reduced, the offset is floored to a whole character, so the page steps
+    // rather than glides. This is the one mode whose entire content is a
+    // continuously sliding page, which makes it the strongest stimulus in the
+    // game -- see docs/design/12-motion-and-comfort.md#reading-mode-steps-as-well.
+    const offset = lectioOffset(r.state, VIRTUAL_W, tuning, reduced());
     // The pace, in the slot the WPM counter takes. Not a score and not a target:
     // there is no failure in this mode and nothing here may add one.
     const pace: Score = { wpm: r.state.wpm, accuracy: 1, medianLatencyMs: 0 };
     return {
       frame: {
         mode: 'lectio' as Mode,
+        reduced: reduced(),
         ref: r.ref,
         stage: level.stage,
         glyphs: r.glyphs,
@@ -2103,6 +2235,10 @@ async function boot(): Promise<void> {
       layout: progress.layout,
       spaceThumb: progress.spaceThumb,
       cloudEnabled: progress.cloudEnabled,
+      motion: progress.motion,
+      // What the system is asking for *now*, so the default setting's effect is
+      // observable rather than something the player has to infer.
+      systemReduced,
       // The last stage the curriculum has, if it loaded. Said, never enforced:
       // the second translation is offered from the first evening, and locking it
       // behind this would make it invisible again.
@@ -2287,6 +2423,14 @@ async function boot(): Promise<void> {
       );
       overlay.openMenu(menuView());
     },
+    setMotion: (setting: MotionSetting) => {
+      progress = setMotion(progress, setting);
+      saveProgress(progress);
+      // Nothing else to do: every easing in the game asks `reduced()` on the
+      // frame it runs, so the next frame is already the presentation he chose.
+      // In particular the ribbon does not have to be moved -- its target is the
+      // cursor's column in both presentations, which is the invariant.
+    },
     setCloud: (enabled) => {
       progress = setCloudEnabled(progress, enabled);
       saveProgress(progress);
@@ -2340,15 +2484,12 @@ async function boot(): Promise<void> {
       // Synchronous, inside the click: `start()` constructs the AudioContext
       // before this handler returns, which is the only moment a browser will
       // allow it. The promise it hands back is only the resume.
-      if (on) {
-        audioOpened = true;
-        void webAudio.start().catch(() => {
-          /* The browser refused the context. The label still says what we asked
-             for, and the next gesture will try again. */
-          audioOpened = false;
-        });
-      }
       audio = setAudioOn(audio, on);
+      // The same door the first keystroke uses, so there is one start path and
+      // one set of rules about when a context may be resumed. Still synchronous
+      // inside the click: `openAudioDevice` constructs the context before it
+      // returns, which is the only moment a browser will allow it.
+      if (on) openAudioDevice();
       overlay.showAudio(on);
     },
     importFile: (file) => {
@@ -2370,14 +2511,6 @@ async function boot(): Promise<void> {
   // --- input ----------------------------------------------------------------
 
   /**
-   * Whether the browser has been asked for an audio device yet.
-   *
-   * Nothing is constructed before the player's first keystroke: a page sitting
-   * untouched holds no `AudioContext` and makes no sound.
-   */
-  let audioOpened = false;
-
-  /**
    * Open the audio device on a user gesture, which is the only moment a browser
    * will allow it.
    *
@@ -2395,12 +2528,28 @@ async function boot(): Promise<void> {
    * See docs/design/09-music.md#audio-is-on-and-starts-on-the-first-keystroke.
    */
   function openAudioDevice(): void {
-    if (audioOpened || !audio.on) return;
-    audioOpened = true;
+    // The guard is "a context exists **and is running**", and there is
+    // deliberately no flag beside it.
+    //
+    // It used to be "have we opened one before", and a browser **suspends an
+    // `AudioContext` when its tab goes to the background** -- which is normal
+    // and expected rather than a failure, and which `web_audio.ts` answers by
+    // dropping every event on a context that is not running. So after one
+    // alt-tab nothing ever called `resume()` again and the game was silent for
+    // the rest of the evening with the toggle still reading on. The owner:
+    // "Sound had been working when I turned it on. Now it's not at all."
+    //
+    // Any latch is the same bug wearing a different hat -- including a
+    // "we are already resuming" flag, which strands the device if the promise
+    // it is waiting on never settles. `isRunning()` is a fact about the device
+    // rather than a memory of what we did to it, so it cannot get stuck, and
+    // resuming a context that is already running is a no-op in every browser.
+    // See docs/design/09-music.md#a-suspended-context-is-a-backgrounded-tab-not-an-error.
+    if (!audio.on || webAudio.isRunning()) return;
     void webAudio.start().catch(() => {
       /* The browser refused. The next gesture will try again -- and it will,
-         because the next gesture is the next key he presses. */
-      audioOpened = false;
+         because the next gesture is the next key he presses, or the next time
+         he comes back to the tab. */
     });
   }
 
@@ -2675,6 +2824,15 @@ async function boot(): Promise<void> {
   window.addEventListener('resize', () => {
     renderer.resize();
   });
+  // A backgrounded tab has its audio context suspended by the browser, and
+  // coming back does not resume it. Without this the sound returns only on the
+  // next keystroke, and before the fix above it never returned at all. Resuming
+  // here is safe for the same reason resuming in the input handler is: the
+  // player is looking at the page he asked for, and the toggle already says on.
+  // docs/design/09-music.md#a-suspended-context-is-a-backgrounded-tab-not-an-error
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') openAudioDevice();
+  });
 
   let previous = performance.now();
   const loop = (now: number): void => {
@@ -2690,7 +2848,10 @@ async function boot(): Promise<void> {
       && warp === null && reading === null;
     if (live) {
       level.typing = tick(level.typing, dtMs);
-      level.animMs += dtMs;
+      // The scenery's own clock, eased down rather than stopped when the motion
+      // is reduced: a flame that had stopped flickering is not a flame, and a
+      // set piece is brief and is what the passage looks like.
+      level.animMs += dtMs * animScale(tuning, reduced());
       // Bobbing, and running out the bursts a keystroke already started; a
       // finished burst is swept here. No monster is placed, moved or defeated
       // by this call -- only `resolveDefeats` can do any of that.
@@ -2705,7 +2866,13 @@ async function boot(): Promise<void> {
       // words are behind the cursor, and this only eases toward it.
       const camera = cameraTarget(level);
       const delta = camera - level.cameraX;
-      level.cameraX = Math.abs(delta) < 1 ? camera : level.cameraX + delta * CAMERA_LERP;
+      // Reduced, it closes half the gap a frame instead of a fifth, so a stride
+      // lands in about four frames and reads as a step rather than a slide --
+      // and short of a teleport, so the scribe is still visibly walking when he
+      // takes it. The target is unchanged in both: it is still one stride per
+      // travelled word and still moves only when a word is finished.
+      const lerp = cameraLerp(tuning, reduced(), CAMERA_LERP);
+      level.cameraX = Math.abs(delta) < 1 ? camera : level.cameraX + delta * lerp;
     }
 
     // A crossing. Time is injected here and nowhere else in it: the whole state
@@ -2737,13 +2904,21 @@ async function boot(): Promise<void> {
         : null;
     if (drawn === null) {
       const target = layoutRail(level.glyphs, level.typing.cursor, VIRTUAL_W, tuning).offset;
-      level.rail = stepRail(level.rail, target, tuning);
+      // The target is the cursor's own column in both presentations -- that is
+      // the invariant, and it is not what reduced motion touches. What `reduced`
+      // removes is the *approach* to it: the ribbon is on its target on every
+      // frame instead of easing toward it over a quarter of a second.
+      const motionReduced = reduced();
+      level.rail = stepRail(level.rail, target, tuning, motionReduced);
       renderer.render(
         drawFrame(
-          frameFor(
-            level, damage, cloud, tuning, levelScore(), noteText(coach), arrivalText(),
-            doorwayPrompt(), reportMemory(), partyLine(),
-          ),
+          {
+            ...frameFor(
+              level, damage, cloud, tuning, levelScore(), noteText(coach), arrivalText(),
+              doorwayPrompt(), reportMemory(), partyLine(),
+            ),
+            reduced: motionReduced,
+          },
           level.rail,
           tuning,
         ),
