@@ -118,9 +118,10 @@ export interface OverlayHandlers {
   /**
    * The player asked to read rather than type.
    *
-   * Reading: the same ribbon on the same rail with the pace ramping and nothing
-   * asked of him. It is "the mode available on a day he does not want to drill",
-   * so it is in the menu rather than behind anything.
+   * Reading: the same passage on the same rail, shown one word at a time with an
+   * anchor letter on the focal column and nothing asked of him. It is "the mode
+   * available on a day he does not want to drill", so it is in the menu rather
+   * than behind anything. See docs/design/02-rail.md#reading-mode.
    */
   startReading(): void;
   /**

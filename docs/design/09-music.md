@@ -72,6 +72,36 @@ its note number *is* which drum. And `arpHz` defaults to 60 when `arp` is given 
 `loop` is authoritative: playback wraps there, not at the last note, and a note starting
 at or after it is a load error rather than a note nobody will ever hear.
 
+## The arpeggio ceiling
+
+An arpeggiated note is expanded into one scheduled pitch change per rung, and
+`MAX_ARP_STEPS` in `core/synth.ts` caps how many rungs one note may have. **A note that
+wants more is not refused by the synth, it is clamped by it** — the arpeggio stops moving
+partway through and holds its last pitch to the end of the note.
+
+That is the worst possible failure mode, because it sounds almost right. It is not
+silence, it is not a wrong note, and nobody finds it by listening: it is a drone going
+flat in the middle. It sat in `veni-creator` — the abbey's tune, which `void` borrows, so
+the most-heard music in the game — with a ceiling of 512 and a chant over a pedal drone
+whose longest note runs 384 ticks. At 96 bpm that is ten seconds, which at the house 60 Hz
+arpeggio is 600 rungs, so the drone froze about two thirds of the way through each of them.
+
+Two things changed, and both were needed.
+
+**The ceiling was mis-sized.** 512 rungs is a couple of hundred past a held whole note, and
+plainsong does not hold whole notes. A guard that catches real music is not a guard; it is
+4096 now, which is over a minute of the house arpeggio against a longest loop in the whole
+library of under a minute. A typo — an `arpHz` in the thousands, a duration authored in
+milliseconds — is still orders of magnitude past it and still refused.
+
+**And the loader now does the arithmetic.** `loadTune` rejects any note that would exceed
+the ceiling, naming the channel and the tick, so a tune that outgrows it fails loudly at
+load rather than quietly freezing. It is measured at `tempoRatio` 1, the slowest the
+sequencer ever plays — the combo only ever speeds the music up, and a faster tempo shortens
+every note — so a note that fits at rest fits at every tempo. `core/tunes.test.ts` runs it
+over every file in `data/tunes/`, and `tools/smoke.mjs` runs it over the tunes the booted
+game actually loaded.
+
 ```json
 {
   "id": "cwm-rhondda",

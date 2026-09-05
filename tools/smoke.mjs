@@ -22,7 +22,7 @@
  *
  * Usage: node tools/smoke.mjs        (after `make build`)
  */
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
@@ -580,6 +580,58 @@ ok(!audioToggled && audio.notes > 0,
    'and the tune is actually being sounded, not merely enabled',
    `${audio.notes} voice(s) started`);
 
+// Every tune in the songbook, through the built loader, against the built
+// synth's ceiling.
+//
+// A note wanting more arpeggio rungs than the ceiling allows is not refused by
+// the synth, it is *clamped* by it: the arpeggio stops moving partway through
+// the note and holds its last pitch. That is not silence and it is not a wrong
+// note -- it is a drone going flat in the middle, and nobody finds it by
+// listening. One hid in `veni-creator`, the abbey's tune, which `void` borrows,
+// so the most-heard music in the game: 600 rungs against a limit of 512, and
+// the drone froze two thirds of the way through every long note.
+// docs/design/09-music.md#the-arpeggio-ceiling.
+const { MAX_ARP_STEPS, arpStepCount, msPerTick } = await import(
+  pathToFileURL(resolve(ROOT, 'build/core/synth.js')).href
+);
+const { loadTune } = await import(
+  pathToFileURL(resolve(ROOT, 'build/core/tunes.js')).href
+);
+const tuneFiles = (await readdir(resolve(ROOT, 'data/tunes'))).filter((n) => n.endsWith('.json'));
+let worstArp = 0;
+let worstArpWhere = '';
+let overCeiling = null;
+let arpeggiated = 0;
+for (const name of tuneFiles.sort()) {
+  const tune = loadTune(JSON.parse(await readFile(resolve(ROOT, 'data/tunes', name), 'utf8')));
+  // `tempoRatio` 1: the combo only ever speeds the music up, and a faster tempo
+  // shortens every note, so the note that fits at rest fits at every tempo.
+  const perTick = msPerTick(tune.bpm, tune.ppq, 1);
+  for (const track of tune.tracks) {
+    for (const note of track.notes) {
+      if (note.arp === null || note.arpHz === null) continue;
+      arpeggiated += 1;
+      const rungs = arpStepCount(note.dur * perTick, note.arpHz);
+      if (rungs > worstArp) {
+        worstArp = rungs;
+        worstArpWhere = `${tune.id} ${track.ch} at tick ${note.t}`;
+      }
+      if (rungs > MAX_ARP_STEPS && overCeiling === null) {
+        overCeiling = `${tune.id} ${track.ch} at tick ${note.t}: ${rungs} rungs`;
+      }
+    }
+  }
+}
+ok(tuneFiles.length > 0 && arpeggiated > 0,
+   'every tune in the songbook loads, and the songbook is arpeggiated',
+   `${tuneFiles.length} tunes, ${arpeggiated} arpeggiated notes`);
+ok(overCeiling === null,
+   'NO NOTE IN ANY TUNE EXCEEDS THE ARPEGGIO LIMIT',
+   overCeiling ?? `worst is ${worstArp} of ${MAX_ARP_STEPS} (${worstArpWhere})`);
+ok(worstArp * 2 <= MAX_ARP_STEPS,
+   'and the ceiling has room left in it, so the next tune is not the failing one',
+   `worst ${worstArp} of ${MAX_ARP_STEPS} (${worstArpWhere})`);
+
 // Genesis 1 hands over nobody, and that is the finding rather than a gap. The
 // man is *formed* in Genesis 2:7, out of the dust; handing him over for
 // finishing Genesis 1 attached a person to the famous chapter rather than to the
@@ -1120,37 +1172,154 @@ ok(Boolean(opening), 'reading mode reports a pace instead of a score',
    calls.fillText.map((c) => c.v).slice(0, 3).join(' / '));
 ok(!calls.fillText.some((c) => c.v.startsWith('next:')), 'reading mode asks for no keys');
 ok(calls.fillText.some((c) => /esc/.test(c.v)), 'and names the way out of it');
-// The ribbon *glides* here rather than stepping -- `charOffset` is fractional on
-// purpose, because rounding it to whole cells would make 180 wpm a stutter of
-// three cells a second. So the claim is not that a glyph sits on the focal
-// column; it is that the focal point itself does not move, and that the ribbon
-// stays one rigid grid sliding under it.
-const readingCarets = new Set();
-const readingPitch = new Set();
-const readingOffsets = new Set();
-for (let i = 0; i < 240; i++) {
-  tick();
-  const x = caretX();
-  if (x !== null) readingCarets.add(x);
-  const xs = calls.fillText.filter((c) => c.style.includes('17px')).map((c) => c.x).sort((a, b) => a - b);
-  for (let j = 1; j < xs.length; j++) readingPitch.add(Math.round((xs[j] - xs[j - 1]) * 100) / 100);
-  if (xs.length > 0) readingOffsets.add(Math.round((((xs[0] % CELL) + CELL) % CELL) * 100) / 100);
-}
-ok(readingCarets.size === 1 && readingCarets.has(FOCAL),
-   'the focal point does not move in reading mode either',
-   `caret columns: ${[...readingCarets].join(', ')}`);
-ok([...readingPitch].every((d) => Math.abs(d % CELL) < 1e-6),
-   'the ribbon stays one rigid grid, so nothing inside it can drift',
-   `pitches: ${[...readingPitch].slice(0, 6).join(', ')}`);
-ok(readingOffsets.size > 1, 'and it really was sliding under the guide',
-   `${readingOffsets.size} distinct offsets`);
-const later = calls.fillText.find((c) => c.v.startsWith('READING'));
-ok(Boolean(later) && later.v !== opening?.v, 'the pace ramps while the reading is sustained',
-   `${opening?.v ?? '?'} -> ${later?.v ?? '?'}`);
 
-// It ramps and it *holds*; it never falls back. This is the one mode in the game
-// that exists for a day without pressure, and a pace that dropped would be a
-// punishment for blinking -- which is a failure state by another name.
+/** The pace the HUD is reporting, in words a minute. */
+const paceNow = () => {
+  const line = calls.fillText.find((c) => c.v.startsWith('READING'));
+  return line ? Number(line.v.replace(/\D+/g, '')) : null;
+};
+/** The word on the screen, read back left to right. */
+const wordNow = () => {
+  const glyphs = calls.fillText.filter((c) => c.style.includes('17px')).sort((a, b) => a.x - b.x);
+  return glyphs.length === 0 ? null : glyphs.map((c) => c.v).join('');
+};
+
+tick(240);
+const climbed = paceNow();
+ok(climbed !== null && opening !== undefined && climbed > Number(opening.v.replace(/\D+/g, '')),
+   'the pace ramps while the reading is sustained',
+   `${opening?.v ?? '?'} -> ${climbed ?? '?'}`);
+
+// The pace comes down from inside the mode. It used to take quitting and
+// re-entering, which restarts the ramp -- and a decision the player has no way
+// to express is not a decision he made.
+// docs/design/02-rail.md#coming-back-down.
+//
+// Wound up first, because the floor is the opening pace: a reader three seconds
+// into a sitting is already at the bottom and has nowhere to come down to, so
+// pressing down there would prove nothing about whether down works.
+for (let i = 0; i < 5; i++) press('ArrowUp');
+tick(2);
+const high = paceNow();
+ok(high !== null && climbed !== null && high > climbed,
+   'the pace goes up on request as well as on the ramp',
+   `${climbed ?? '?'} -> ${high ?? '?'} wpm`);
+press('ArrowDown');
+tick(2);
+const eased = paceNow();
+ok(eased !== null && high !== null && eased < high,
+   'THE PACE CAN BE BROUGHT DOWN FROM INSIDE THE MODE',
+   `${high ?? '?'} -> ${eased ?? '?'} wpm`);
+ok(calls.fillText.some((c) => c.v.startsWith('READING'))
+   && !calls.fillText.some((c) => c.v.startsWith('next:')),
+   'and it is still the same sitting, not a new one', '');
+// Two seconds later it is still down. A correction sitting on top of the ramp
+// would be walked over by it; this moved the ramp clock itself.
+tick(120);
+ok(paceNow() !== null && paceNow() < high,
+   'AND IT STAYS DOWN: THE RAMP DOES NOT WALK BACK OVER THE DECISION',
+   `${eased ?? '?'} -> ${paceNow() ?? '?'} wpm, was ${high ?? '?'}`);
+press('ArrowUp');
+tick(2);
+ok(paceNow() > eased, 'and it goes back up again the same way',
+   `${eased ?? '?'} -> ${paceNow() ?? '?'} wpm`);
+
+// Reading is RSVP: one word at a time, replacing each other in place, with an
+// anchor letter nailed to the focal column. It scrolled the ribbon at a rising
+// pace until the owner named what that is -- "Read without typing should snap
+// words into place rather than moving them" -- so what is asserted below is
+// that it snaps, and that it snaps onto one column, for a whole chapter.
+// docs/design/02-rail.md#reading-mode.
+//
+// Wound up to the ceiling first, so a chapter fits in a smoke test rather than
+// in three minutes of simulated frames. The pace is the only thing that
+// changes: at 700 words a minute a word is still five frames, so a word that
+// slid would still have five different pictures to be caught by.
+for (let i = 0; i < 40; i++) press('ArrowUp');
+tick(2);
+
+const GOLD = '#f0b429';
+const anchorColumns = new Set();
+const gridOffsets = new Set();
+const shapes = [];          // one signature per frame: the word, and where it is
+const wordsSeen = [];       // the distinct words, in the order they were shown
+let readingFrames = 0;
+let multiWord = null;       // the first frame that drew anything but one word
+for (let i = 0; i < 20000 && calls.fillText.some((c) => c.v.startsWith('READING')); i++) {
+  tick();
+  const glyphs = calls.fillText.filter((c) => c.style.includes('17px')).sort((a, b) => a.x - b.x);
+  if (glyphs.length === 0) continue;
+  readingFrames += 1;
+  const text = glyphs.map((c) => c.v).join('');
+  // One word: no space in it, and no second word beside it. A page of a chapter
+  // is sixty glyphs on the rail; a word is not.
+  if (multiWord === null && (/\s/.test(text) || glyphs.length > 24)) multiWord = text;
+  // Every cell on the grid, with no fractional position anywhere. A fractional
+  // offset is exactly what the sliding version had, on every frame.
+  for (const g of glyphs) gridOffsets.add(Math.round((((g.x - FOCAL) % CELL) + CELL) % CELL));
+  // The anchor: the one glyph drawn in the caret's gold, and the column it is on.
+  for (const g of glyphs) if (g.color === GOLD) anchorColumns.add(g.x);
+  shapes.push(glyphs.map((g) => `${g.v}@${Math.round(g.x)}`).join(' '));
+  if (wordsSeen[wordsSeen.length - 1] !== text) wordsSeen.push(text);
+}
+ok(readingFrames > 1000 && wordsSeen.length > 200,
+   'reading ran a whole chapter, a frame at a time',
+   `${readingFrames} frames, ${wordsSeen.length} words`);
+ok(multiWord === null, 'READING MODE SHOWS EXACTLY ONE WORD AT A TIME', multiWord ?? '');
+ok(wordsSeen.every((w) => w.length > 0 && !/\s/.test(w)),
+   'and every one of them is a whole word with nothing beside it',
+   wordsSeen.slice(0, 8).join(' '));
+ok(anchorColumns.size === 1 && anchorColumns.has(FOCAL),
+   'THE ANCHOR COLUMN IS IDENTICAL ON EVERY FRAME OF THE CHAPTER',
+   `anchor columns: ${[...anchorColumns].join(', ')}`);
+ok(gridOffsets.size === 1 && gridOffsets.has(0),
+   'and every letter sits on the grid, never between two cells',
+   `offsets from the focal column: ${[...gridOffsets].join(', ')}`);
+
+// Nothing slides. A word that slid would be a different picture on every frame;
+// a word that snaps is the same picture for as long as it is up, and changes
+// once, whole, when the word changes.
+const runLengths = [];
+for (let i = 0; i < shapes.length;) {
+  let j = i;
+  while (j < shapes.length && shapes[j] === shapes[i]) j += 1;
+  runLengths.push(j - i);
+  i = j;
+}
+const runs = runLengths.length;
+// The first and last runs are cut by where the sweep started and stopped, not
+// by a word ending, so they say nothing about how long a word is held.
+const shortestRun = Math.min(...runLengths.slice(1, -1));
+ok(shortestRun >= 2 && runs < readingFrames / 2,
+   'NOTHING SLIDES: A WORD IS THE SAME PICTURE FOR AS LONG AS IT IS UP',
+   `${runs} still pictures over ${readingFrames} frames, shortest ${String(shortestRun)}`);
+ok(runs === wordsSeen.length,
+   'and the picture changes once per word, never inside one',
+   `${runs} pictures, ${wordsSeen.length} words`);
+
+// Punctuation reaches the screen rather than being filtered off it, which is
+// also what the beat at the end of a sentence is measured against.
+ok(wordsSeen.filter((w) => /[.!?]["”']?$/.test(w)).length > 5,
+   'punctuation is on the page, not stripped out of it',
+   wordsSeen.filter((w) => /[.!?]["”']?$/.test(w)).slice(0, 4).join(' '));
+
+// The chapter ran out, and the sitting ended with it rather than sitting on the
+// last word forever.
+ok(!calls.fillText.some((c) => c.v.startsWith('READING'))
+   && calls.fillText.some((c) => c.v.startsWith('next:')),
+   'and the end of the chapter hands the rail back',
+   `${readingFrames} frames`);
+
+// A fresh sitting, for everything that has to be said about one that is running.
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-read').click();
+tick(2);
+
+// It ramps and it *holds*; it never falls back on its own. This is the one mode
+// in the game that exists for a day without pressure, and a pace that dropped
+// unasked would be a punishment for blinking -- which is a failure state by
+// another name. The player may bring it down; nothing else may.
 const paces = [];
 for (let i = 0; i < 200; i++) {
   tick();
@@ -1159,7 +1328,7 @@ for (let i = 0; i < 200; i++) {
 }
 const fell = paces.findIndex((wpm, i) => i > 0 && wpm < paces[i - 1]);
 ok(paces.length > 0 && fell === -1,
-   'THE PACE NEVER FALLS: THERE IS NO WAY TO DO BADLY IN THIS MODE',
+   'THE PACE NEVER FALLS UNASKED: THERE IS NO WAY TO DO BADLY IN THIS MODE',
    fell < 0 ? '' : `${paces[fell - 1]} -> ${paces[fell]} wpm at sample ${fell}`);
 
 // The whole chapter, not the part he is in. The reference carries no part
@@ -1168,34 +1337,27 @@ const readingRef = calls.fillText.map((c) => c.v).find((v) => /^\w.*\d/.test(v))
 ok(!readingRef.includes('part'), 'reading is the chapter, not the part he was typing',
    `${readingRef} (was ${typingRef})`);
 
-// Lit against the whole board. A page half greyed here would be the curriculum
+// Lit against the whole board. A word half greyed here would be the curriculum
 // answering a question this mode never puts.
 const readingDim = dimShare();
 ok(typingDim !== null && readingDim !== null && readingDim < typingDim,
    'READING LIGHTS THE PAGE THE STAGE WOULD HAVE GREYED',
    `${Math.round((readingDim ?? 1) * 100)}% dim reading, ${Math.round((typingDim ?? 0) * 100)}% typing`);
 
-// And it asks for nothing. Keys pressed into it are not typing: nothing is
-// owed, nothing is scored, and the record does not move -- the ribbon carries on
-// at its own pace regardless.
+// And it asks for nothing. Letters pressed into it are not typing: nothing is
+// owed, nothing is scored, and the record does not move -- the page carries on
+// turning at its own pace regardless.
 const beforeReadingKeys = store.get('scriptorium.progress');
-// Where the ribbon has slid to. It is a clock this mode runs on, not a cursor a
-// keystroke moves, so the way to show a key did nothing is to show the page went
-// on doing exactly what it was doing anyway.
-const ribbonX = () => {
-  const xs = calls.fillText.filter((c) => c.style.includes('17px')).map((c) => c.x);
-  return xs.length === 0 ? null : Math.round(Math.min(...xs) * 100) / 100;
-};
-const flowedTo = ribbonX();
-for (const k of ['a', 's', 'd', 'f', 'x']) { press(k); tick(); }
+const wordsWhilePressed = new Set();
+for (const k of ['a', 's', 'd', 'f', 'x']) { press(k); tick(10); wordsWhilePressed.add(wordNow()); }
 tick(4);
 ok(!calls.fillText.some((c) => c.v.startsWith('next:')),
    'keys pressed while reading are not owed back', '');
 ok(store.get('scriptorium.progress') === beforeReadingKeys,
    'AND NOTHING TYPED INTO A READING SITTING REACHES THE RECORD', '');
-ok(flowedTo !== null && ribbonX() !== null && ribbonX() !== flowedTo,
-   'and the page kept flowing at its own pace while they were pressed',
-   `${String(flowedTo)} -> ${String(ribbonX())}`);
+ok(wordsWhilePressed.size > 1,
+   'and the page kept turning at its own pace while they were pressed',
+   [...wordsWhilePressed].join(' '));
 
 press('Escape');
 tick(4);

@@ -113,12 +113,42 @@ export interface ArpStep {
 }
 
 /**
- * A hard ceiling on rungs per note. A held whole note under a 60 Hz arpeggio is
- * already a couple of hundred scheduled pitch changes; a tune file asking for
- * ten thousand is a typo, and the platform should refuse it rather than stall
- * the audio thread honouring it.
+ * A hard ceiling on rungs per note: a guard against malformed tune data, and
+ * nothing about how the music should sound.
+ *
+ * It was 512, which is a couple of hundred rungs past a held whole note and
+ * looked generous -- and it was not, because plainsong does not hold whole
+ * notes. `veni-creator` is a chant over a pedal drone: its longest `pulse2`
+ * note runs 384 ticks, which at 96 bpm is ten seconds, which at the house
+ * 60 Hz arpeggio is 600 rungs. `expandArp` clamped it, so the drone froze on
+ * its last pitch about two thirds of the way through every long note, in the
+ * abbey's own tune -- the tune the player hears first and hears most, and the
+ * one `void` borrows.
+ *
+ * A guard that catches real music is mis-sized, so this is now set well past
+ * anything anyone would write: 4096 rungs is over a minute of the house
+ * arpeggio, and the longest loop in the whole library is under a minute. A typo
+ * -- an `arpHz` in the thousands, a duration authored in milliseconds -- is
+ * still orders of magnitude past it and still refused.
+ *
+ * And it is no longer the only line of defence. `loadTune` now rejects any note
+ * that would exceed this, so a tune that outgrows the ceiling fails loudly at
+ * load rather than quietly freezing an arpeggio in a tune nobody is listening
+ * closely to. See docs/design/09-music.md#the-arpeggio-ceiling.
  */
-export const MAX_ARP_STEPS = 512; // tuning-exempt: a guard against malformed tune data, not a musical choice
+export const MAX_ARP_STEPS = 4096; // tuning-exempt: a guard against malformed tune data, not a musical choice
+
+/**
+ * How many rungs a note of `durationMs` wants at `arpHz`, before the ceiling.
+ *
+ * The one place that arithmetic is written down, so the loader's question --
+ * "does this note fit?" -- and the expander's answer are the same sum rather
+ * than two sums that agree today.
+ */
+export function arpStepCount(durationMs: number, arpHz: number): number {
+  if (!(arpHz > 0) || !(durationMs > 0)) return 1;
+  return Math.max(1, Math.ceil(durationMs / (MS_PER_SECOND / arpHz)));
+}
 
 /**
  * The pitch an arpeggiated note is sounding at `tMs` into itself.
@@ -161,8 +191,7 @@ export function expandArp(
   if (!(durationMs > 0)) return [{ atMs: 0, midi: midi + (arp[0] ?? 0) }];
 
   const stepMs = MS_PER_SECOND / arpHz;
-  const wanted = Math.ceil(durationMs / stepMs);
-  const count = Math.max(1, Math.min(MAX_ARP_STEPS, wanted));
+  const count = Math.min(MAX_ARP_STEPS, arpStepCount(durationMs, arpHz));
   const steps: ArpStep[] = [];
   for (let i = 0; i < count; i += 1) {
     steps.push({ atMs: i * stepMs, midi: midi + (arp[i % arp.length] ?? 0) });

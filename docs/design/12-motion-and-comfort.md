@@ -99,7 +99,7 @@ asks its own platform the same question and every rule below stays where it is.
 | the parallax layers | scroll at their own authored depths | frozen: `reduced_parallax` multiplies every depth, and it is 0 |
 | flame, smoke, swell, drift | run at their authored periods | slowed by `reduced_anim_scale`, because a set piece is brief and worth keeping |
 | a crossing | 1.4 seconds of two worlds dissolving, both sliding | the same 1.4 seconds, with neither side sliding |
-| reading mode | glides at a fractional character offset | steps a whole character at a time |
+| reading mode | one word at a time, held still | **identical** -- there was never anything here to reduce |
 | the fixed reading column | unchanged | unchanged |
 
 Nothing is removed. Every set piece still runs, every crossing still crosses, the scribe
@@ -126,14 +126,31 @@ which is the property that matters -- an image that changes position instantly, 
 keystroke the player made, presents nothing for the motion detectors to adapt to. A slide
 does.
 
-### Reading mode steps as well
+### Reading mode has nothing left to reduce
 
-[Reading](02-rail.md#reading-mode) is the one mode whose whole content is a continuously
-sliding page, and its offset is deliberately fractional so that the text glides rather
-than stutters. In reduced motion that offset is floored to a whole character, so the page
-advances a character at a time at whatever pace the ramp has reached. It is a stutter, and
-it is the honest translation: the mode is still there, still ramps, still asks nothing,
-and it no longer slides.
+This section used to say that [reading](02-rail.md#reading-mode) was the one mode whose
+whole content is a continuously sliding page, and that reduced motion floored its offset so
+the page stuttered a character at a time instead of gliding. That was an honest translation
+of a mode that no longer exists.
+
+Reading is **RSVP** now: one word at a time, replacing each other in place, with an anchor
+letter nailed to the focal column. There is no scroll, so there is nothing to freeze;
+nothing eases, so there is nothing to step; and the objection this document raised against
+the reduced presentation of it -- that it traded a slide for roughly fifteen jumps a second
+-- disappeared along with the slide it was jumping.
+
+**So there is no reduced-motion branch in reading mode, and there must not be one.** A
+special case that does nothing is worse than no special case: it reads as a decision
+somebody made, and the next person to touch the file has to work out what it was for. The
+mode is drawn identically whatever this setting says, and the setting still reaches the
+frame -- the scenery band behind the word is themed and drawn like any other, and its
+parallax obeys `reduced_parallax` like any other. Nothing in it is moving either: a sitting
+does not travel the camera and does not run the set pieces' clock, so the whole picture is
+still.
+
+Which flips this mode's standing entirely. It was the strongest motion stimulus in the
+game; it is now the weakest thing in it, and it is the mode to reach for when the eyes have
+had enough rather than the one to avoid.
 
 ### Held scenes are the same mechanism seen twice
 

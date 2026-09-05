@@ -40,9 +40,12 @@ first evening a real beginner plays it and something feels wrong.
 | `focal_guide_width` | 40 | px | Width of the rules above and below the cursor. |
 | `warp_phase_ms` | 1400 | ms | Duration of a warp crossfade. |
 | `warp_echo_hold_ms` | 900 | ms | How long the shared phrase stays lit while the world changes. |
-| `lectio_start_wpm` | 180 | wpm | Opening pace in reading mode. |
-| `lectio_ramp_wpm` | 20 | wpm/min | How fast [reading mode](02-rail.md#reading-mode) accelerates while sustained. The row keeps the internal name; the player is only ever shown "Reading". |
-| `lectio_max_wpm` | 700 | wpm | Ceiling. |
+| `lectio_start_words_per_min` | 180 | words/min | Opening pace in [reading mode](02-rail.md#reading-mode), in **whole words shown, one at a time**. Not the `wpm_chars_per_word` definition every other rate in this table uses: reading mode displays words, so it counts them, and 180 here is 180 words on the screen in a minute. The rows keep the internal name; the player is only ever shown "Reading". |
+| `lectio_ramp_words_per_min` | 20 | words/min per min | How fast the pace climbs while the reading is sustained. |
+| `lectio_max_words_per_min` | 700 | words/min | Ceiling. |
+| `lectio_pace_step` | 40 | words/min | What one press of the pace control moves the pace by, in either direction. It moves the *ramp clock* rather than sitting on top of it, so a pace the player has come down to stays come down and then climbs again from there -- see [coming back down](02-rail.md#coming-back-down). Small enough that one press is an adjustment; large enough that a reader who has overshot does not have to press it nine times. |
+| `lectio_comma_hold` | 1.5 | ratio | How much longer a word ending in a comma, semicolon, colon or dash holds, as a multiple of one word's beat. |
+| `lectio_stop_hold` | 2.5 | ratio | The same, for a word that ends a sentence or ends a verse. A sentence that ended should feel like it ended, and at 700 words a minute a beat and a half is 90 ms -- which is the difference between prose and a list of words. |
 | `candle_interval` | 3 | verses | Checkpoint spacing, so death costs a verse or two, never a chapter. |
 | `monster_burst_ms` | 320 | ms | How long a struck monster takes to burst and leave the screen. Feedback only -- nothing is at stake while it runs. |
 | `strike_reach` | 36 | px | How far beyond the scribe a monster stands, so a blow has a gap to cross. Derived placement put it exactly where he arrives, and standing in a monster is not a fight -- see [pacing](03-pacing.md#defeating-a-monster-must-read-as-an-action). |

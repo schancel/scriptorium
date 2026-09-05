@@ -19,8 +19,11 @@
 
 import {
   FULL_VELOCITY,
+  MAX_ARP_STEPS,
+  arpStepCount,
   isChannel,
   isPulse,
+  msPerTick,
   nearestDuty,
   percussionMidi,
 } from './synth.js';
@@ -225,15 +228,58 @@ export function loadTune(parsed: unknown): Tune {
     }
   }
 
+  const bpm = positive(raw, 'bpm', what);
+  const ppq = positive(raw, 'ppq', what);
+  checkArpeggios(read, bpm, ppq, what);
+
   return {
     id,
     name: str(raw, 'name', what),
     source: str(raw, 'source', what),
-    bpm: positive(raw, 'bpm', what),
-    ppq: positive(raw, 'ppq', what),
+    bpm,
+    ppq,
     loop,
     tracks: read,
   };
+}
+
+/**
+ * No note may want more arpeggio rungs than `MAX_ARP_STEPS`.
+ *
+ * A note that wants more is not refused by the synth, it is *clamped* by it --
+ * so the arpeggio simply stops moving partway through and holds its last pitch
+ * to the end of the note. That is not silence and it is not a wrong note; it is
+ * a drone going flat in the middle, which is exactly the kind of fault nobody
+ * finds by listening to a tune they are not listening closely to. It hid in
+ * `veni-creator` -- the abbey's tune, and the one `void` borrows, so the
+ * most-heard music in the game -- until somebody did the arithmetic.
+ *
+ * So the loader does the arithmetic instead, at the one moment a bad tune can
+ * still be reported by reading an error. Measured at `tempoRatio` 1, which is
+ * the slowest the sequencer ever plays: the combo only ever speeds the music up
+ * (`combo_tempo_max` is above 1), and a faster tempo shortens every note, so
+ * the note that fits at rest fits at every tempo.
+ * See docs/design/09-music.md#the-arpeggio-ceiling.
+ */
+function checkArpeggios(
+  tracks: readonly TuneTrack[],
+  bpm: number,
+  ppq: number,
+  what: string,
+): void {
+  const perTick = msPerTick(bpm, ppq, 1);
+  for (const track of tracks) {
+    for (const note of track.notes) {
+      if (note.arp === null || note.arpHz === null) continue;
+      const rungs = arpStepCount(note.dur * perTick, note.arpHz);
+      if (rungs <= MAX_ARP_STEPS) continue;
+      fail(
+        `${what}: the ${track.ch} note at tick ${String(note.t)} wants `
+        + `${String(rungs)} arpeggio steps, over the ${String(MAX_ARP_STEPS)} limit. `
+        + 'Split the note or lower its "arpHz".',
+      );
+    }
+  }
 }
 
 // --- lookup -----------------------------------------------------------------

@@ -30,6 +30,7 @@
  */
 
 import { CELL_W, focalX, visibleRange } from './rail.js';
+import type { ReadingWord } from './lectio.js';
 import { smudgeFraction } from './damage.js';
 import {
   burstFraction,
@@ -445,6 +446,20 @@ export interface FrameState {
    * See docs/design/12-motion-and-comfort.md#what-reduced-motion-changes.
    */
   readonly reduced?: boolean;
+  /**
+   * The one word reading mode is showing, and where its anchor letter sits.
+   *
+   * Absent everywhere else, and absent produces byte-for-byte the display list
+   * every typing frame always did. Present, the rail draws this word and no
+   * other -- one word at a time, replacing each other in place, per
+   * docs/design/02-rail.md#reading-mode -- with `cursor` on the anchored glyph
+   * and the ribbon offset laid out around it by `readingOffset`.
+   *
+   * It is the word rather than a flag because the range *is* the difference: a
+   * boolean would leave the drawing to work out which glyphs belong to the word,
+   * which is the sort of second opinion that drifts away from the first.
+   */
+  readonly readingWord?: ReadingWord;
   /**
    * The company walking behind the scribe: everyone whose passage he has
    * finished, and everyone whose room he has found.
@@ -2089,9 +2104,12 @@ function pushHud(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
   // one more thing on a screen whose whole job is to hold his eye on one place.
   const points = Math.round(state.points ?? 0);
   const score = state.gilding === true || points > 0 ? `    SCORE ${points}` : '';
-  // Reading mode reports the pace it is flowing at and nothing else. An accuracy
-  // in a mode with no keystrokes in it would be a number the player cannot move,
-  // and a WPM would read as a score for something he is not doing.
+  // Reading mode reports the pace it is showing words at and nothing else. An
+  // accuracy in a mode with no keystrokes in it would be a number the player
+  // cannot move, and a typing WPM would read as a score for something he is not
+  // doing. The number here is literally words on the screen per minute -- not
+  // the `wpm_chars_per_word` definition the typing side uses -- because this
+  // mode shows words, so it counts them.
   cmds.push({
     op: 'text',
     value: state.mode === 'lectio'
@@ -2179,11 +2197,31 @@ function pushSpaceMark(
   });
 }
 
+/**
+ * The rail: the ribbon, the focal guide, and the caret.
+ *
+ * ## Two things it draws, and reading mode changes which
+ *
+ * Typing draws every glyph with any part of it on screen and puts a caret on
+ * the focal column. Reading draws **one word**, laid out around its anchor
+ * letter, and no caret -- a caret says *this keystroke* and there are no
+ * keystrokes here, so what marks the column instead is the focal guide, which
+ * is drawn identically in both, and the anchor letter itself in the caret's
+ * gold. See docs/design/02-rail.md#reading-mode.
+ *
+ * The geometry is the same geometry in both. `rail.offset` was chosen so that
+ * the cursor -- or the anchor -- lands on `focalX`, and every glyph is at
+ * `i * CELL_W`, so nothing here has an opinion about which mode it is in beyond
+ * which range of `i` it walks.
+ */
 function pushRail(cmds: DrawCmd[], state: FrameState, rail: RailState, tuning: Tuning): void {
   cmds.push({ op: 'rect', x: 0, y: M.bandTop, w: M.vw, h: M.bandH, color: pal('band') });
 
   const x0 = focalX(M.vw, tuning);
-  const { first, last } = visibleRange(state.glyphs.length, rail.offset, M.vw);
+  const word = state.readingWord;
+  const { first, last } = word === undefined
+    ? visibleRange(state.glyphs.length, rail.offset, M.vw)
+    : { first: word.start, last: word.end };
   const faults = state.standing === true ? state.faults : undefined;
   for (let i = first; i < last; i++) {
     const g = state.glyphs[i];
@@ -2227,10 +2265,15 @@ function pushRail(cmds: DrawCmd[], state: FrameState, rail: RailState, tuning: T
     op: 'line', x1: centre - half, y1: M.guideBotY, x2: centre + half, y2: M.guideBotY,
     color: pal('rule'), width: 1,
   });
-  // No caret during a crossing: nothing is being asked for, and gold is how the
-  // game says *this one*. While the phrase is held it is the only gold on
-  // screen, which is the whole of what the transition has to say.
-  if (state.warp === undefined) {
+  // Gold is how the game says *this one*. While a crossing's phrase is held it
+  // is the only gold on screen, which is the whole of what the transition has
+  // to say.
+  //
+  // No caret during a crossing, and none in reading mode: in the first nothing
+  // is being asked for, and in the second nothing is ever asked for at all. The
+  // guide above and below still marks the column, and reading marks the letter
+  // on it in the same gold the caret would have been.
+  if (state.warp === undefined && word === undefined) {
     cmds.push({
       op: 'line', x1: x0, y1: M.caretTop, x2: x0, y2: M.caretBot,
       color: pal(state.blocked ? 'error' : 'gold'), width: CARET_W,
@@ -2239,16 +2282,23 @@ function pushRail(cmds: DrawCmd[], state: FrameState, rail: RailState, tuning: T
 }
 
 /**
- * The way out of reading mode, where the keyboard overlay would otherwise be.
+ * The way out of reading mode, and the pace controls, where the keyboard
+ * overlay would otherwise be.
  *
- * Lectio "is the mode available on a day he does not want to drill", so it has
- * to be as easy to leave as it was to enter -- and the one place a player is
- * already looking for instructions is the line under the rail that normally
+ * The mode "is the mode available on a day he does not want to drill", so it
+ * has to be as easy to leave as it was to enter -- and the one place a player
+ * is already looking for instructions is the line under the rail that normally
  * names the next key.
+ *
+ * The pace is named here for the same reason. Coming down used to mean quitting
+ * the mode and re-entering it, which restarts the ramp; a control nobody is told
+ * about is the same as not having one, so the line that already names the way
+ * out names the way down beside it. See
+ * docs/design/02-rail.md#coming-back-down.
  */
 function pushReadingHint(cmds: DrawCmd[]): void {
   cmds.push({
-    op: 'text', value: 'reading \u2014 esc: back to typing',
+    op: 'text', value: 'reading \u2014 down: slower   up: faster   esc: back to typing',
     x: M.vw / 2, y: M.hintY, style: 'hint-center', color: pal('hud'),
   });
 }
@@ -2268,6 +2318,15 @@ function pushReadingHint(cmds: DrawCmd[]): void {
 function glyphStyle(i: number, state: FrameState): string {
   const g = state.glyphs[i];
   if (g === undefined) return 'rail-dim';
+  // Reading mode: nothing in the word has been typed and nothing in it is owed,
+  // so `done` and `live` would both be lying about a keystroke. Every letter of
+  // the word is simply lit, and the one on the focal column is marked -- which
+  // is the anchor the whole mode is built around, in the gold the caret would
+  // otherwise have been drawn in.
+  if (state.readingWord !== undefined) {
+    if (!g.live) return 'rail-dim';
+    return i === state.cursor ? 'rail-cursor' : 'rail-live';
+  }
   if (!g.live) {
     if (state.gilding !== true || !g.producible) return 'rail-dim';
     if (i < state.cursor) return 'rail-gild';

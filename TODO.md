@@ -18,8 +18,10 @@ alone.
    would be worse, and a second key nobody has met would be worse still. Worth a look
    on the screen: it is the first time Tab means two things.
    → `docs/design/04-route.md#finishing-a-passage-offers-the-thread-it-leads-to`
-3. **Reading mode cannot slow down** without leaving and re-entering. Deliberate —
-   coming down is a decision you make — but it may just be annoying.
+3. ~~**Reading mode cannot slow down**~~ *Fixed.* Down and up set the pace from inside
+   the mode, named under the rail beside the way out. The old behaviour was defended as
+   "coming down is a decision you make", and a decision the player has no way to express
+   is not one. See *reading mode is RSVP* below.
 4. **The report card leads with your worst key**, so for a beginner with any key
    above 12% error that dominates for weeks and the deeper "you are reaching for
    that key" finding only ever appears in the note beneath. Swapping the order is
@@ -71,12 +73,12 @@ alone.
     `docs/design/12-motion-and-comfort.md#a-word-at-a-time-and-what-the-fixed-column-does-to-that`.
     Worth a look on the screen: it is discrete either way, and the only question is whether
     a 12px jump per keystroke reads as calm or as busy.
-12. **Reading mode in reduced motion is a stutter.** Its offset is deliberately fractional
-    so the page glides; floored to whole characters it advances 15 times a second at the
-    opening pace and faster as the ramp climbs. It is the honest translation of "no
-    continuous motion" and it may simply be unpleasant. The alternative is to leave reading
-    mode gliding and say so in the menu, which is worse for exactly the person the setting
-    is for. → `docs/design/12-motion-and-comfort.md#reading-mode-steps-as-well`
+12. ~~**Reading mode in reduced motion is a stutter.**~~ *Gone, along with the scroll it
+    was a stutter of.* Reading is RSVP now: one word at a time, held still. There is no
+    motion in it to reduce, so there is no reduced-motion branch in it and there must not
+    be one — a special case that does nothing reads as a decision somebody made. The mode
+    went from the strongest motion stimulus in the game to the weakest thing in it.
+    → `docs/design/12-motion-and-comfort.md#reading-mode-has-nothing-left-to-reduce`
 13. **Genesis 3:24 keeps the garden theme.** Being driven out is the one verse of the
     chapter that travels, and it could equally have cut to `desert` for its last verse --
     the ground he was taken from, and the palette easing out of the green over the final
@@ -301,6 +303,33 @@ the section below. The heading stays because it is where the next one goes.
   chapters or something?"* `part` joins `candle` on the jargon list in both the copy test
   and the smoke sweep, so neither can drift back in one surface at a time.
   → `docs/design/03-pacing.md#the-game-says-verses-and-chapters-and-invents-nothing`
+- **Reading mode is RSVP, not a teleprompter.** It scrolled the ribbon at a rising pace,
+  which is the thing speed reading exists to get away from: text that moves must be
+  tracked, and tracking is the saccade cost the whole technique removes. The owner:
+  *"Read without typing should snap words into place rather than moving them. Speed
+  reading software only displays one word at a time as I recall. With the second letter
+  of each word anchored to the same place or something like that."* So it does.
+  **One word at a time**, replacing each other in place, with an **anchor letter on the
+  focal column** that never moves — the RSVP convention, first letter for a one-letter
+  word, second up to five, third up to nine, fourth beyond, measured over the letters so
+  a trailing comma cannot shift it. The offset is a function of *which word* and of
+  nothing else, so nothing slides, ever. **Pace is words per minute literally** rather
+  than the characters-over-five the typing side uses, **punctuation and a verse boundary
+  earn a beat**, and **the pace comes down from inside the mode** with the arrow keys,
+  named under the rail. The tunables were renamed with the meaning:
+  `lectio_start_words_per_min`, `lectio_ramp_words_per_min`, `lectio_max_words_per_min`,
+  plus `lectio_pace_step`, `lectio_comma_hold` and `lectio_stop_hold`.
+  → `docs/design/02-rail.md#reading-mode`
+- **`veni-creator` was freezing its arpeggio.** Its longest pedal note wanted 600
+  arpeggio rungs against a ceiling of 512, so the drone stopped moving two thirds of the
+  way through each of them — in the abbey's tune, which `void` borrows, so the most-heard
+  music in the game. The ceiling was mis-sized rather than the tune being wrong: 512 is a
+  couple of hundred rungs past a held whole note, and plainsong does not hold whole notes.
+  It is 4096 now, over a minute of the house arpeggio against a longest loop of under a
+  minute. And `loadTune` now refuses any note past it, so a tune that outgrows the ceiling
+  fails loudly at load instead of quietly going flat; `core/tunes.test.ts` and
+  `tools/smoke.mjs` both assert it over every file in `data/tunes/`.
+  → `docs/design/09-music.md#the-arpeggio-ceiling`
 - **The reading mode is called Reading.** It was *Lectio*, from lectio divina, sitting in
   the menu with nothing to explain it — *"Lectio? Is that the character name?"* Internal
   identifiers keep the old name, as `candle_interval` does.

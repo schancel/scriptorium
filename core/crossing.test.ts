@@ -42,12 +42,14 @@ import { DEFAULT_THEME } from './worlds.js';
 import { classify } from './illumination.js';
 import { SETPIECE_IDS, setpieceState } from './setpieces.js';
 import { beginWarp, planWarp, stepWarp, warpComplete, type WarpState } from './warp.js';
-import { createLectio, lectioCursor, lectioOffset, stepLectio } from './lectio.js';
+import {
+  createLectio, lectioAnchorIndex, lectioWord, readingOffset, splitReadingWords, stepLectio,
+} from './lectio.js';
 import type { RouteEdge } from './route.js';
 import type { DrawCmd, Glyph, Key, Score, Tuning } from './types.js';
 
 /** The rows data/tuning.json carries that any of this path reads. */
-const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20, overlay_retired_alpha: 0.15, report_trend_parts: 20, report_finger_min_hits: 12, report_reach_ratio: 2.0, report_key_min_attempts: 12, report_worst_key_rate: 0.12, smudge_max: 100, smudge_per_error_base: 12, smudge_per_error_step: 1, smudge_decay_per_key: 3, hearts_start: 3, hearts_max: 5, idle_base_ms: 8000, idle_step_ms: 400, idle_floor_ms: 3000, cloud_approach_ms: 2500, cloud_smudge: 25, monster_burst_ms: 320, strike_reach: 36, stomp_ms: 460, ink_ms: 420, strike_hop_px: 12, strike_contact_px: 7, strike_bounce_ratio: 0.6, strike_nib_arc_px: 14, strike_rise_travel: 0.7, warp_phase_ms: 1400, warp_echo_hold_ms: 900, lectio_start_wpm: 180, lectio_ramp_wpm: 20, lectio_max_wpm: 700, wpm_chars_per_word: 5 }; // tuning-exempt: test fixture mirroring data/tuning.json
+const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20, overlay_retired_alpha: 0.15, report_trend_parts: 20, report_finger_min_hits: 12, report_reach_ratio: 2.0, report_key_min_attempts: 12, report_worst_key_rate: 0.12, smudge_max: 100, smudge_per_error_base: 12, smudge_per_error_step: 1, smudge_decay_per_key: 3, hearts_start: 3, hearts_max: 5, idle_base_ms: 8000, idle_step_ms: 400, idle_floor_ms: 3000, cloud_approach_ms: 2500, cloud_smudge: 25, monster_burst_ms: 320, strike_reach: 36, stomp_ms: 460, ink_ms: 420, strike_hop_px: 12, strike_contact_px: 7, strike_bounce_ratio: 0.6, strike_nib_arc_px: 14, strike_rise_travel: 0.7, warp_phase_ms: 1400, warp_echo_hold_ms: 900, lectio_start_words_per_min: 180, lectio_ramp_words_per_min: 20, lectio_max_words_per_min: 700, lectio_pace_step: 40, lectio_comma_hold: 1.5, lectio_stop_hold: 2.5, wpm_chars_per_word: 5 }; // tuning-exempt: test fixture mirroring data/tuning.json
 
 const FRAME_MS = 16;  // tuning-exempt: test fixture, a frame at 60Hz
 const STAGE = 1;      // tuning-exempt: test fixture
@@ -387,25 +389,43 @@ test('THE FALLBACK BANNER IS STILL THE LAST COMMAND, BEHIND A CROSSING AND A SET
 
 // --- reading ----------------------------------------------------------------
 
-test('READING MODE HOLDS THE FOCAL GUIDE STILL AND ASKS FOR NO KEYS', () => {
+test('READING MODE DRAWS ONE WORD, ANCHORED, AND ASKS FOR NO KEYS', () => {
   const glyphs = glyphsOf(`${ORIGIN_TEXT} ${DEST_TEXT}`);
+  const words = splitReadingWords(glyphs, [], TUNING);
   const target = focalX(VIRTUAL_W, TUNING);
   let state = createLectio(TUNING);
   const guides = new Set<string>();
+  const anchors = new Set<number>();
+  let shown = 0;
 
   for (let i = 0; i < CLOCK_STEPS * CLOCK_STEPS; i += 1) {
-    const offset = lectioOffset(state, VIRTUAL_W, TUNING);
+    const word = lectioWord(state, words);
+    if (word === null) break;
+    const offset = readingOffset(word, VIRTUAL_W, TUNING);
     const cmds = drawFrame(
-      frame(glyphs, Math.min(lectioCursor(state), glyphs.length), {
+      frame(glyphs, lectioAnchorIndex(word), {
         mode: 'lectio',
+        readingWord: word,
         score: { wpm: state.wpm, accuracy: 1, medianLatencyMs: 0 },
       }),
       { offset, targetOffset: offset },
       TUNING,
     );
-    const caret = cmds.find((cmd) => cmd.op === 'line' && cmd.x1 === cmd.x2);
-    assert.ok(caret !== undefined && caret.op === 'line');
-    assert.equal(caret.x1, target, 'the focal point moved in reading mode');
+
+    // One word, and only one. Every rail glyph on the frame belongs to it, and
+    // the gold one -- the anchor -- is on the focal column on every frame.
+    const rail = cmds.filter((cmd) => cmd.op === 'text' && cmd.style.startsWith('rail-'));
+    assert.ok(rail.length > 0, 'reading drew nothing');
+    assert.ok(rail.length <= word.end - word.start, 'more glyphs than the word has');
+    shown += 1;
+    for (const cmd of cmds) {
+      if (cmd.op !== 'text' || cmd.style !== 'rail-cursor') continue;
+      anchors.add(cmd.x);
+    }
+
+    // No caret: nothing is being asked for, so nothing marks a keystroke. What
+    // marks the column is the guide, and it is where it always is.
+    assert.equal(cmds.some((cmd) => cmd.op === 'line' && cmd.x1 === cmd.x2), false);
     for (const cmd of cmds) {
       if (cmd.op === 'line' && cmd.y1 === cmd.y2) guides.add(`${String(cmd.x1)}:${String(cmd.y1)}`);
     }
@@ -417,13 +437,15 @@ test('READING MODE HOLDS THE FOCAL GUIDE STILL AND ASKS FOR NO KEYS', () => {
       cmds.some((cmd) => cmd.op === 'text' && cmd.value.startsWith('next:')),
       false,
     );
-    state = stepLectio(state, FRAME_MS, true, TUNING);
+    state = stepLectio(state, FRAME_MS, words, true, TUNING);
   }
 
   // Two rules, at two heights, on one column, for the whole sitting.
   assert.equal(guides.size, 2);
-  // And the ribbon really did move past them, or none of the above is a claim.
-  assert.ok(state.charOffset > 0);
+  // And the words really did change under them, or none of the above is a claim.
+  assert.ok(state.index > 0, 'the sitting never advanced');
+  assert.ok(shown > state.index, 'the fixture barely drew anything');
+  assert.deepEqual([...anchors], [target], 'the anchor column moved');
 });
 
 test('reading mode names the way out where the next key would have been', () => {

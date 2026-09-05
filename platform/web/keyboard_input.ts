@@ -14,15 +14,23 @@ const COMMANDS: Readonly<Record<string, string>> = {
   Escape: 'escape',
   Backspace: 'backspace',
   Tab: 'tab',
+  // Up and down are a pace, not a direction: reading mode brings the pace down
+  // with them and nothing else in the game listens for them. They are named for
+  // the key rather than for what one mode does with it, because a command
+  // called `slower` would be a mode's opinion sitting in the input layer.
+  ArrowDown: 'down',
+  ArrowUp: 'up',
 };
 
 /**
- * Keys the browser would otherwise steal mid-verse: space scrolls the page,
- * Tab walks the focus ring, and `/` and `'` open quick-find in Firefox. All of
- * them are characters the curriculum teaches, so none may reach the browser.
+ * Keys the browser would otherwise steal mid-verse: space and the arrows scroll
+ * the page, Tab walks the focus ring, and `/` and `'` open quick-find in
+ * Firefox. All but the arrows are characters the curriculum teaches, and the
+ * arrows set the reading pace -- so none of them may reach the browser.
  */
 function stealsFocus(key: string): boolean {
-  return key === ' ' || key === 'Tab' || key === '/' || key === "'" || key === 'Backspace';
+  return key === ' ' || key === 'Tab' || key === '/' || key === "'" || key === 'Backspace'
+    || key === 'ArrowUp' || key === 'ArrowDown';
 }
 
 /**

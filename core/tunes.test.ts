@@ -12,7 +12,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 
-import { CHANNELS, isChannel } from './synth.js';
+import { CHANNELS, MAX_ARP_STEPS, arpStepCount, isChannel, msPerTick } from './synth.js';
 import { advanceSequencer, createSequencer, startSequencer } from './sequencer.js';
 import { createLibrary, loadThemeTunes, loadTune, tuneForTheme } from './tunes.js';
 import type { Tune } from './tunes.js';
@@ -46,6 +46,84 @@ const MS_PER_MINUTE = 60000; // tuning-exempt: SI unit conversion
 test('every tune file parses', () => {
   assert.ok(files.length > 0, 'no tune files found');
   assert.equal(tunes.length, files.length);
+});
+
+test('NO NOTE IN ANY TUNE EXCEEDS THE ARPEGGIO CEILING', () => {
+  /*
+   * A note wanting more rungs than `MAX_ARP_STEPS` is not refused by the synth,
+   * it is *clamped* by it: the arpeggio stops moving partway through and holds
+   * its last pitch to the end of the note. That is the worst kind of fault --
+   * it is not silence and it is not a wrong note, it is a drone going flat in
+   * the middle, and nobody finds it by listening to a tune they are not
+   * listening closely to.
+   *
+   * One did hide, in `veni-creator`: the abbey's tune, which `void` borrows, so
+   * the most-heard music in the game. Its longest pedal note wanted 600 rungs
+   * against a ceiling of 512, and the drone froze two thirds of the way through
+   * every one of them.
+   *
+   * `loadTune` now refuses such a note, so parsing the files at the top of this
+   * file is already most of the assertion. This states the property in its own
+   * right, over every file in `data/tunes/`, and prints how much headroom the
+   * library actually has -- because a check that passes with two rungs to spare
+   * is one composer away from failing again.
+   *
+   * Measured at `tempoRatio` 1, which is the slowest the sequencer ever plays:
+   * `combo_tempo_max` is above 1, so the combo only ever speeds the music up,
+   * and a faster tempo shortens every note.
+   */
+  let worst = 0;
+  let where = 'nothing arpeggiated';
+  let arpeggiated = 0;
+  for (const tune of tunes) {
+    const perTick = msPerTick(tune.bpm, tune.ppq, 1);
+    for (const track of tune.tracks) {
+      for (const note of track.notes) {
+        if (note.arp === null || note.arpHz === null) continue;
+        arpeggiated += 1;
+        const rungs = arpStepCount(note.dur * perTick, note.arpHz);
+        assert.ok(
+          rungs <= MAX_ARP_STEPS,
+          `${tune.id}: the ${track.ch} note at tick ${String(note.t)} wants `
+          + `${String(rungs)} rungs, over the ${String(MAX_ARP_STEPS)} limit`,
+        );
+        if (rungs > worst) {
+          worst = rungs;
+          where = `${tune.id} ${track.ch} at tick ${String(note.t)}`;
+        }
+      }
+    }
+  }
+  assert.ok(arpeggiated > 0, 'no tune is arpeggiated, so this test asserts nothing');
+  assert.ok(
+    worst * 2 <= MAX_ARP_STEPS, // tuning-exempt: half the ceiling, as headroom
+    `the longest arpeggio is ${String(worst)} rungs (${where}), over half the ceiling`,
+  );
+});
+
+test('a note past the ceiling is refused at load, not clamped at playback', () => {
+  // The failure this file exists to prevent, written down as a tune. Ten
+  // seconds of 60 Hz arpeggio is 600 rungs, which is what `veni-creator` was
+  // doing. It is under the ceiling now, so the fixture goes far past it.
+  const overlong = {
+    id: 'overlong', name: 'Overlong', source: 'a test fixture, public domain',
+    bpm: 60, ppq: 1, loop: 1000, // tuning-exempt: one tick a second, for legible arithmetic
+    tracks: [{
+      ch: 'pulse2', duty: 0.5, // tuning-exempt: a duty the hardware has
+      notes: [{
+        t: 0, dur: 500, midi: 55, vel: 52, // tuning-exempt: 500 seconds of note
+        arp: [0, 7], arpHz: 60, // tuning-exempt: the house arpeggio rate
+      }],
+    }],
+  };
+  assert.throws(() => loadTune(overlong), /arpeggio steps/);
+  // And the same note at a rate it can sustain is accepted, so the check is
+  // about the arithmetic rather than about refusing long notes.
+  const shorter = structuredClone(overlong);
+  const note = shorter.tracks[0]?.notes[0];
+  assert.ok(note !== undefined);
+  note.dur = 1;
+  assert.doesNotThrow(() => loadTune(shorter));
 });
 
 test('a tune is named by its filename, so a lookup cannot miss', () => {

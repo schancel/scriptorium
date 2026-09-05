@@ -76,8 +76,9 @@ import {
   type FlashbackFrame, type WarpPlan, type WarpState,
 } from '../../core/warp.js';
 import {
-  createLectio, lectioCursor, lectioFinished, lectioOffset, pauseLectio, stepLectio,
-  type LectioState,
+  createLectio, easePace, lectioAnchorIndex, lectioFinished, lectioWord, pauseLectio,
+  quickenPace, readingOffset, splitReadingWords, stepLectio,
+  type LectioState, type ReadingWord,
 } from '../../core/lectio.js';
 import { SPRITE_SIZE } from '../../core/sprites.js';
 import {
@@ -188,7 +189,10 @@ const FALLBACK_TUNING = {
     cloud_smudge: 25, smudge_max: 100, smudge_per_error_base: 12, smudge_per_error_step: 2,
     smudge_decay_per_key: 2, hearts_start: 3, hearts_max: 5, combo_tempo_max: 1.25,
     rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, warp_phase_ms: 1400,
-    warp_echo_hold_ms: 900, lectio_start_wpm: 180, lectio_ramp_wpm: 20, lectio_max_wpm: 700,
+    warp_echo_hold_ms: 900,
+    lectio_start_words_per_min: 180, lectio_ramp_words_per_min: 20,
+    lectio_max_words_per_min: 700, lectio_pace_step: 40,
+    lectio_comma_hold: 1.5, lectio_stop_hold: 2.5,
     candle_interval: 3, bonus_word_chance: 0.15, master_volume: 0.35, audio_default_on: 1,
     monster_burst_ms: 320, strike_reach: 36, stomp_ms: 460, ink_ms: 420,
     strike_hop_px: 12, strike_contact_px: 7, strike_bounce_ratio: 0.6,
@@ -2286,10 +2290,21 @@ async function boot(): Promise<void> {
 
   // --- reading ----------------------------------------------------------------
 
-  /** A lectio sitting: the ribbon, and where the ramp has got to. */
+  /**
+   * The empty word, for the one frame that can ask for a word after the last.
+   *
+   * `startReading` refuses a passage with no words in it, so this is reachable
+   * only as the type checker's share of `words[words.length - 1]`, and drawing
+   * an empty range draws nothing.
+   */
+  const NO_WORD: ReadingWord = { start: 0, end: 0, anchor: 0, hold: 1 };
+
+  /** A lectio sitting: the ribbon, the words in it, and where the ramp has got to. */
   interface Reading {
     state: LectioState;
     readonly glyphs: readonly Glyph[];
+    /** The passage split into the words the mode shows, one at a time. */
+    readonly words: readonly ReadingWord[];
     readonly ref: string;
   }
 
@@ -2298,7 +2313,8 @@ async function boot(): Promise<void> {
   /**
    * Read without typing.
    *
-   * Same ribbon, same rail, same focal guide, and the pace ramps for as long as
+   * Same passage, same rail, same focal guide -- shown one word at a time, with
+   * an anchor letter on the focal column, and a pace that ramps for as long as
    * the reader sustains it. The ribbon is classified against the *whole* board
    * rather than the current stage: reading mode asks for no keys, and half a
    * page greyed would be the curriculum answering a question this mode never
@@ -2309,17 +2325,22 @@ async function boot(): Promise<void> {
     if (section === null) return;
     const last = stages[stages.length - 1];
     const keys = last === undefined ? new Set(FALLBACK_KEY_SET) : keySetFor(stages, last.stage);
-    reading = {
-      state: createLectio(tuning),
-      glyphs: buildRibbon(
-        section.units, 1, keys, progress.layout, progress.spaceThumb,
-      ).glyphs,
-      ref: level.ref,
-    };
+    const { glyphs, verseAt } = buildRibbon(
+      section.units, 1, keys, progress.layout, progress.spaceThumb,
+    );
+    // The words, once, at the top of the sitting. They are a property of the
+    // passage rather than of the frame, so splitting them per frame would be
+    // the same answer recomputed sixty times a second -- and the verse numbers
+    // are here and nowhere else, which is what lets the last word of a verse
+    // take a beat like the last word of a sentence.
+    const words = splitReadingWords(glyphs, verseAt, tuning);
+    if (words.length === 0) return;
+    reading = { state: createLectio(tuning), glyphs, words, ref: level.ref };
     overlay.close();
-    // The keyboard stays attached, and it is listened to for exactly one key:
-    // Escape. A mode that is easy to enter and hard to leave is worse than one
-    // that is hard to enter.
+    // The keyboard stays attached, and it is listened to for three keys and no
+    // more: Escape, and the two that set the pace. A mode that is easy to enter
+    // and hard to leave is worse than one that is hard to enter, and a pace that
+    // can only be changed by leaving is the same failing one step in.
     attachTyping();
   }
 
@@ -2330,22 +2351,32 @@ async function boot(): Promise<void> {
   }
 
   function readingFrame(r: Reading): { frame: FrameState; rail: RailState } {
-    // Reduced, the offset is floored to a whole character, so the page steps
-    // rather than glides. This is the one mode whose entire content is a
-    // continuously sliding page, which makes it the strongest stimulus in the
-    // game -- see docs/design/12-motion-and-comfort.md#reading-mode-steps-as-well.
-    const offset = lectioOffset(r.state, VIRTUAL_W, tuning, reduced());
+    // One word, laid out around its anchor letter, and the offset that puts that
+    // letter on the focal column. It is a function of *which word* and of
+    // nothing else -- no frame clock reaches it -- so two frames showing the
+    // same word are the same picture and nothing can slide between them.
+    // docs/design/02-rail.md#reading-mode.
+    //
+    // Past the last word the sitting is already over: the loop stops it on the
+    // frame it finishes. The fallback is for the frame that finishes it.
+    const word = lectioWord(r.state, r.words) ?? r.words[r.words.length - 1] ?? NO_WORD;
+    const offset = readingOffset(word, VIRTUAL_W, tuning);
     // The pace, in the slot the WPM counter takes. Not a score and not a target:
     // there is no failure in this mode and nothing here may add one.
     const pace: Score = { wpm: r.state.wpm, accuracy: 1, medianLatencyMs: 0 };
     return {
       frame: {
         mode: 'lectio' as Mode,
+        // The scenery band is still drawn behind the word, and it is still
+        // frozen for a player who asked for that -- but nothing in this mode
+        // moves in the first place: the camera does not travel and the set
+        // pieces' clock does not run while a sitting is up.
         reduced: reduced(),
         ref: r.ref,
         stage: level.stage,
         glyphs: r.glyphs,
-        cursor: Math.min(lectioCursor(r.state), r.glyphs.length),
+        readingWord: word,
+        cursor: lectioAnchorIndex(word),
         blocked: false,
         score: pace,
         keyStats: {},
@@ -2846,9 +2877,21 @@ async function boot(): Promise<void> {
     // screen and there is nothing to type on either side of it.
     if (warp !== null) return;
     if (reading !== null) {
-      // Reading asks for nothing, so it listens for one key: the way out. Escape
-      // backs out of the mode, which is what Escape means everywhere else too.
-      if (event.type === 'command' && event.value === 'escape') stopReading();
+      // Reading asks for nothing, so it listens for three keys and no more.
+      //
+      // Escape backs out of the mode, which is what Escape means everywhere
+      // else too. Down and up set the pace *without leaving the mode*: coming
+      // down used to mean quitting and re-entering, which restarts the ramp,
+      // and a decision the player has no way to express is not a decision he
+      // made. docs/design/02-rail.md#coming-back-down.
+      //
+      // Nothing else reaches anything. A letter pressed into a reading sitting
+      // is not a keystroke: nothing is owed, nothing is scored and the record
+      // does not move.
+      if (event.type !== 'command') return;
+      if (event.value === 'escape') stopReading();
+      else if (event.value === 'down') reading.state = easePace(reading.state, tuning);
+      else if (event.value === 'up') reading.state = quickenPace(reading.state, tuning);
       return;
     }
     if (level.reporting) {
@@ -3246,8 +3289,8 @@ async function boot(): Promise<void> {
     if (reading !== null) {
       reading.state = paused
         ? pauseLectio(reading.state, dtMs)
-        : stepLectio(reading.state, dtMs, true, tuning);
-      if (lectioFinished(reading.state, reading.glyphs.length)) stopReading();
+        : stepLectio(reading.state, dtMs, reading.words, true, tuning);
+      if (lectioFinished(reading.state, reading.words)) stopReading();
     }
 
     const drawn = warp !== null

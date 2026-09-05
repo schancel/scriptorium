@@ -216,6 +216,17 @@ owner caught it:
 
 That is RSVP -- rapid serial visual presentation -- and it is what Spritz and the rest do.
 
+```
+             ▁▁▁▁▁                        ▁▁▁▁▁
+      In the beginning God                     a
+             ▔▔▔▔▔                        ▔▔▔▔▔
+             ^ every frame of "beginning"      ^ and of "a", two words later
+```
+
+One word stands between the focal guide's two rules; the letter under them is the same
+column in every frame of the sitting. Nothing is drawn to the left or right of the word,
+and the next word appears where this one was.
+
 ### How it works
 
 - **One word is shown at a time.** Words replace each other in place. Nothing slides, ever.
@@ -230,6 +241,28 @@ That is RSVP -- rapid serial visual presentation -- and it is what Spritz and th
   should count them.
 - **Punctuation earns a beat.** A comma, a full stop or a verse boundary holds fractionally
   longer, because a sentence that ends should feel like it ended.
+
+### The anchor, exactly
+
+The tiers are the established RSVP convention and not a curve of ours. They are in
+`core/lectio.ts` as `ANCHOR_TIERS`, and they are not tunable for the same reason `CELL_W`
+is not: their value is that every speed reader in the world already uses them.
+
+| letters in the word | anchor | example |
+|---|---|---|
+| 1 | 1st letter | **a** |
+| 2-5 | 2nd | t**h**e, w**a**ters |
+| 6-9 | 3rd | be**g**inning |
+| 10 and over | 4th | fir**m**ament, lov**i**ngkindnesses |
+
+It is measured over the word's **letters**, so wrapping quotes and a trailing comma move
+nothing: `beginning` and `beginning,` anchor on the same `g`. A comma is not part of the
+word and must not be able to shift where the eye is asked to land.
+
+Everything else about the word is laid out around that letter -- which costs one
+subtraction, because the ribbon's glyphs are already at `i * CELL_W` and the offset that
+puts glyph *n* on the focal column is the same arithmetic the typing rail does with the
+cursor. The invariant is the rail's own, unchanged, and it holds by construction.
 
 ### Why this also settles the comfort question
 
@@ -248,14 +281,32 @@ leaving the mode: the first version required quitting and re-entering, which res
 ramp, on the theory that slowing down should be a decision. In practice that is a decision
 the player cannot express, which is not the same thing.
 
+**Down and up, named under the rail** beside the way out, in the line that otherwise names
+the next key -- because a control nobody is told about is the same as not having one.
 
-The rail makes a reading mode nearly free: same ribbon, same focal guide, no typing.
-Text flows through at a pace that ramps upward the longer the player sustains it.
+They move the **ramp clock** rather than sitting on top of it. A correction term would be
+walked over by the ramp a few seconds later, so the pace the player asked for would quietly
+stop being the pace; moving the clock means the pace he came down to is where the ramp now
+is, and it climbs again from there. `lectio_pace_step` is what one press is worth.
 
-This is worth shipping rather than treating as a bonus. It is the mode available on a day
-he does not want to drill, it exercises the same corpus, and it converts the fixed-gaze
-habit from a side effect into something practised deliberately. Pace ramp parameters live
-in [tuning](07-tuning.md).
+Up is there as well as down, and it is not a way to win anything: there is nothing to win
+here. It is for a reader who already knows he reads at 400 and would otherwise spend ten
+minutes waiting for the ramp to agree with him. It is bounded by the same ceiling the ramp
+is.
+
+### Why the mode is worth shipping
+
+It is the mode available on a day he does not want to drill, it exercises the same corpus,
+and it converts the fixed-gaze habit from a side effect of the typing rail into something
+practised deliberately. Pace parameters live in [tuning](07-tuning.md).
+
+**This is the one place a clock legitimately drives the display**, and the distinction is
+worth keeping clean. The player is not typing, so something has to decide when the next
+word appears, and that something is elapsed time. Nothing follows from it: no verdict, no
+score, no failure, and nothing on the typing side reads a clock for any of those --
+[ADR 0004](../decisions/0004-idle-threat-not-speed-timer.md) is untouched, and so is the
+rule that [the scribe's page](#the-scribe-at-his-lectern) moves only when the player types.
+A clock that decides what is *drawn* is not a clock the player is racing.
 
 **It is called Reading, and it was called Lectio.** The name came from *lectio divina*, the
 slow devotional reading the mode is shaped after, and it sat in the interface with nothing
@@ -263,7 +314,7 @@ whatever to explain it. The owner, on meeting it: *"Lectio? Is that the characte
 which is exactly what an unglossed Latin word does in a menu. Everything a player sees now
 says **Reading**: the menu, the HUD while it is running, and the way out under the rail.
 The internal identifiers keep the old name — `core/lectio.ts`, `LectioState`,
-`lectio_start_wpm` — for the same reason `candle_interval` does: it is a good name for the
+`lectio_start_words_per_min` — for the same reason `candle_interval` does: it is a good name for the
 thing, and it is ours rather than his. Same rule as
 [verses and chapters](03-pacing.md#the-game-says-verses-and-chapters-and-invents-nothing).
 
