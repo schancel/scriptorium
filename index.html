@@ -82,9 +82,31 @@
      how it goes *off* -- which is the direction it was always more likely to be
      wanted in. It was the only way it came on, and nobody found it. */
   #audio-toggle { right: 7.5rem; }
+  /* The honest-toggle line. Beside the control it qualifies, in the dim colour
+     the rest of the chrome uses, and never in the error colour: the browser
+     holding audio shut until you type is normal and expected, and shouting
+     about it would be the wrong reading of ADR 0009. */
+  #audio-note {
+    position: fixed;
+    bottom: 2.6rem;
+    right: .75rem;
+    margin: 0;
+    max-width: 22rem;
+    text-align: right;
+    font-size: .75rem;
+    color: var(--dim);
+    pointer-events: none;
+  }
+  #audio-note[hidden] { display: none; }
+  body:not(.ready) #audio-note { display: none; }
   #menu-open:hover, #menu-open:focus-visible,
   #audio-toggle:hover, #audio-toggle:focus-visible { opacity: 1; }
   #audio-toggle[aria-pressed="true"] { opacity: 1; border-color: var(--gold); color: var(--gold); }
+  /* Sound asked for, device not running. Legible rather than gold: gold is how
+     this game says "this is happening", and the whole point of the state is
+     that it is not. It stays fully opaque, because it is the one moment the
+     control has something to tell you. */
+  #audio-toggle[data-audio="waiting"] { opacity: 1; border-color: var(--dim); color: var(--dim); }
   body:not(.ready) #menu-open, body:not(.ready) #audio-toggle { display: none; }
 
   /* --- overlays ---------------------------------------------------------- */
@@ -227,6 +249,14 @@
 
 <button id="audio-toggle" type="button" aria-pressed="false">&#9834; sound: off</button>
 <button id="menu-open" type="button">menu &middot; esc</button>
+
+<!-- Degraded operation, said out loud where the player already is. The toggle
+     can read "on" while the browser is holding the audio device shut, and that
+     gap is exactly the shape ADR 0009 exists to close: a silent failure that
+     looks like working software. Quiet, one line, and it names the one thing
+     that fixes it. It is up only while the gap is open.
+     docs/decisions/0009-fallbacks-must-announce-themselves.md -->
+<p id="audio-note" hidden>Sound is on, but the browser has not started the audio yet &mdash; press any key.</p>
 
 <div id="overlay" hidden>
 
@@ -565,6 +595,23 @@
     <p class="dim">
       Your operating system has a setting for this, and following it is the
       default. Set it here instead if you want it on one machine and not another.
+    </p>
+
+    <!-- The sound diagnostic. It is here because the control on the screen can
+         only carry three words, and because we have twice had to guess at why
+         one machine was silent -- once a deploy that 404'd every tune, once a
+         context nothing ever resumed. Both times the game knew and had no way
+         to say. docs/decisions/0009-fallbacks-must-announce-themselves.md -->
+    <h3>Sound</h3>
+    <p class="lead" id="menu-audio-state"></p>
+    <p class="dim" id="menu-audio-detail"></p>
+    <p class="dim">
+      The control at the bottom of the screen reports the audio device rather
+      than the setting, so <b>on</b> there means the browser is actually playing.
+      Browsers refuse to start audio until you have typed on or clicked the page,
+      and suspend it again whenever the tab goes to the background; typing brings
+      it back. If the game is silent while the control reads on, the line above is
+      the browser's own account of the device, and it is the thing to send us.
     </p>
 
     <h3>Your hands</h3>

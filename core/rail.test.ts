@@ -24,7 +24,7 @@ import { classify as illuminate, fingerFor } from './illumination.js';
 import type { DrawCmd, Glyph, Key, Score, Tuning } from './types.js';
 
 /** The rows data/tuning.json actually carries, as a fixture. */
-const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20, report_trend_parts: 20, report_finger_min_hits: 12, report_reach_ratio: 2.0, report_key_min_attempts: 12, report_worst_key_rate: 0.12 }; // tuning-exempt: test fixture mirroring data/tuning.json
+const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20, overlay_retired_alpha: 0.15, report_trend_parts: 20, report_finger_min_hits: 12, report_reach_ratio: 2.0, report_key_min_attempts: 12, report_worst_key_rate: 0.12 }; // tuning-exempt: test fixture mirroring data/tuning.json
 
 /** Genesis 1, World English Bible. A whole chapter, because that is the claim. */
 const GENESIS_1: readonly string[] = [

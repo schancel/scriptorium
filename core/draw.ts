@@ -2271,9 +2271,21 @@ function styleColour(style: string): string {
 }
 
 /**
- * Earned fade-out: a key stops being drawn once its accuracy clears the mastery
- * threshold. The crutch withdraws itself key by key, without the player ever
- * having to decide to give it up.
+ * Earned fade-out: a key stops being *pointed at* once its accuracy clears the
+ * mastery threshold. The crutch withdraws itself key by key, without the player
+ * ever having to decide to give it up.
+ *
+ * **The key itself is still drawn.** It stops being lit gold and it stops
+ * carrying its finger's colour -- which is the whole of what the crutch was --
+ * but its face and its label stay on the board, because the board is a picture
+ * of the keys under the player's hands and a picture with holes in it is a
+ * picture of a different keyboard. This retired a key out of the display list
+ * once, and what the owner saw was damage rather than a reward: *"why are some
+ * keys missing from the keyboard?"*. See
+ * docs/design/06-curriculum.md#keyboard-layout, which is the invariant that
+ * settles it, and #breaking-the-looking-down-habit for the mechanic itself.
+ * What gives the band back instead is `retiredShare`, which recedes the board
+ * as a whole and brings the lectern up behind it.
  *
  * Read over the **lifetime** table when the frame carries one, and over the
  * session's only when it does not. A key is earned over weeks, and `keyStats`
@@ -2426,6 +2438,29 @@ function retiredShare(state: FrameState, tuning: Tuning): number {
 }
 
 /**
+ * How present the whole board is, given how much of it has been earned away.
+ *
+ * The band is given back by **receding the overlay, not by deleting keys from
+ * it**. At nothing earned the board is solid; as keys retire it thins evenly
+ * across every key it draws, down to `overlay_retired_alpha` when the last one
+ * goes -- and the lectern, drawn behind it at `retiredShare`, comes up through
+ * it at exactly the same rate. Nothing is announced and there is no frame on
+ * which anything appears or disappears, which was always the good half of the
+ * idea; what changed is that the picture stays whole while it happens.
+ *
+ * The floor is deliberately above zero. A board that vanished entirely would be
+ * indistinguishable, on the one frame the player looks down, from a board that
+ * had lost the key he was hunting for -- and
+ * docs/design/06-curriculum.md#keyboard-layout says the overlay must match the
+ * physical board exactly or it teaches the wrong finger.
+ */
+function boardPresence(state: FrameState, tuning: Tuning): number {
+  const floor = tuningValue(tuning, 'overlay_retired_alpha');
+  const share = Math.max(0, Math.min(1, retiredShare(state, tuning)));
+  return 1 - share * (1 - floor);
+}
+
+/**
  * The scribe at his lectern, in the band the keyboard is giving back.
  *
  * The best reward the game has, because it is the thing the game is about: he
@@ -2551,6 +2586,10 @@ function pushKeyboard(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void 
   const taught = new Set(state.keySet);
   const next = nextLiveGlyph(state);
   const lit = highlightedKeys(next, state, tuning);
+  // How solid the board is at all, which is the *only* thing mastery changes
+  // about how much of it there is. Every key of the layout is pushed below, at
+  // every mastery level, for ever.
+  const presence = boardPresence(state, tuning);
 
   for (const k of keys) {
     const x = originX + k.x * M.kbUnit + M.keyPad;
@@ -2562,22 +2601,34 @@ function pushKeyboard(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void 
     // right-hand one stops being dim exactly when the left-hand one does.
     const curriculum = curriculumKeyFor(k.key);
     const known = taught.has(curriculum);
-    // A key he has earned his way out of is not drawn at all. That is what
-    // "the curriculum retires the overlay a key at a time" has always meant,
-    // and it is what empties the band for a player who has arrived -- what is
-    // behind it is `pushLectern`, drawn first so it is uncovered rather than
-    // introduced. An untaught key is *not* retired: it is still dim, because it
-    // is still something he has not been given.
-    if (known && isMastered(curriculum, state, tuning)) continue;
+    // A key he has earned his way out of loses the *crutch* and keeps its
+    // place. The crutch is the colour: the board is painted by finger so it can
+    // tell him which one to strike with, and a key he strikes correctly nine
+    // times in ten is not being told that any more -- so it goes to the plain
+    // key face, and `highlightedKeys` has already stopped lighting it gold.
+    //
+    // What it does not lose is being drawn. It used to `continue` here, and the
+    // board grew holes as the player improved: "why are some keys missing from
+    // the keyboard?". docs/design/06-curriculum.md#keyboard-layout is the rule
+    // that settles it -- the overlay must match the board under his hands
+    // exactly, or it teaches the wrong finger for `'`, `#` and `\` -- and a
+    // reward that reads as damage is not a reward. The band is given back by
+    // `presence` above instead, which thins the whole board evenly as
+    // `pushLectern` comes up behind it.
+    //
+    // An untaught key is *not* retired: it is still dim in its finger's colour,
+    // because it is still something he has not been given.
+    const retired = known && isMastered(curriculum, state, tuning);
+    const alpha = (known ? 1 : DIM_ALPHA) * presence;
     cmds.push({
       op: 'rect', x, y, w, h,
-      color: pal(isNext ? 'gold' : k.finger),
-      alpha: known ? 1 : DIM_ALPHA,
+      color: pal(isNext ? 'gold' : (retired ? 'keyFace' : k.finger)),
+      alpha,
     });
     cmds.push({
       op: 'text', value: keyLabel(k.key), x: x + w / 2, y: y + h / 2,
       style: 'key', color: pal(isNext ? 'bg' : 'keyLabel'),
-      alpha: known ? 1 : DIM_ALPHA,
+      alpha,
     });
   }
 

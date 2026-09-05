@@ -60,6 +60,16 @@ picked.
 - The banner is ugly on purpose. A tasteful one gets ignored.
 - Every future loader must register its fallback in the same list. A loader that quietly
   substitutes a default is a regression even when the default is correct.
+- **The rule is not only about loaders.** It reappeared in a third costume as a *control*:
+  the sound toggle reported `audio.on`, the setting, and never asked whether the browser had
+  started an `AudioContext`. The owner found it the only way it can be found -- *"it says
+  'on' for sound, but no sound."* The smoke harness could not have caught it, because it
+  drives a stubbed `AudioContext` and a stub cannot prove a browser made a noise; so the
+  control was asserting a state nobody had verified, which is this ADR's failure exactly.
+  Any indicator must report the **device**, not the intent, and must say so where the player
+  is already looking when the two disagree. See
+  [music](../design/09-music.md#the-control-reports-the-device-not-the-setting) for the
+  three states it can show and the diagnostic that goes with them.
 
 ## Alternatives rejected
 

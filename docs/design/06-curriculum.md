@@ -102,10 +102,22 @@ Escalating, so the support is withdrawn as it stops being needed:
    does not know is the shift, and lighting the near one would drill the wrist-rolling
    habit this stage exists to replace.
 2. **Earned fade-out.** Once a key's accuracy passes threshold, that key stops being
-   drawn on the overlay at all. The crutch removes itself key by key, as it is earned,
-   without the player ever choosing to give it up — and what is behind it is
-   [the scribe at his lectern](02-rail.md#the-scribe-at-his-lectern), uncovered a key at
-   a time rather than introduced at a threshold.
+   *pointed at*: it no longer lights gold when it is owed, and it drops the finger colour
+   that was telling him which finger to strike it with. The crutch removes itself key by
+   key, as it is earned, without the player ever choosing to give it up — and what comes
+   up behind the board is [the scribe at his lectern](02-rail.md#the-scribe-at-his-lectern),
+   uncovered a key at a time rather than introduced at a threshold.
+
+   **The key itself is still drawn, always.** This once removed the key from the overlay
+   outright, and the owner reported it as a bug within the evening: *"why are some keys
+   missing from the keyboard?"* Two things were wrong with it. A board with holes in it
+   is not the board under his hands, which [the layout rule below](#keyboard-layout)
+   forbids outright; and a reward that reads as damage is not a reward. So the band is
+   given back by **receding the whole overlay together** — its opacity falls with the
+   share of the stage's keys that have retired, down to `overlay_retired_alpha`, and the
+   lectern rises through it at the same rate. The reveal stays gradual and unannounced,
+   which was the good half of the idea, and the picture stays whole, which is the half
+   that was missing.
 
    **Measured over a lifetime, not over a stretch.** A key is earned across weeks, and
    a stretch of verses is a hundred and fifty keystrokes spread over nine fingers — fewer

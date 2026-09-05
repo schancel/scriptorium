@@ -135,6 +135,36 @@ export interface OverlayHandlers {
 }
 
 /** The menu is a view of the record; the caller supplies the record's summary. */
+/**
+ * What the sound control is allowed to say, which is a fact about the device.
+ *
+ * Three states and not two, because "on" was two states wearing one label and
+ * the owner met the difference: *"it says 'on' for sound, but no sound."* The
+ * setting being on is not the sound being on -- a browser will not run an
+ * `AudioContext` until the page has been typed on or clicked, and suspends it
+ * again the moment the tab goes to the background. `waiting` is that gap, said
+ * out loud instead of asserted away.
+ * See docs/decisions/0009-fallbacks-must-announce-themselves.md.
+ */
+export type AudioIndicator = 'off' | 'on' | 'waiting';
+
+/**
+ * The audio device as the menu reports it.
+ *
+ * Facts read off the `AudioContext` this frame, not a memory of what we asked
+ * it to do. It is here because we have twice had to guess at why one particular
+ * machine was silent, and guessing is not a diagnostic.
+ */
+export interface AudioMenuView {
+  readonly indicator: AudioIndicator;
+  /** The context's own `state`, verbatim, or `none`. */
+  readonly state: string;
+  readonly contexts: number;
+  readonly notesScheduled: number;
+  readonly sampleRate: number;
+  readonly lastError: string;
+}
+
 export interface MenuView {
   readonly where: string;
   readonly stageLine: string;
@@ -175,6 +205,8 @@ export interface MenuView {
    */
   readonly curriculumFinished: boolean;
   readonly history: readonly HistoryEntry[];
+  /** The audio device, so the menu can say why a machine is silent. */
+  readonly audio: AudioMenuView;
 }
 
 /**
@@ -287,8 +319,11 @@ export interface Overlay {
    */
   showGildOffer(onAnswer: (accept: boolean) => void): void;
   showError(message: string): void;
-  /** Say out loud whether the sound is on. The control is the only indicator. */
-  showAudio(on: boolean): void;
+  /**
+   * Say out loud what the audio device is doing. The control is the only
+   * indicator, so it reports the device and never the setting.
+   */
+  showAudio(indicator: AudioIndicator): void;
   close(): void;
 }
 
@@ -304,6 +339,30 @@ const SECOND_ACT =
   'You have reached the last stage this curriculum has. The King James is the '
   + 'second pass: the same keys, in prose that asks more of them. Nothing is '
   + 'lost by switching, and nothing is lost by staying.';
+
+/**
+ * What the sound control says, per state of the device.
+ *
+ * Three labels because there are three things that can be true, and the middle
+ * one used to be told as the first: sound on with a device the browser has not
+ * started is not sound on. The waiting label carries its own remedy, because
+ * the remedy is one keystroke and the player is sitting at a keyboard.
+ */
+const AUDIO_LABEL: Readonly<Record<AudioIndicator, string>> = {
+  off: '\u266a sound: off',
+  on: '\u266a sound: on',
+  waiting: '\u266a sound: on \u2014 press a key',
+};
+
+/** The same three states, said in a sentence for the menu. */
+const AUDIO_SENTENCE: Readonly<Record<AudioIndicator, string>> = {
+  off: 'Sound is off.',
+  on: 'Sound is on, and the audio device is running.',
+  waiting:
+    'Sound is on, but the browser has not started the audio device yet. Browsers hold '
+    + 'audio until the page has been typed on, and suspend it again whenever the tab goes '
+    + 'to the background. Press any key with this page in front of you and it starts.',
+};
 
 const PERCENT = 100;
 /** Most recent sessions shown in the menu. Enough to see a trend, few enough to scan. */
@@ -363,6 +422,12 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const gildingSelect = need('menu-gilding', HTMLSelectElement);
   const mistakesSelect = need('menu-mistakes', HTMLSelectElement);
   const editionNext = need('menu-edition-next', HTMLParagraphElement);
+  // The sound control's honesty, in two places: a line beside the toggle that
+  // is up only while the device is not doing what the toggle claims, and the
+  // menu's diagnostic, which is the thing to read out when a machine is silent.
+  const audioNote = need('audio-note', HTMLParagraphElement);
+  const audioState = need('menu-audio-state', HTMLParagraphElement);
+  const audioDetail = need('menu-audio-detail', HTMLParagraphElement);
   const errorLine = need('menu-error', HTMLParagraphElement);
   const resumeButton = need('menu-resume', HTMLButtonElement);
   const restartButton = need('menu-restart', HTMLButtonElement);
@@ -463,9 +528,51 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
    * reading "mute" on a silent game cannot tell whether he is about to turn the
    * sound on or has already turned it off.
    */
-  function showAudio(on: boolean): void {
-    audioButton.textContent = on ? '\u266a sound: on' : '\u266a sound: off';
-    audioButton.setAttribute('aria-pressed', on ? 'true' : 'false');
+  /**
+   * The sound control, reporting the device rather than the setting.
+   *
+   * It used to say `on` the instant the setting was flipped, whatever the
+   * browser had done about it, and the owner met the difference the only way
+   * anyone does: *"it says 'on' for sound, but no sound."* An `AudioContext` is
+   * not running until a gesture has been made on the page, and stops running
+   * again whenever the tab is backgrounded, so `on` was two states in one word
+   * and one of them was silent.
+   *
+   * `waiting` is that state, named. And because sound on with a device that is
+   * not running is degraded operation wearing the look of normal operation, the
+   * line beside the control says so where the player is already looking --
+   * quietly, and with the one thing that fixes it, which is to type.
+   * docs/decisions/0009-fallbacks-must-announce-themselves.md
+   */
+  function showAudio(indicator: AudioIndicator): void {
+    audioButton.textContent = AUDIO_LABEL[indicator];
+    // `aria-pressed` is the *setting*, because that is what the button toggles
+    // and what pressing it will change. The label carries the device.
+    audioButton.setAttribute('aria-pressed', indicator === 'off' ? 'false' : 'true');
+    audioButton.setAttribute('data-audio', indicator);
+    audioNote.hidden = indicator !== 'waiting';
+  }
+
+  /**
+   * The diagnostic, in the menu, in the browser's own words.
+   *
+   * We have twice had to guess at why one machine was silent -- once a deploy
+   * that 404'd every tune, once a context nothing resumed -- and both times the
+   * game knew and could not say. This is the game answering instead: the
+   * context's own `state`, how many devices this session opened, and whether a
+   * single note has actually been handed to one. A running device with no notes
+   * is a different fault from a device that never started.
+   */
+  function renderAudio(view: AudioMenuView): void {
+    audioState.textContent = AUDIO_SENTENCE[view.indicator];
+    const parts = [
+      `Device: ${view.state}`,
+      `opened this sitting: ${String(view.contexts)}`,
+      `notes sent: ${String(view.notesScheduled)}`,
+      `sample rate: ${view.sampleRate === 0 ? 'none' : `${String(Math.round(view.sampleRate))} Hz`}`,
+    ];
+    if (view.lastError !== '') parts.push(`last refusal: ${view.lastError}`);
+    audioDetail.textContent = parts.join(' · ');
   }
 
   function renderHistory(history: readonly HistoryEntry[]): void {
@@ -565,6 +672,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     gildingSelect.value = view.gilding ? 'on' : 'off';
     mistakesSelect.value = view.mistakesStand ? 'stand' : 'block';
     renderStages(view);
+    renderAudio(view.audio);
     errorLine.textContent = '';
     renderHistory(view.history);
     promotionPanel.hidden = true;

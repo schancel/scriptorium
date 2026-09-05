@@ -18,6 +18,7 @@ first evening a real beginner plays it and something feels wrong.
 | `min_stage1_coverage` | 0.30 | fraction | If measured stage-1 live coverage falls below this, the curriculum boundaries must move. Hard floor. |
 | `gate_accuracy` | 0.95 | fraction | Accuracy required on a stage's new keys to advance. |
 | `mastery_min_samples` | 20 | keystrokes | Hits on a key before earned fade-out may retire its overlay highlight. Without a floor, one lucky keystroke removes the crutch. |
+| `overlay_retired_alpha` | 0.15 | fraction | How far the whole keyboard overlay recedes once every key of the stage has earned its fade-out, so [the scribe at his lectern](02-rail.md#the-scribe-at-his-lectern) comes up behind it. Never zero, and never applied a key at a time: the board must stay a true picture of the keys under the player's hands, so it fades as a whole rather than developing holes. |
 | `gate_window` | 200 | keystrokes | Trailing window the gate is measured over. |
 | `gate_latency_base_ms` | 600 | ms | Median keystroke latency allowed at stage 0. |
 | `gate_latency_step_ms` | 25 | ms | Tightening per stage. This is the anti-hunt-and-peck lever. |

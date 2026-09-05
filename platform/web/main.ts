@@ -33,6 +33,8 @@ import { createRenderer, type Renderer } from './canvas_renderer.js';
 import { attachKeyboard } from './keyboard_input.js';
 import {
   createOverlay,
+  type AudioIndicator,
+  type AudioMenuView,
   type HandsView,
   type MenuView,
   type Overlay,
@@ -179,7 +181,7 @@ const FALLBACK_KEY_SET: readonly Key[] = ['f', 'j', '<space>', 'a', 's', 'd', 'g
 const FALLBACK_TUNING = {
   values: {
     grey_snap_ms: 0, min_stage1_coverage: 0.3, gate_accuracy: 0.95, gate_window: 200,
-    mastery_min_samples: 20,
+    mastery_min_samples: 20, overlay_retired_alpha: 0.15,
     gate_latency_base_ms: 600, gate_latency_step_ms: 25, gate_latency_floor_ms: 250,
     idle_base_ms: 8000, idle_step_ms: 400, idle_floor_ms: 3000, cloud_approach_ms: 2500,
     cloud_smudge: 25, smudge_max: 100, smudge_per_error_base: 12, smudge_per_error_step: 2,
@@ -1036,6 +1038,16 @@ async function loadSongbook(): Promise<Songbook> {
 }
 
 const MAX_FRAME_MS = 100;
+
+/**
+ * How often the frame loop re-reads the audio device, in milliseconds.
+ *
+ * A backstop under the context's own `statechange`, not a replacement for it:
+ * `statechange` cannot fire on a context that was never constructed, and that is
+ * the silent case the owner actually met. Twice a second is invisible next to a
+ * frame and immediate next to a player's patience for a control that is wrong.
+ */
+const AUDIO_POLL_MS = 500;
 
 async function boot(): Promise<void> {
   const surface = document.getElementById('stage');
@@ -2313,6 +2325,7 @@ async function boot(): Promise<void> {
       // behind this would make it invisible again.
       curriculumFinished: last !== undefined && progress.stage >= last.stage,
       history: progress.history,
+      audio: audioMenuView(),
     };
   }
 
@@ -2584,7 +2597,11 @@ async function boot(): Promise<void> {
       // inside the click: `openAudioDevice` constructs the context before it
       // returns, which is the only moment a browser will allow it.
       if (on) openAudioDevice();
-      overlay.showAudio(on);
+      // Not `showAudio(on)`. The setting is on; the device may or may not be,
+      // and the control's whole job is to say which. `start()` resolves after
+      // this handler returns, so the label settles on the next refresh -- from
+      // the context's own `statechange`, or from the frame loop's poll.
+      refreshAudio();
     },
     importFile: (file) => {
       void importProgress(file)
@@ -2640,11 +2657,68 @@ async function boot(): Promise<void> {
     // resuming a context that is already running is a no-op in every browser.
     // See docs/design/09-music.md#a-suspended-context-is-a-backgrounded-tab-not-an-error.
     if (!audio.on || webAudio.isRunning()) return;
-    void webAudio.start().catch(() => {
+    void webAudio.start().then(refreshAudio, () => {
       /* The browser refused. The next gesture will try again -- and it will,
          because the next gesture is the next key he presses, or the next time
-         he comes back to the tab. */
+         he comes back to the tab. The refusal itself is recorded on the device
+         report and said in the menu, rather than being swallowed here. */
+      refreshAudio();
     });
+  }
+
+  /**
+   * What the sound control is allowed to say.
+   *
+   * It reports the **device**, never `audio.on`. Reporting the setting is how
+   * the control came to assert a state nobody had verified: the smoke harness
+   * drives a stubbed `AudioContext`, and a stub cannot prove a browser made a
+   * noise, so seven green assertions sat beside a machine that said `on` and
+   * played nothing. The owner: *"it says 'on' for sound, but no sound."* That is
+   * degraded operation dressed as normal operation, which is exactly what
+   * docs/decisions/0009-fallbacks-must-announce-themselves.md is about.
+   *
+   * `waiting` is the honest third state: the player has asked for sound and the
+   * browser has not started the device -- because nothing has been typed yet, or
+   * because the tab was in the background. Neither is a fault, and neither is
+   * `on`.
+   */
+  function audioIndicator(): AudioIndicator {
+    if (!audio.on) return 'off';
+    return webAudio.isRunning() ? 'on' : 'waiting';
+  }
+
+  /** The device as the menu reports it: the browser's own words, plus counters. */
+  function audioMenuView(): AudioMenuView {
+    const report = webAudio.report();
+    return {
+      indicator: audioIndicator(),
+      state: report.state,
+      contexts: report.contexts,
+      notesScheduled: report.notesScheduled,
+      sampleRate: report.sampleRate,
+      lastError: report.lastError,
+    };
+  }
+
+  /**
+   * Put the control in step with the device.
+   *
+   * Called from everything that can change either half: the toggle, a resolved
+   * or refused `start()`, the tab coming back, the context's own `statechange`,
+   * and the frame loop at `AUDIO_POLL_MS`. The poll is the belt to
+   * `statechange`'s braces -- `statechange` is the browser's own signal and is
+   * the one to trust, but it is only ever attached to a context that exists, and
+   * the interesting silent case is the one where none does.
+   *
+   * The DOM is touched only when the answer actually changes, so a poll running
+   * twice a second costs nothing.
+   */
+  let shownAudio: AudioIndicator | null = null;
+  function refreshAudio(): void {
+    const indicator = audioIndicator();
+    if (indicator === shownAudio) return;
+    shownAudio = indicator;
+    overlay.showAudio(indicator);
   }
 
   function onInput(event: { type: string; value: string }): void {
@@ -2958,7 +3032,10 @@ async function boot(): Promise<void> {
   // screen goes up below, once the canvas behind it is drawn and #boot is out
   // of the way, and hands the keyboard over when it is dismissed.
   if (!progress.firstRun) attachTyping();
-  overlay.showAudio(audio.on);
+  refreshAudio();
+  // The browser's own signal that it has suspended or resumed the device, which
+  // is more reliable than any poll and arrives on the frame it happens.
+  webAudio.onStateChange(refreshAudio);
   window.addEventListener('resize', () => {
     renderer.resize();
   });
@@ -2970,9 +3047,14 @@ async function boot(): Promise<void> {
   // docs/design/09-music.md#a-suspended-context-is-a-backgrounded-tab-not-an-error
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') openAudioDevice();
+    // Whether or not it resumed. Coming back to a tab whose device the browser
+    // will not restart is precisely the moment the control must stop claiming
+    // the sound is on.
+    refreshAudio();
   });
 
   let previous = performance.now();
+  let audioPollMs = 0;
   const loop = (now: number): void => {
     const dtMs = Math.min(MAX_FRAME_MS, now - previous);
     previous = now;
@@ -3070,6 +3152,16 @@ async function boot(): Promise<void> {
       renderer.render(drawFrame(drawn.frame, drawn.rail, tuning));
     }
     stepAudio(live ? dtMs : 0);
+    // The device, checked at a low rate. `statechange` above is the browser's
+    // own signal and is the one to trust, but it can only ever be attached to a
+    // context that exists -- and "no context at all" is the silent case the
+    // owner actually met. Twice a second is far below a frame and far above a
+    // player's patience for a control that is lying to him.
+    audioPollMs += dtMs;
+    if (audioPollMs >= AUDIO_POLL_MS) {
+      audioPollMs = 0;
+      refreshAudio();
+    }
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);

@@ -128,8 +128,10 @@ keeping — otherwise it gets rediscovered and "fixed" by the next person to not
 
 The keyboard overlay is a scaffold, and
 [the curriculum](06-curriculum.md#breaking-the-looking-down-habit) retires it a key at a
-time: once a key's accuracy passes threshold it stops being drawn. For a player who has
-arrived, the whole band eventually goes quiet.
+time: once a key's accuracy passes threshold it stops being pointed at. For a player who
+has arrived, the whole band goes quiet -- it recedes to
+`overlay_retired_alpha` and stops asking to be looked at, though every key of it is still
+there for the glance that needs one.
 
 **What fills it is the scribe at his lectern**, hunched over the page, quill moving as
 the player types and the page filling as verses complete. Not an ornament in a corner --
@@ -152,15 +154,26 @@ manuscript, never anyone from the text -- see
 
 **It is uncovered, not introduced.** The lectern is drawn *behind* the board on every
 frame, at the alpha of the share of the stage's keys that have retired. At nothing earned
-it is not drawn at all; at one key in eleven it is a suggestion; with the board gone it is
-the band. There is no threshold, no moment of appearance and nothing to announce, which is
-the whole of what makes it a reward rather than an award.
+it is not drawn at all; at one key in eleven it is a suggestion; at the last one it is the
+band. There is no threshold, no moment of appearance and nothing to announce, which is the
+whole of what makes it a reward rather than an award.
 
-**A retired key stops being drawn**, rather than merely stopping being highlighted, and it
-is judged over the lifetime table --
+**The board recedes; it never loses a key.** The same share that raises the lectern lowers
+the opacity of the *whole* overlay, evenly across every key, from solid down to
+`overlay_retired_alpha` -- so the picture behind comes up through a board that is thinning
+rather than through gaps in one that is disappearing. This was once done the other way, by
+dropping each retired key out of the display list, and the owner reported it within the
+evening: *"why are some keys missing from the keyboard?"* A board with holes is not the
+board under his hands, which
+[the layout rule](06-curriculum.md#keyboard-layout) forbids, and a reward that reads as
+damage is not a reward. Receding the board gives the band back just as well and keeps the
+overlay honest while it happens.
+
+**A retired key stops being pointed at** -- no gold when it is owed, and no finger colour
+-- and it is judged over the lifetime table;
 [the curriculum](06-curriculum.md#breaking-the-looking-down-habit) has the reasoning for
-both halves. Without the first the band never empties and there is nothing for the picture
-to fill; without the second every key comes back at the top of every stretch.
+both halves. Without the first the crutch is never actually given up; without the second
+every key comes back at the top of every stretch.
 
 **He is drawn from rects, not from the 16px sprite**, and the reason is scale rather than
 taste. The band is 130 virtual pixels tall and a sprite is sixteen by contract, so the

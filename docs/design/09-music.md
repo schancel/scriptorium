@@ -216,3 +216,61 @@ And a failed resume must leave the state able to try again rather than latching,
 precisely the trap the first version fell into. The smoke test drives it: start the audio,
 suspend the context the way a backgrounded tab does, type, and assert notes are scheduled
 again. Every existing test passed while this was broken.
+
+### The control reports the device, not the setting
+
+Twice now the game has been silent on the owner's machine and said nothing about it. The
+third time he said it for us: *"it says 'on' for sound, but no sound."*
+
+The toggle, and the label on it, reported `audio.on` — the **setting** — and never asked
+whether a browser had actually started an `AudioContext`. That is a claim about the world
+made from a variable we set ourselves. The smoke harness could not catch it, and cannot:
+it drives a stubbed `AudioContext`, and **a stub cannot prove a browser made a noise.** So
+seven green audio assertions sat beside a control asserting a state nobody had verified,
+which is [ADR 0009](../decisions/0009-fallbacks-must-announce-themselves.md) exactly —
+degraded operation wearing the look of normal operation.
+
+**The control says what is true of the device.** Three states, because there were always
+three and one word was covering two of them:
+
+| The device | The control says |
+|---|---|
+| Setting off | `♪ sound: off` |
+| Setting on, context running | `♪ sound: on` |
+| Setting on, no context or one the browser has not started | `♪ sound: on — press a key` |
+
+The third is not an error. A browser holds audio shut until the page has been typed on or
+clicked, and suspends it again whenever the tab is backgrounded; both are normal, both are
+silent, and neither is *on*. So it is said plainly, and it carries the one thing that fixes
+it, which costs the player a keystroke he was about to make anyway.
+
+**And it is said beside the control, not only on it.** Sound on with a device that is not
+running is degraded operation, so a quiet line under the toggle says so in the dim colour
+the rest of the chrome uses — never in the error colour, because being told to type is not
+an alarm. It is up only while the gap is open.
+
+**It updates from the device, not from the click.** `platform/web/main.ts` refreshes the
+label from the context's own `statechange` — the browser's own signal that it has suspended
+or resumed, which is more reliable than any poll and arrives on the frame it happens — from
+`visibilitychange`, from a resolved or refused `start()`, and from the frame loop
+twice a second as a backstop (`AUDIO_POLL_MS`, a platform constant -- nothing about the
+player's experience is tuned by it). The backstop earns its place because `statechange` can only
+be attached to a context that exists, and "no context at all" is the silent case actually
+met.
+
+### The diagnostic, in the menu
+
+We have twice had to guess at why one particular machine was quiet, and guessing is not a
+diagnostic. The menu now carries the browser's own account of the device:
+
+- the `AudioContext`'s **`state`**, verbatim, or `none` when none has been constructed;
+- how many contexts this sitting has **opened** — zero means no gesture ever reached
+  `start()`;
+- how many **notes** have been handed to the device — a running context with no notes is a
+  different fault from a device that never started, and it is the shape a missing songbook
+  makes;
+- the **sample rate**, and the message from the last refused `resume()` if there was one.
+
+None of it decides anything; it is read out and nothing else. It exists so that the next
+time the game is silent, the game can say why instead of us inferring it from one sentence
+of the owner's.

@@ -54,7 +54,13 @@ class Ctx2D {
   save() { this._clips = this._clips ?? []; this._clips.push(this._clipped === true); }
   restore() { this._clipped = (this._clips ?? []).pop() === true; }
   clearRect() {}
-  fillRect(x, y, w, h) { calls.fillRect += 1; calls.fills.push({ x, y, w, h, color: this.fillStyle }); }
+  // `globalAlpha` is recorded with the rect, because the keyboard overlay now
+  // gives its band back by *receding* rather than by dropping keys, and
+  // "the board thinned" is only an assertion if the alpha is visible here.
+  fillRect(x, y, w, h) {
+    calls.fillRect += 1;
+    calls.fills.push({ x, y, w, h, color: this.fillStyle, alpha: this.globalAlpha });
+  }
   // The clip rect is the only place a *parallax* band's position surfaces:
   // `canvas_renderer.ts` fills one by clipping to the command's rect and
   // repeating a 16x16 image inside it, so the rect's x is the layer's scroll
@@ -2060,10 +2066,23 @@ const lecternShape = () => lectern().map((f) => `${f.x},${f.y},${f.w},${f.h}`).j
 /** The written lines on the page: wide and two pixels tall. */
 const written = () => lectern().filter((f) => f.h === 2 && f.w > 10).length;
 
+/** How solid the board is being drawn: the brightest key face on it. */
+const boardPresence = () => Math.max(...keyFaces().map((f) => f.alpha ?? 1));
+
 tick(4);
-ok(keyFaces().length > 0 && keyFaces().length < BOARD_KEYS,
-   'THE BOARD RETIRES A KEY AT A TIME, AND THIS PLAYER HAS EARNED SOME OF IT',
-   `${keyFaces().length} of ${BOARD_KEYS} keys still drawn`);
+// Earned fade-out once dropped a mastered key out of the display list, and the
+// board grew holes as the player improved. He reported it the same evening:
+// "why are some keys missing from the keyboard?" The overlay must match the
+// board under his hands exactly or it teaches the wrong finger
+// (docs/design/06-curriculum.md#keyboard-layout), and a reward that reads as
+// damage is not a reward. So the board is *whole* at every level of mastery,
+// and what it gives back it gives back by receding.
+ok(keyFaces().length === BOARD_KEYS,
+   'EVERY KEY IS STILL ON THE BOARD, HOWEVER MUCH OF IT HE HAS EARNED',
+   `${keyFaces().length} of ${BOARD_KEYS} keys drawn`);
+ok(boardPresence() < 1,
+   'AND WHAT MASTERY TOOK IS THE BOARD\u2019S PRESENCE, NOT ITS KEYS',
+   `brightest key face at alpha ${boardPresence().toFixed(3)}`);
 ok(lectern().length > 0,
    'AND WHAT IS BEHIND IT IS THE SCRIBE AT HIS LECTERN',
    `${lectern().length} shapes in the band`);
@@ -2151,6 +2170,64 @@ ok((listeners.visibilitychange ?? []).length > 0,
 ok(audio.ctx.state === 'running' && audio.notes > backFrom,
    'AND COMING BACK TO THE TAB BRINGS THE SOUND BACK WITH NO KEYSTROKE AT ALL',
    `${audio.notes - backFrom} notes, device ${String(audio.ctx.state)}`);
+
+// --- the sound control reports the device, not the setting -------------------
+//
+// "it says 'on' for sound, but no sound." The control read `audio.on` -- the
+// *setting* -- and never asked whether the browser had actually started an
+// `AudioContext`. Every assertion above passes against a stub, and a stub cannot
+// prove a browser made a noise, so the control was asserting a state nobody had
+// verified: degraded operation wearing the look of normal operation, which is
+// docs/decisions/0009-fallbacks-must-announce-themselves.md in a third costume.
+//
+// What can be driven here is the gap itself: suspend the device the way a
+// browser does and watch the label. It must stop saying "on".
+
+const audioLabel = () => String(stubEl('audio-toggle').textContent ?? '');
+const audioNoteUp = () => stubEl('audio-note').hidden === false;
+
+ok(audio.ctx.state === 'running' && /sound: on$/.test(audioLabel()),
+   'A RUNNING DEVICE IS REPORTED AS ON, PLAINLY', audioLabel());
+ok(!audioNoteUp(), 'and nothing else is said, because nothing is wrong');
+
+// Suspended. Nothing about the setting changed; the sound stopped anyway.
+audio.ctx.state = 'suspended';
+tick(60);
+ok(/sound: on$/.test(audioLabel()) === false && /sound: on/.test(audioLabel()),
+   'A SUSPENDED DEVICE IS NOT REPORTED AS ON',
+   audioLabel());
+ok(/press a key/.test(audioLabel()),
+   'AND THE LABEL SAYS THE ONE THING THAT FIXES IT', audioLabel());
+ok(audioNoteUp(),
+   'AND IT IS SAID BESIDE THE CONTROL, WHERE HE IS ALREADY LOOKING',
+   `#audio-note hidden=${String(stubEl('audio-note').hidden)}`);
+
+// And the diagnostic: the browser's own account of the device, reachable from
+// the menu. We have twice had to guess at why one machine was silent. This is
+// the game answering instead.
+stubEl('menu-open').click();
+tick(2);
+const audioSaid = String(stubEl('menu-audio-state').textContent ?? '');
+const audioDiag = String(stubEl('menu-audio-detail').textContent ?? '');
+ok(/^Sound is on, but the browser has not started/.test(audioSaid),
+   'THE MENU SAYS WHAT IS TRUE OF THE DEVICE, NOT WHAT THE SETTING SAYS', audioSaid);
+ok(/Device: suspended/.test(audioDiag),
+   'AND IT SURFACES THE REAL AudioContext STATE', audioDiag);
+ok(/opened this sitting: [1-9]/.test(audioDiag) && /notes sent: [1-9]/.test(audioDiag),
+   'AND HOW MANY DEVICES WERE OPENED AND WHETHER A NOTE WAS EVER SCHEDULED', audioDiag);
+
+// Out of the menu, and back to a device that plays -- the run below is entitled
+// to the state it would have had.
+press('Escape');
+tick(4);
+const resumedFrom = audio.notes;
+const backKey = askedFor();
+if (backKey !== null) press(backKey);
+await waitFor(() => audio.ctx.state === 'running', 20);
+tick(60);
+ok(/sound: on$/.test(audioLabel()) && audio.notes > resumedFrom,
+   'AND IT GOES BACK TO SAYING ON THE MOMENT THE DEVICE IS ACTUALLY RUNNING',
+   `${audioLabel()} · ${audio.notes - resumedFrom} notes`);
 
 // --- the voice ---------------------------------------------------------------
 //
@@ -2293,6 +2370,9 @@ tick(6);
 ok(keyFaces().length === BOARD_KEYS,
    'A PLAYER WHO HAS EARNED NOTHING STILL HAS THE WHOLE BOARD',
    `${keyFaces().length} of ${BOARD_KEYS} keys drawn`);
+ok(boardPresence() === 1,
+   'and it is at full strength, because he has earned none of it away',
+   `brightest key face at alpha ${boardPresence()}`);
 ok(lectern().length === 0,
    'AND NOTHING OF THE LECTERN IS BEHIND IT YET, BECAUSE NOTHING HAS BEEN GIVEN UP',
    `${lectern().length} shapes in the band`);

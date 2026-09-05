@@ -111,6 +111,35 @@ const CUES: Readonly<Record<Cue, CueVoice>> = {
   warp: { ch: 'pulse2', midi: 60, ms: 700, duty: 0.5, arp: [0, 6, 12, 18], arpHz: 18 },
 };
 
+/**
+ * What the audio device actually is, as opposed to what the setting says.
+ *
+ * The sound control used to report `audio.on` -- the *intent* -- and the owner
+ * found the gap the only way anyone ever finds it: *"it says 'on' for sound, but
+ * no sound."* A stubbed `AudioContext` in the smoke harness cannot prove a
+ * browser made a noise, so the control asserted a state nobody had verified,
+ * which is the failure
+ * docs/decisions/0009-fallbacks-must-announce-themselves.md exists to prevent.
+ *
+ * So the device is asked, and every field here is a fact read off it at the
+ * moment it is asked for -- never a memory of what we did to it. Between them
+ * they answer the question we have twice had to guess at: whether a silent
+ * machine has no context, a context the browser will not run, or a running
+ * context nothing has been sent to.
+ */
+export interface AudioReport {
+  /** The context's own `state`, verbatim. `'none'` when none has been made. */
+  readonly state: string;
+  /** How many contexts this session has constructed. Never grows without a gesture. */
+  readonly contexts: number;
+  /** Notes and cues handed to the device. Zero with a running context is the tell. */
+  readonly notesScheduled: number;
+  /** The device's sample rate, or 0 when there is no device. */
+  readonly sampleRate: number;
+  /** What the last `start()` threw, or `''` if none has thrown. */
+  readonly lastError: string;
+}
+
 export interface WebAudio {
   /** True once a context exists and is running. */
   isRunning(): boolean;
@@ -122,6 +151,18 @@ export interface WebAudio {
   play(events: readonly SoundEvent[]): void;
   /** The most recent tempo ratio announced by the core, for diagnostics. */
   tempoRatio(): number;
+  /** The device as it actually is, for the control and for the menu's diagnostic. */
+  report(): AudioReport;
+  /**
+   * Register a listener for the browser's own `statechange` on the context.
+   *
+   * The browser suspends and resumes contexts on its own -- a backgrounded tab,
+   * an autoplay policy relenting -- and `statechange` is its own signal that it
+   * has. More reliable than polling and, unlike polling, it fires on the frame
+   * it happens, so the control never sits reading `on` at a device that stopped
+   * a second ago.
+   */
+  onStateChange(listener: () => void): void;
 }
 
 export function createWebAudio(tuning: Tuning): WebAudio {
@@ -129,6 +170,17 @@ export function createWebAudio(tuning: Tuning): WebAudio {
   let master: GainNode | null = null;
   let noiseBuffer: AudioBuffer | null = null;
   let ratio = 1;
+  // The diagnostic's three counters. Nothing reads them but `report`, and
+  // nothing decides anything by them: they exist so the game can answer "why is
+  // this machine silent" instead of us guessing at it a third time.
+  let contexts = 0;
+  let notesScheduled = 0;
+  let lastError = '';
+  const stateListeners: (() => void)[] = [];
+
+  function announceState(): void {
+    for (const listener of stateListeners) listener();
+  }
 
   const waves = new Map<number, PeriodicWave>();
   const voices = new Map<Channel, Voice>();
@@ -240,6 +292,7 @@ export function createWebAudio(tuning: Tuning): WebAudio {
       source = osc;
     }
 
+    notesScheduled += 1;
     const env = envelopeFor(ch, vel, ch === 'noise' ? timbreForMidi(midi) : undefined);
     const endsAt = shape(gain.gain, env, at, seconds);
     gain.connect(out);
@@ -267,10 +320,29 @@ export function createWebAudio(tuning: Tuning): WebAudio {
         const gain = context.createGain();
         gain.gain.value = masterGain(tuning);
         gain.connect(context.destination);
+        // The browser's own signal that it has suspended or resumed the device
+        // behind our back, which is exactly the thing the control has to know
+        // and the thing a poll finds out late. Assigned rather than added as a
+        // listener so releasing the context releases it too.
+        context.onstatechange = (): void => {
+          announceState();
+        };
         ctx = context;
         master = gain;
+        contexts += 1;
       }
-      await ctx.resume();
+      try {
+        await ctx.resume();
+        lastError = '';
+      } catch (error) {
+        // Recorded, not swallowed. A refused resume is the commonest reason a
+        // machine is silent with the toggle reading on, and until now the only
+        // trace it left was in a console nobody playing a game has open.
+        lastError = error instanceof Error ? error.message : String(error);
+        throw error;
+      } finally {
+        announceState();
+      }
     },
 
     async stop(): Promise<void> {
@@ -282,7 +354,9 @@ export function createWebAudio(tuning: Tuning): WebAudio {
       noiseBuffer = null;
       ctx = null;
       master = null;
+      context.onstatechange = null;
       await context.close();
+      announceState();
     },
 
     play(events: readonly SoundEvent[]): void {
@@ -300,6 +374,20 @@ export function createWebAudio(tuning: Tuning): WebAudio {
 
     tempoRatio(): number {
       return ratio;
+    },
+
+    report(): AudioReport {
+      return {
+        state: ctx === null ? 'none' : ctx.state,
+        contexts,
+        notesScheduled,
+        sampleRate: ctx === null ? 0 : ctx.sampleRate,
+        lastError,
+      };
+    },
+
+    onStateChange(listener: () => void): void {
+      stateListeners.push(listener);
     },
   };
 }

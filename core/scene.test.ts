@@ -46,7 +46,7 @@ import type {
 } from './types.js';
 
 /** The rows data/tuning.json carries that any of this path reads. */
-const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20, report_trend_parts: 20, report_finger_min_hits: 12, report_reach_ratio: 2.0, report_key_min_attempts: 12, report_worst_key_rate: 0.12, smudge_max: 100, smudge_per_error_base: 12, smudge_per_error_step: 1, smudge_decay_per_key: 3, hearts_start: 3, hearts_max: 5, idle_base_ms: 8000, idle_step_ms: 400, idle_floor_ms: 3000, cloud_approach_ms: 2500, cloud_smudge: 25, monster_burst_ms: 320, strike_reach: 36, stomp_ms: 460, ink_ms: 420, strike_hop_px: 12, strike_contact_px: 7, strike_bounce_ratio: 0.6, strike_nib_arc_px: 14, strike_rise_travel: 0.7, reduced_parallax: 0, reduced_anim_scale: 0.35, reduced_camera_lerp: 0.5 }; // tuning-exempt: test fixture mirroring data/tuning.json
+const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20, overlay_retired_alpha: 0.15, report_trend_parts: 20, report_finger_min_hits: 12, report_reach_ratio: 2.0, report_key_min_attempts: 12, report_worst_key_rate: 0.12, smudge_max: 100, smudge_per_error_base: 12, smudge_per_error_step: 1, smudge_decay_per_key: 3, hearts_start: 3, hearts_max: 5, idle_base_ms: 8000, idle_step_ms: 400, idle_floor_ms: 3000, cloud_approach_ms: 2500, cloud_smudge: 25, monster_burst_ms: 320, strike_reach: 36, stomp_ms: 460, ink_ms: 420, strike_hop_px: 12, strike_contact_px: 7, strike_bounce_ratio: 0.6, strike_nib_arc_px: 14, strike_rise_travel: 0.7, reduced_parallax: 0, reduced_anim_scale: 0.35, reduced_camera_lerp: 0.5 }; // tuning-exempt: test fixture mirroring data/tuning.json
 
 const FRAME_MS = 16; // tuning-exempt: test fixture, a frame at 60Hz
 const HOUR_MS = 3600000; // tuning-exempt: the length of the simulated trace
@@ -932,14 +932,81 @@ test('NOTHING IS EARNED, SO THE BOARD IS WHOLE AND THERE IS NOTHING BEHIND IT', 
     'and every key is drawn');
 });
 
-test('A KEY THAT HAS EARNED ITS FADE-OUT IS NOT DRAWN AT ALL', () => {
-  const whole = drawFrame(frame(0), createRail(0), TUNING);
-  const retired = drawFrame(withEarned(), createRail(0), TUNING);
-  assert.ok(facesIn(retired).length < facesIn(whole).length,
-    'the board did not retire anything');
-  // Only the *taught* keys go. An untaught key is still dim on the board,
-  // because it is still something he has not been given.
-  assert.ok(facesIn(retired).length > 0, 'the whole board went, untaught keys included');
+/** A frame in which the first `n` of the stage's keys have earned their fade-out. */
+const withEarnedCount = (n: number): FrameState => frame(0, {
+  report: { keyStats: earned(KEYS.slice(0, n)), history: [] },
+});
+
+test('EVERY KEY OF THE LAYOUT IS DRAWN AT EVERY LEVEL OF MASTERY', () => {
+  // The regression this exists to stop. Earned fade-out used to drop a mastered
+  // key out of the display list, so the board grew holes as the player improved
+  // and the owner reported it as a bug: "why are some keys missing from the
+  // keyboard?". docs/design/06-curriculum.md#keyboard-layout is why it is one --
+  // the overlay must match the physical board exactly or it teaches the wrong
+  // finger -- and a reward that reads as damage is not a reward.
+  //
+  // Walked one key at a time from nothing earned to everything earned, because a
+  // hole appears at *some* level of mastery and asserting only the two ends
+  // would miss it.
+  const board = overlayLayout('ansi');
+  for (let n = 0; n <= KEYS.length; n++) {
+    const faces = facesIn(drawFrame(withEarnedCount(n), createRail(0), TUNING));
+    assert.equal(faces.length, board.length,
+      `${String(n)} of ${String(KEYS.length)} keys retired and the board lost some`);
+  }
+  // And the labels too: a key face with no legend on it is the same hole.
+  const labels = drawFrame(withEarned(), createRail(0), TUNING)
+    .filter((c) => c.op === 'text' && c.style === 'key');
+  assert.equal(labels.length, board.length, 'a key face lost its label');
+});
+
+test('WHAT MASTERY TAKES AWAY IS THE BOARD S PRESENCE, NOT ITS KEYS', () => {
+  // The band is given back by receding the whole overlay together -- the picture
+  // stays a picture of his keyboard while it thins, and the lectern comes up
+  // through it. docs/design/02-rail.md#how-it-arrives-and-how-it-is-drawn
+  // The brightest face on the board is a taught, un-dimmed key, so its alpha
+  // *is* the board's presence -- an untaught key carries the dimming as well.
+  const alphaOf = (n: number): number => {
+    const faces = facesIn(drawFrame(withEarnedCount(n), createRail(0), TUNING));
+    assert.ok(faces.length > 0);
+    return Math.max(...faces.map((c) => c.alpha ?? 1));
+  };
+  assert.equal(alphaOf(0), 1, 'nothing earned, and the board is already faint');
+  const floor = TUNING['overlay_retired_alpha'] ?? 0;
+  assert.ok(floor > 0, 'the floor must be above zero or the board can still vanish');
+  assert.ok(Math.abs(alphaOf(KEYS.length) - floor) < 1e-9, // tuning-exempt: float slack
+    'everything earned, and the board did not recede to its floor');
+  // Monotone: it thins as he earns, and never comes back brighter.
+  for (let n = 1; n <= KEYS.length; n++) {
+    assert.ok(alphaOf(n) < alphaOf(n - 1), `the board did not recede at ${String(n)}`);
+  }
+
+  // And the lectern comes up through it at the same rate, which is the half of
+  // this the receding board exists to serve: the band is *given back*, not
+  // merely dimmed. Nothing behind at nothing earned, and brighter every step.
+  const lecternAlphaAt = (n: number): number => {
+    const shapes = lecternIn(drawFrame(withEarnedCount(n), createRail(0), TUNING));
+    return shapes.length === 0 ? 0 : Math.max(...shapes.map((c) => c.alpha ?? 1));
+  };
+  assert.equal(lecternAlphaAt(0), 0, 'the reward arrived before the crutch was given up');
+  for (let n = 1; n <= KEYS.length; n++) {
+    assert.ok(lecternAlphaAt(n) > lecternAlphaAt(n - 1),
+      `the lectern did not come up at ${String(n)}`);
+  }
+});
+
+test('a key that has earned its fade-out stops being coloured for its finger', () => {
+  // The crutch is the colour: the board is painted by finger so it can say which
+  // one to strike with, and a key he has earned is not being told that any more.
+  // It keeps its face and its label; it loses the pointing.
+  const fingers = new Set(overlayLayout('ansi').map((k) => PALETTE_ORDER.indexOf(k.finger)));
+  const before = facesIn(drawFrame(frame(0), createRail(0), TUNING));
+  const after = facesIn(drawFrame(withEarned(), createRail(0), TUNING));
+  assert.ok(before.some((c) => fingers.has(c.color)), 'nothing was finger-coloured to begin with');
+  const keyFace = PALETTE_ORDER.indexOf('keyFace');
+  const taught = KEYS.length;
+  assert.ok(after.filter((c) => c.color === keyFace).length >= taught,
+    'every taught key should have dropped to the plain key face');
 });
 
 test('AND THE SCRIBE AT HIS LECTERN IS BEHIND IT, BELOW THE RAIL AND INSIDE THE BAND', () => {
