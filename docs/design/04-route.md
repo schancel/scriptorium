@@ -1,6 +1,6 @@
 # The route
 
-**Implemented by:** `core/route.ts`, `core/warp.ts`, `platform/web/overlay.ts`
+**Implemented by:** `core/route.ts`, `core/warp.ts`, `platform/web/overlay.ts`, `platform/web/main.ts`
 
 ## A graph, not a reading plan
 
@@ -110,6 +110,57 @@ restating it.
 A room the player has entered is recorded in the progress record as `discovered`, because
 a player who steps in, turns round and walks straight back out has still found it, and a
 reload must not be a cheaper way to lose a room than walking out of one.
+
+## Finishing a passage offers the thread it leads to
+
+The map was the *only* way onto a thread, and the map is a screen a player has to go
+looking for. So the whole of this document was optional in the worst way: finish
+Genesis 1, read straight on into Genesis 2, and never learn that the route or the threads
+exist at all. The best idea in the game was invisible.
+[ADR 0012](../decisions/0012-the-route-must-not-skip-the-events.md) closed it.
+
+**Finish a passage a thread leaves, and the thread is offered** — one sentence in the
+strip under the rail, in the same place, the same manner and the same register as a
+[doorway](#how-it-is-played): the key, where it goes, and the route's own note about the
+echo.
+
+> `tab: a thread to John 1 · John opens by quoting Genesis word for word · or read on`
+
+**It is an offer and not a fork.** Reading onward is the default and stays the default:
+the next stretch of verses is already on the rail underneath the sentence, and typing is
+what makes the sentence go. Declining costs nothing, is not recorded, and is not
+mentioned again. Nothing about it moves the player, which is the whole difference between
+this and travelling a thread — *"an offer that moves you is a fork, and the player did not
+ask to leave."*
+
+### One thread is offered, not three
+
+Genesis 1 has three progression edges leaving it, and three of anything in the strip is a
+menu rather than an invitation. Exactly one is named, and the others are **counted**:
+the sentence ends `· 2 more on the route`, which is a signpost to the screen built for the
+job rather than a second list in a place that holds one line.
+
+Which one is decided by two rules and no taste:
+
+- **A thread that lands where reading on lands is not an offer.** It is a description of
+  the default. `living-creature` goes Genesis 1 → Genesis 2, and the player's very next
+  keystroke after Genesis 1 is Genesis 2:1 — so offering it says nothing he is not already
+  doing. It is skipped, and it is the reason this rule exists at all.
+- **Otherwise the route's own table order.** `beginning` is first out of Genesis 1, and it
+  is the strongest echo in the graph: John 1 opens by quoting Genesis word for word.
+  `first-day` stays on the route screen with the rest.
+
+### It is silent on a passage already travelled from
+
+An offer that came back every time a chapter was finished would be nagging, and the
+project has [a rule about a tip that returns](10-first-run.md#once-only-and-gone) after you
+have understood it.
+
+So: **if any passage a thread out of here leads to is already finished, nothing is
+offered.** He has been where the signpost points, whether he travelled the thread or read
+his way there, and a signpost to somewhere you have been is not a signpost. It is derived
+from `completed` and needs no field on the record — which also means it survives a reload
+without one, and cannot disagree with the route screen about what has been finished.
 
 ## Standing off the route
 

@@ -61,12 +61,13 @@ import {
 } from '../../core/scenes.js';
 import { setpieceState, type SetpieceState } from '../../core/setpieces.js';
 import {
-  arrivalLine, followerLine, loadFollowers, party as gatheredParty,
+  arrivalLine, followerCitation, followerLine, loadFollowers, party as gatheredParty,
   type Follower, type FollowerLine, type Roster,
 } from '../../core/followers.js';
 import {
   arriveAt, completePassage, createMap, discoverSecret, flashbacksFrom,
-  loadRoute, mapThreads, mapView, nodeRefs, requiredRefs, routeComplete, standingOffRoute,
+  loadRoute, mapThreads, mapView, nodeRefs, offerLine, requiredRefs, routeComplete,
+  standingOffRoute, threadOffer,
   type MapState, type Route, type RouteEdge,
 } from '../../core/route.js';
 import {
@@ -951,6 +952,7 @@ function frameFor(
   tuning: Tuning,
   points: number,
   note: string | null,
+  offer: string | null,
   arrival: string | null,
   doorway: string | null,
   report: ReportMemory,
@@ -997,6 +999,7 @@ function frameFor(
     // Absent on all but a handful of frames in a player's life -- and absent is
     // not the same as empty here, so it is spread in rather than set to null.
     ...(note === null ? {} : { note }),
+    ...(offer === null ? {} : { offer }),
     ...(arrival === null ? {} : { arrival }),
     ...(doorway === null ? {} : { doorway }),
   };
@@ -1542,6 +1545,11 @@ async function boot(): Promise<void> {
     // up over the top of this, so the line waits under the rail for the next
     // stretch of verses, which is where the player will be when he reads it.
     greetNewcomers();
+    // And names the thread it leads to, in the same strip and for the same
+    // reason: the player is about to be looking at the rail, not at a menu he
+    // has never opened. It waits behind the report card exactly as an arrival
+    // does. docs/design/04-route.md#finishing-a-passage-offers-the-thread-it-leads-to
+    if (lastChunk) offerThread(`${level.bookTitle} ${String(level.chapter)}`);
 
     if (promotion !== null) {
       detachTyping();
@@ -1688,7 +1696,11 @@ async function boot(): Promise<void> {
    */
   function company(): readonly Follower[] {
     if (route === null || roster === null) return [];
-    return gatheredParty(roster, route, mapState());
+    // The verse under the cursor, which is the same number the scenery has been
+    // resolved from since it went verse-precise. It is what lets Adam join at
+    // Genesis 2:7 with nothing written to the record: the standing is a fact the
+    // game already has. docs/design/11-followers.md#derived-never-stored
+    return gatheredParty(roster, route, mapState(), verseUnder(level));
   }
 
   /** The company as the screen draws it: capped, nearest first, plus a count. */
@@ -1727,7 +1739,7 @@ async function boot(): Promise<void> {
    * place a "have I said this yet" fact is kept -- and it is session state on
    * purpose: it is about this sitting, not about the player.
    */
-  const metAlready = new Set<string>(company().map((f) => f.ref));
+  const metAlready = new Set<string>(company().map(followerCitation));
 
   /**
    * Compare the party against who has already been greeted, and take a line if
@@ -1741,8 +1753,9 @@ async function boot(): Promise<void> {
    */
   function greetNewcomers(): void {
     for (const figure of company()) {
-      if (metAlready.has(figure.ref)) continue;
-      metAlready.add(figure.ref);
+      const cite = followerCitation(figure);
+      if (metAlready.has(cite)) continue;
+      metAlready.add(cite);
       if (arrival === null) {
         arrival = { line: arrivalLine(figure.who), left: noteHoldKeys() };
       }
@@ -1768,9 +1781,107 @@ async function boot(): Promise<void> {
    */
   function stepArrival(before: TypingState): void {
     if (arrival === null) return;
+    if (stripHolder() !== 'arrival') return;
     if (level.typing.correct <= before.correct) return;
     arrival.left -= 1;
     if (arrival.left <= 0) arrival = null;
+  }
+
+  // --- the thread the finished passage leads to -----------------------------
+
+  /**
+   * The offer standing under the rail, and how much typing is left before it
+   * goes.
+   *
+   * Taking a thread required opening the route screen, which is a screen a
+   * player has to go looking for -- so someone could finish Genesis 1, read
+   * straight on into Genesis 2, and never learn that the route existed. The
+   * offer is the signpost that was missing.
+   * docs/design/04-route.md#finishing-a-passage-offers-the-thread-it-leads-to
+   *
+   * It is session state and not a record field for the same reason `metAlready`
+   * is: what the record has to know -- whether he has already been where this
+   * thread points -- it already knows, in `completed`. See `threadOffer`.
+   */
+  interface Offer {
+    readonly line: string;
+    readonly edge: RouteEdge;
+    /** Correct keystrokes still owed before it leaves. */
+    left: number;
+  }
+
+  let offer: Offer | null = null;
+
+  /**
+   * Which of the three sentences the one strip is showing, if any.
+   *
+   * There is one strip and the rarer thing wins it, in the order
+   * `core/draw.ts` draws them. This exists because the two that are *spent by
+   * typing* must be spent while they are on screen and not before: an arrival
+   * standing behind an offer used to be counted down under it and lost, and a
+   * follower nobody was told about is the hole the arrival line exists to fill.
+   * docs/design/11-followers.md#arriving-with-a-line
+   */
+  function stripHolder(): 'note' | 'offer' | 'arrival' | null {
+    if (noteText(coach) !== null) return 'note';
+    if (offer !== null) return 'offer';
+    if (arrival !== null) return 'arrival';
+    return null;
+  }
+
+  /**
+   * A passage was finished. Name the thread it leads to, if there is one to
+   * name and he has not already been where it points.
+   *
+   * Every rule about *which* thread, and about staying quiet, is in
+   * `threadOffer` -- this only asks. A passage the route does not name, a route
+   * that would not load, and a passage already travelled from all produce
+   * nothing, which is the ordinary case.
+   */
+  function offerThread(ref: string): void {
+    if (route === null) return;
+    const node = routeRefFor(ref);
+    if (node === null) return;
+    const found = threadOffer(route, mapState(), node);
+    if (found === null) return;
+    offer = { line: offerLine(found), edge: found.edge, left: noteHoldKeys() };
+  }
+
+  /** The sentence in the strip, or null. */
+  function offerText(): string | null {
+    return offer === null ? null : offer.line;
+  }
+
+  /**
+   * One keystroke, as the offer sees it.
+   *
+   * **This is the declining.** Reading onward is the default and typing is what
+   * takes it: the next stretch of verses is already on the rail underneath the
+   * sentence, nothing is recorded, nothing is lost, and it is not mentioned
+   * again. An offer that had to be dismissed would be a fork wearing an offer's
+   * clothes.
+   */
+  function stepOffer(before: TypingState): void {
+    if (offer === null) return;
+    if (stripHolder() !== 'offer') return;
+    if (level.typing.correct <= before.correct) return;
+    offer.left -= 1;
+    if (offer.left <= 0) offer = null;
+  }
+
+  /**
+   * Take it: travel the thread the strip is naming.
+   *
+   * The same crossing the route screen runs, because it is the same thread --
+   * `travelTo` finds the edge again from the record rather than being handed
+   * this one, so there is exactly one path onto a thread and this is a shortcut
+   * to it rather than a second way of doing it.
+   */
+  function takeOffer(): void {
+    const taken = offer;
+    if (taken === null) return;
+    offer = null;
+    travelTo(taken.edge.to);
   }
 
   function routeView(): RouteView {
@@ -1792,8 +1903,13 @@ async function boot(): Promise<void> {
       // capped line on screen is currently showing.
       party: (() => {
         const gathered = company();
-        const shown = new Set(followerLine(gathered, tuning).walking.map((f) => f.ref));
-        return gathered.map((f) => ({ ref: f.ref, who: f.who, walking: shown.has(f.ref) }));
+        const shown = new Set(followerLine(gathered, tuning).walking.map(followerCitation));
+        // Named by where they joined rather than by the chapter alone: Genesis 2
+        // hands over two people, at 2:7 and 2:24, and two rows both reading
+        // "Genesis 2" would be the screen losing the thing the verse column added.
+        return gathered.map((f) => ({
+          ref: followerCitation(f), who: f.who, walking: shown.has(followerCitation(f)),
+        }));
       })(),
       finished: mapView(route, state).filter((n) => n.kind === 'stop' && n.completed).length,
       stops: requiredRefs(route).length,
@@ -2775,11 +2891,17 @@ async function boot(): Promise<void> {
         level.typing = deleteBack(level.typing);
         bookmark();
       }
-      // The doorway. Tab steps through one standing open, and steps back out of
-      // a room already entered. Walking past it is typing on, which costs
-      // nothing at all -- see `skipFlashback`.
+      // The doorway, and the thread a finished passage offered. Tab steps
+      // through whichever the strip is currently naming, and steps back out of
+      // a room already entered. Walking past either is typing on, which costs
+      // nothing at all -- see `skipFlashback` and `stepOffer`.
+      //
+      // The offer takes the key only while it is the sentence on screen, so the
+      // key always does the thing the player can read. Behind a first-run note
+      // it is invisible and Tab means what it meant before.
       if (event.value === 'tab') {
-        if (level.flashback === null) enterDoorway();
+        if (stripHolder() === 'offer') takeOffer();
+        else if (level.flashback === null) enterDoorway();
         else leaveDoorway();
       }
       return;
@@ -2788,7 +2910,13 @@ async function boot(): Promise<void> {
     const before = level.typing;
     level.typing = applyKey(level.typing, event.value, tuning);
     coachKeystroke(before);
+    stepOffer(before);
     stepArrival(before);
+    // A figure may be formed by this very keystroke: Adam at Genesis 2:7, with
+    // no chapter ending and no report card. Asked after the two above, so a
+    // line that has just been taken is not also spent on the keystroke that
+    // took it. docs/design/11-followers.md#they-join-at-a-verse-not-at-the-end-of-a-chapter
+    greetNewcomers();
     scoreKeystroke(before, level.typing);
     resolveDefeats(before.cursor);
     bookmark();
@@ -3139,8 +3267,8 @@ async function boot(): Promise<void> {
         drawFrame(
           {
             ...frameFor(
-              level, damage, cloud, tuning, levelScore(), noteText(coach), arrivalText(),
-              doorwayPrompt(), reportMemory(), partyLine(),
+              level, damage, cloud, tuning, levelScore(), noteText(coach), offerText(),
+              arrivalText(), doorwayPrompt(), reportMemory(), partyLine(),
             ),
             reduced: motionReduced,
           },

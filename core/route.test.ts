@@ -37,12 +37,14 @@ import {
   mapThreads,
   mapView,
   nodeRefs,
+  offerLine,
   orphans,
   requiredRefs,
   returnTargetFor,
   routeComplete,
   routeNodes,
   standingOffRoute,
+  threadOffer,
   unresolvedRefs,
   type Route,
 } from './route.js';
@@ -269,4 +271,93 @@ test('entries are the passages a player opens rather than warps into', () => {
   assert.ok(entries.has('Genesis 1'));
   assert.ok(!entries.has('John 1'), 'John 1 is arrived at');
   for (const ref of entries) assert.equal(routeNodes(route).get(ref)?.inbound.length, 0);
+});
+
+// --- the thread a finished passage offers ------------------------------------
+//
+// docs/design/04-route.md#finishing-a-passage-offers-the-thread-it-leads-to.
+// Taking a thread used to require opening the route screen, so a player could
+// finish Genesis 1, read straight on into Genesis 2, and never learn that any
+// of this existed. The offer is the signpost that was missing, and everything
+// worth getting wrong about it is a rule over the graph and the record.
+
+function standing(done: readonly string[] = []): ReturnType<typeof createMap> {
+  let state = createMap(route);
+  for (const ref of done) state = completePassage(state, ref);
+  return state;
+}
+
+test('FINISHING A PASSAGE OFFERS ONE THREAD, NOT A MENU OF THREE', () => {
+  // Genesis 1 has three progression edges leaving it, and three of anything in
+  // one sentence under the rail is a menu rather than an invitation.
+  const out = edgesFrom(route, 'Genesis 1').filter((e) => e.kind === 'progression');
+  assert.equal(out.length, 3); // tuning-exempt: rows in docs/design/04-route.md#edges
+  const offer = threadOffer(route, standing(['Genesis 1']), 'Genesis 1');
+  assert.equal(offer?.edge.id, 'beginning');
+  assert.equal(offer?.edge.to, 'John 1');
+  // The other two are the route screen's to show, and the offer says how many.
+  assert.equal(offer?.others, 2); // tuning-exempt: the other two rows
+});
+
+test('AND NEVER THE THREAD THAT LANDS WHERE READING ON LANDS', () => {
+  // `living-creature` runs Genesis 1 -> Genesis 2, and the keystroke after the
+  // last one of Genesis 1 is Genesis 2:1. An offer to go where the default
+  // already goes is not an offer, it is a description of the default -- so it
+  // is skipped even though it is not the first row in the table.
+  const offer = threadOffer(route, standing(['Genesis 1']), 'Genesis 1');
+  assert.notEqual(offer?.edge.id, 'living-creature');
+  assert.ok(!offerLine(offer!).includes('Genesis 2'));
+});
+
+test('IT IS SILENT ON A PASSAGE ALREADY TRAVELLED FROM', () => {
+  // An offer that came back every time a chapter was finished would be nagging.
+  // He has been where the signpost points, whether he travelled the thread or
+  // read his way there, and a signpost to somewhere you have been is not one.
+  assert.equal(threadOffer(route, standing(['Genesis 1', 'John 1']), 'Genesis 1'), null);
+  assert.equal(threadOffer(route, standing(['Genesis 1', 'Genesis 2']), 'Genesis 1'), null);
+  assert.equal(threadOffer(route, standing(['Genesis 1', 'John 20']), 'Genesis 1'), null);
+  // And it is derived from `completed` alone, so it survives a reload without a
+  // field and cannot disagree with the route screen about what is finished.
+  assert.notEqual(threadOffer(route, standing(['Genesis 1', 'Psalm 23']), 'Genesis 1'), null);
+});
+
+test('a passage no thread leaves offers nothing at all', () => {
+  // John 1 and Revelation 22 are the ends of threads, not dead ends -- and
+  // there is nothing for the strip to say when a passage finishes there.
+  assert.equal(threadOffer(route, standing(['John 1']), 'John 1'), null);
+  assert.equal(threadOffer(route, standing(['Revelation 22']), 'Revelation 22'), null);
+  // A passage the route does not name has no threads either, and asking is safe.
+  assert.equal(threadOffer(route, standing([]), 'Genesis 4'), null);
+  // A doorway is not a thread to be offered: a flashback is a round trip found
+  // inside a passage, and finishing the passage is not finding it.
+  assert.equal(threadOffer(route, standing(['John 19']), 'John 19'), null);
+});
+
+test('THE OFFER NAMES THE ECHO, AND SAYS THAT READING ON IS THE OTHER ANSWER', () => {
+  const offer = threadOffer(route, standing(['Genesis 1']), 'Genesis 1');
+  const line = offerLine(offer!);
+  assert.ok(line.startsWith('tab: '), line);
+  assert.ok(line.includes('John 1'), line);
+  // The route's own note, so the strip and the route screen say the same thing
+  // about the same thread rather than two authored sentences that can drift.
+  assert.ok(line.includes(edgeById(route, 'beginning')?.note ?? '!'), line);
+  assert.ok(line.includes('or read on'), line);
+  assert.ok(line.includes('2 more on the route'), line);
+  // Every offer the graph can produce is one line, and never exclaims: it is
+  // copy about the world, and the world is not congratulating anybody.
+  for (const ref of nodeRefs(route)) {
+    const found = threadOffer(route, standing([ref]), ref);
+    if (found === null) continue;
+    const said = offerLine(found);
+    assert.ok(!said.includes('\n'), said);
+    assert.ok(!said.includes('!'), said);
+    assert.ok(said.length < 120, `${String(said.length)} characters: ${said}`); // tuning-exempt: the strip is one line
+  }
+});
+
+test('and a passage with one thread out of it does not point at a route screen for nothing', () => {
+  const offer = threadOffer(route, standing(['Exodus 3']), 'Exodus 3');
+  assert.equal(offer?.edge.to, 'John 8');
+  assert.equal(offer?.others, 0);
+  assert.ok(!offerLine(offer!).includes('more on the route'));
 });

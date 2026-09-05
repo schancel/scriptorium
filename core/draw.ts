@@ -496,6 +496,21 @@ export interface FrameState {
    */
   readonly arrival?: string;
   /**
+   * The thread the passage just finished leads to, named in one sentence.
+   *
+   * Shares the coaching strip, and outranks everything but a first-run note: a
+   * passage is finished five times in a player's life at the places a thread
+   * leaves, an arrival happens twenty times, and a doorway stands open for the
+   * rest of its verse, so the rarer thing wins the strip. The wording is
+   * `offerLine` in `core/route.ts`, beside the graph it is formed from.
+   *
+   * It is an offer and not a fork. Nothing in this file moves the player; the
+   * next stretch of verses is already on the rail underneath the sentence, and
+   * typing is what makes the sentence go.
+   * See docs/design/04-route.md#finishing-a-passage-offers-the-thread-it-leads-to.
+   */
+  readonly offer?: string;
+  /**
    * A doorway standing open in this passage, named in one sentence.
    *
    * It shares the coaching strip with `note` rather than taking a band of its
@@ -1976,12 +1991,15 @@ export function drawFrame(state: FrameState, rail: RailState, tuning: Tuning): D
   if (warp !== undefined) pushHeldEcho(cmds, warp);
   // One sentence, in the one strip reserved for one, and the rarer thing wins
   // it. A first-run note is spent three times in a player's life and never comes
-  // back; a follower arrives twenty times; a doorway stands open for the rest
-  // of its verse. docs/design/11-followers.md#arriving-with-a-line.
+  // back; a thread is offered five times; a follower arrives twenty times; a
+  // doorway stands open for the rest of its verse.
+  // docs/design/11-followers.md#arriving-with-a-line.
   const note = state.note;
+  const offer = state.offer;
   const arrival = state.arrival;
   const doorway = state.doorway;
   if (note !== undefined && note.length > 0) pushNote(cmds, note, pal('hud'));
+  else if (offer !== undefined && offer.length > 0) pushNote(cmds, offer, pal('live'));
   else if (arrival !== undefined && arrival.length > 0) pushNote(cmds, arrival, pal('live'));
   else if (doorway !== undefined && doorway.length > 0) pushNote(cmds, doorway, pal('live'));
   // Reading mode asks for nothing, so it points at nothing. A board lit for a

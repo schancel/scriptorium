@@ -580,52 +580,138 @@ ok(!audioToggled && audio.notes > 0,
    'and the tune is actually being sounded, not merely enabled',
    `${audio.notes} voice(s) started`);
 
-// One passage finished, one figure walking. Not "some": exactly one, because a
-// follower is a record of somewhere he has been and two of them would be the
-// screen saying he had been there twice.
+// Genesis 1 hands over nobody, and that is the finding rather than a gap. The
+// man is *formed* in Genesis 2:7, out of the dust; handing him over for
+// finishing Genesis 1 attached a person to the famous chapter rather than to the
+// verse that makes him, which is the same mistake ADR 0012 found in the route.
+// docs/design/11-followers.md#who-genesis-hands-over
 tick(4);
-const firstLine = figuresDrawn();
-ok(firstLine.length === 1, 'FINISHING A PASSAGE PUTS EXACTLY ONE FIGURE BEHIND HIM',
-   `${firstLine.length} figures after finishing Genesis 1`);
-ok(firstLine.every((f) => f.x < SCRIBE_X), 'AND HE WALKS BEHIND THE SCRIBE, NEVER AHEAD',
-   firstLine.map((f) => `x=${f.x}`).join(', '));
-ok(firstLine.every((f) => f.y + 16 <= RAIL_BAND_TOP),
-   'AND NEVER REACHES DOWN INTO THE READING BAND',
-   firstLine.map((f) => `y=${f.y}`).join(', '));
-// On the ground line, which is where the scribe is: no floating, no flying.
-const scribeFeet = calls.sprites.filter((c) => c.x === SCRIBE_X).map((c) => c.y);
-ok(scribeFeet.length > 0 && firstLine.every((f) => scribeFeet.includes(f.y)),
-   'and stands on the same ground the scribe stands on',
-   `scribe y=${scribeFeet.join('/')} follower y=${firstLine.map((f) => f.y).join('/')}`);
-// Nothing is written over him. The map names the company; the world does not.
-const overhead = calls.fillText.filter(
-  (c) => c.y > 22 && c.y + 4 < RAIL_BAND_TOP && firstLine.some((f) => Math.abs(c.x - f.x) < 16),
-);
-ok(overhead.length === 0, 'AND NOTHING IS WRITTEN OVER HIS HEAD',
-   overhead.map((c) => c.v).join(' / '));
+const afterGenesis1 = figuresDrawn();
+ok(afterGenesis1.length === 0,
+   'GENESIS 1 HANDS OVER NOBODY: THE MAN IS FORMED IN GENESIS 2, NOT HERE',
+   `${afterGenesis1.length} figures after finishing Genesis 1`);
 
-// --- and he arrives with a line ----------------------------------------------
+// --- and it offers the thread it leads to ------------------------------------
 //
-// A figure appearing in the scenery band, unremarked, on a screen the player is
-// not looking at, is an arrival that did not happen. So one sentence goes in the
-// strip under the rail, in the same manner as a first-run note: once, gone as he
-// types on, never again. docs/design/11-followers.md#arriving-with-a-line
+// Taking a thread used to require opening the route screen, so a player could
+// finish Genesis 1, read straight on into Genesis 2, and never learn that any of
+// it existed. `core/route.test.ts` proves the rules over the graph; none of that
+// says a sentence ever reached the rail, which is the only place the player is
+// looking. So it is read here off the canvas, at the moment he meets it.
+// docs/design/04-route.md#finishing-a-passage-offers-the-thread-it-leads-to
 //
 // The strip is the reserved band immediately under the reading band: its text
 // sits on the centre line of an 18px strip at `M.bandTop + M.bandH`.
 const STRIP_Y = RAIL_BAND_TOP + 62 + 9;
 const stripText = () => calls.fillText.filter((c) => c.y === STRIP_Y).map((c) => c.v);
+const offerNow = () => stripText().find((v) => v.startsWith('tab: a thread to'));
 const arrivalNow = () => stripText().find((v) => / walks with you\.$|acquired!$/.test(v));
 
-const greeting = arrivalNow();
-ok(greeting !== undefined, 'A FOLLOWER ARRIVES WITH A LINE, IN THE STRIP UNDER THE RAIL',
-   greeting ?? `strip: ${stripText().join(' | ') || '(empty)'}`);
-ok(greeting === 'Adam walks with you.',
-   'and it names the figure the passage just handed over', String(greeting));
+const offered = offerNow();
+ok(offered !== undefined, 'FINISHING A PASSAGE OFFERS THE THREAD IT LEADS TO',
+   offered ?? `strip: ${stripText().join(' | ') || '(empty)'}`);
+ok((offered ?? '').includes('John 1'), 'AND NAMES WHERE THE THREAD GOES', String(offered));
+ok(/quoting Genesis word for word/.test(offered ?? ''),
+   'AND THE ECHO IT IS MADE OF, IN THE ROUTE TABLE’S OWN WORDS', String(offered));
+ok((offered ?? '').includes('or read on'),
+   'AND SAYS OUT LOUD THAT READING ON IS THE OTHER ANSWER', String(offered));
+ok((offered ?? '').includes('2 more on the route'),
+   'AND COUNTS THE OTHER THREADS RATHER THAN LISTING THREE IN ONE LINE', String(offered));
+ok(!/Genesis 2/.test(offered ?? ''),
+   'and never offers the thread that lands where reading on already lands',
+   String(offered));
+ok(stripText().length <= 1, 'and it is the only sentence in the strip',
+   stripText().join(' | '));
 
-// Dismissed by continuing to type, and by nothing else: `first_run_note_keys`
-// correct keystrokes, the same rule the coaching notes are held to.
+// Declining is reading on, and it costs nothing at all: nothing to dismiss,
+// nothing recorded, nothing taken, and the thread still there to travel later.
 const HOLD = TUNING_ROWS.first_run_note_keys;
+const beforeDecline = {
+  completed: [...(record().completed ?? [])].join(),
+  where: refText().split(':')[0].trim(),
+};
+for (let i = 0; i < HOLD + 2; i++) {
+  const k = askedFor();
+  if (k === null) break;
+  press(k);
+  tick();
+}
+ok(offerNow() === undefined, 'READING ON DECLINES THE OFFER, WITH NOTHING TO DISMISS',
+   stripText().join(' | ') || '(empty)');
+ok([...(record().completed ?? [])].join() === beforeDecline.completed,
+   'AND NOTHING IS LOST BY DECLINING: the passage he finished stays finished',
+   `${beforeDecline.completed} -> ${[...(record().completed ?? [])].join()}`);
+ok(askedFor() !== null && beforeDecline.where === 'Genesis 2',
+   'and he is exactly where reading on put him, still being asked for keys',
+   `${beforeDecline.where} / ${String(askedFor())}`);
+
+// And it does not come back while he types on through the chapter it pointed
+// away from.
+let offerReturned = null;
+for (let i = 0; i < 60 && offerReturned === null; i++) {
+  const k = askedFor();
+  if (k === null) break;
+  press(k);
+  tick();
+  offerReturned = offerNow() ?? null;
+}
+ok(offerReturned === null, 'AND IT IS SAID ONCE, NOT ONCE A STRETCH', offerReturned ?? '');
+
+// --- Adam at 2:7, Eve at 2:24 ------------------------------------------------
+//
+// The scenery went verse-precise and the roster did not, and the mismatch
+// showed: both of them used to arrive when a chapter ended, four hundred
+// keystrokes after the verse they are about. `core/followers.test.ts` proves the
+// derivation at the verse; this types the chapter and watches the screen.
+// docs/design/11-followers.md#they-join-at-a-verse-not-at-the-end-of-a-chapter
+
+/** The stretch of verses on the HUD right now, as [first, last]. */
+function stretchSpan() {
+  const found = /^Genesis 2:(\d+)(?:-(\d+))?$/.exec(refText());
+  if (!found) return null;
+  return [Number(found[1]), Number(found[2] ?? found[1])];
+}
+
+/**
+ * Type on until somebody joins, taking report cards forward on the way.
+ *
+ * What is captured is the moment itself: the line said, the stretch that was on
+ * the rail when it was said, and how many figures were behind the scribe.
+ */
+async function typeUntilSomebodyJoins(limitParts = 20) {
+  for (let part = 0; part < limitParts; part++) {
+    for (let i = 0; i < 4000; i++) {
+      const k = askedFor();
+      if (k === null) break;
+      const span = stretchSpan();
+      press(k);
+      tick();
+      const line = arrivalNow();
+      if (line !== undefined) {
+        return { line, span, figures: figuresDrawn().length };
+      }
+    }
+    if (askedFor() === null) await takeCardForward();
+    if (askedFor() === null) return null;
+  }
+  return null;
+}
+
+const adam = await typeUntilSomebodyJoins();
+ok(adam !== null, 'SOMEBODY JOINS WHILE GENESIS 2 IS BEING TYPED, NOT WHEN IT ENDS',
+   adam ? adam.line : '(nobody arrived in twenty stretches)');
+ok(adam !== null && adam.line === 'Adam walks with you.',
+   'AND IT IS ADAM, WHERE THE MAN IS FORMED', adam ? adam.line : '');
+ok(adam !== null && adam.span !== null && adam.span[0] <= 7 && adam.span[1] >= 7,
+   'AND HE ARRIVES INSIDE THE STRETCH THAT HOLDS GENESIS 2:7',
+   adam && adam.span ? `Genesis 2:${adam.span[0]}-${adam.span[1]}` : '(no stretch on the HUD)');
+ok(adam !== null && adam.figures === 1,
+   'AND THERE IS ONE FIGURE BEHIND THE SCRIBE WHERE THERE WERE NONE',
+   adam ? `${adam.figures} figures` : '');
+
+// The line the arrival is drawn in is the one the roster forms, and it goes as
+// he types on: `first_run_note_keys` correct keystrokes, the same rule the
+// coaching notes are held to.
 for (let i = 0; i < HOLD + 2; i++) {
   const k = askedFor();
   if (k === null) break;
@@ -635,9 +721,67 @@ for (let i = 0; i < HOLD + 2; i++) {
 ok(arrivalNow() === undefined, 'AND IT GOES AS HE TYPES ON',
    stripText().join(' | ') || '(empty)');
 
-// And never comes back. Genesis 2 is not a passage the route names, so nothing
-// joins while it is typed -- if the line returned here it would be the strip
-// re-announcing a figure that has been walking behind him for a chapter.
+// One passage, two people, at the two verses that make them. Eve is the one
+// authored line in the game, and it is hers because 2:24 is where she becomes a
+// wife -- she is not named Eve until 3:20, which is why it does not use the name.
+const eve = await typeUntilSomebodyJoins();
+ok(eve !== null && eve.line === 'Wife acquired!',
+   'AND EVE ARRIVES LATER IN THE SAME CHAPTER, WITH HER OWN LINE',
+   eve ? eve.line : '(she never arrived)');
+ok(eve !== null && eve.span !== null && eve.span[0] <= 24 && eve.span[1] >= 24,
+   'AT THE STRETCH THAT HOLDS GENESIS 2:24, WHERE THEY BECOME ONE FLESH',
+   eve && eve.span ? `Genesis 2:${eve.span[0]}-${eve.span[1]}` : '(no stretch on the HUD)');
+ok(eve !== null && eve.figures === 2,
+   'and the line behind him is two long now, in the order the chapter makes them',
+   eve ? `${eve.figures} figures` : '');
+
+// The geometry of the line, off the real canvas. It was asserted after Genesis 1
+// and has moved here with the figures.
+tick(4);
+const firstLine = figuresDrawn();
+ok(firstLine.length === 2, 'GENESIS 2 PUTS EXACTLY TWO FIGURES BEHIND HIM',
+   `${firstLine.length} figures while typing Genesis 2`);
+ok(firstLine.every((f) => f.x < SCRIBE_X), 'AND THEY WALK BEHIND THE SCRIBE, NEVER AHEAD',
+   firstLine.map((f) => `x=${f.x}`).join(', '));
+ok(firstLine.every((f) => f.y + 16 <= RAIL_BAND_TOP),
+   'AND NEVER REACH DOWN INTO THE READING BAND',
+   firstLine.map((f) => `y=${f.y}`).join(', '));
+// On the ground line, which is where the scribe is: no floating, no flying.
+const scribeFeet = calls.sprites.filter((c) => c.x === SCRIBE_X).map((c) => c.y);
+ok(scribeFeet.length > 0 && firstLine.every((f) => scribeFeet.includes(f.y)),
+   'and stand on the same ground the scribe stands on',
+   `scribe y=${scribeFeet.join('/')} follower y=${firstLine.map((f) => f.y).join('/')}`);
+// Nothing is written over them. The route screen names the company; the world does not.
+const overhead = calls.fillText.filter(
+  (c) => c.y > 22 && c.y + 4 < RAIL_BAND_TOP && firstLine.some((f) => Math.abs(c.x - f.x) < 16),
+);
+ok(overhead.length === 0, 'AND NOTHING IS WRITTEN OVER THEIR HEADS',
+   overhead.map((c) => c.v).join(' / '));
+
+// Her line goes the way his did, and then the chapter is finished off. Finishing
+// is what makes an early arrival permanent: the verse is how he arrives before
+// the end, not a condition he has to keep meeting.
+// docs/design/11-followers.md#derived-never-stored
+for (let i = 0; i < HOLD + 2; i++) {
+  const k = askedFor();
+  if (k === null) break;
+  press(k);
+  tick();
+}
+for (let part = 0; part < 8 && !(record().completed ?? []).includes('Genesis 2'); part++) {
+  await finishPart();
+  if (askedFor() === null) break;
+}
+ok((record().completed ?? []).includes('Genesis 2'),
+   'the harness typed Genesis 2 to the end as well',
+   (record().completed ?? []).join(', '));
+tick(4);
+ok(figuresDrawn().length === 2,
+   'AND THE PAIR STAY IN THE LINE ONCE THE CHAPTER THEY JOINED IN IS FINISHED',
+   `${figuresDrawn().length} figures in ${refText()}`);
+
+// And no arrival comes back. If a line returned here it would be the strip
+// re-announcing figures that have been walking behind him for a chapter.
 let cameBack = null;
 for (let i = 0; i < 200 && cameBack === null; i++) {
   const k = askedFor();
@@ -1206,8 +1350,12 @@ if (doorway !== undefined) {
   ok(partyRows.some((t) => t.includes('Genesis 22') && t.includes('Abraham')),
      'A ROOM FOUND PUTS ITS FIGURE IN THE COMPANY, AND THE MAP NAMES HIM',
      partyRows.join(' / ') || '(nobody is with him)');
-  ok(partyRows.some((t) => t.includes('Genesis 1')),
-     'and the passages he finished are named there too', partyRows.join(' / '));
+  ok(partyRows.some((t) => t.includes('Genesis 2:7') && t.includes('Adam')),
+     'AND A FIGURE IS NAMED BY THE VERSE HE JOINED AT, NOT BY THE CHAPTER ALONE',
+     partyRows.join(' / '));
+  ok(partyRows.some((t) => t.includes('Genesis 2:24') && t.includes('Eve')),
+     'so the one chapter that hands over two people can say so',
+     partyRows.join(' / '));
   ok(String(stubEl('map-party-note').textContent).length > 0,
      'and the map says what the company does, which is nothing',
      String(stubEl('map-party-note').textContent));
@@ -2299,6 +2447,19 @@ const ours = [/\bcandles?\b/i, /\bparts?\b/i, /\blectio\b/i, /\bchunks?\b/i, /\b
 const jargon = spoken.find((t) => ours.some((re) => re.test(t)));
 ok(jargon === undefined, 'AND NOTHING SAYS A WORD ONLY THE SOURCE TREE KNOWS', jargon ?? '');
 
+/**
+ * Let every game booted so far finish whatever it was doing.
+ *
+ * Each boot leaves the one before it listening for keys, and a stretch it was
+ * opening when it last saw an Enter writes the record when its fetch resolves --
+ * *after* the next record has been forged into storage, which is how a boot ends
+ * up reading somebody else's bookmark. Nothing here presses anything; it only
+ * gives the pending promises somewhere to land.
+ */
+async function quiesce() {
+  await pump(20);
+}
+
 // --- the line caps ------------------------------------------------------------
 //
 // A player far enough along the route has more company than the screen can hold
@@ -2310,15 +2471,15 @@ ok(jargon === undefined, 'AND NOTHING SAYS A WORD ONLY THE SOURCE TREE KNOWS', j
 // input, and this is exactly the reload the player would get.
 const FINISHED = JSON.parse(await readFile(resolve(ROOT, 'data/routes/pilgrimage.json'), 'utf8'))
   .edges.flatMap((e) => [e.from, e.to]);
-// Not every node hands somebody over. Genesis 3 is the chapter everyone is
-// driven out of and nobody joins you in it, so a route finished end to end is
-// one figure short of a node per figure -- see
-// docs/design/11-followers.md#who-joins-after-what.
-const HAS_FIGURE = new Set(
-  JSON.parse(await readFile(resolve(ROOT, 'data/followers.json'), 'utf8'))
-    .followers.map((f) => f.passage),
-);
-const MET = [...new Set(FINISHED)].filter((ref) => HAS_FIGURE.has(ref)).length;
+// Counted over the roster's rows rather than over the route's nodes, because the
+// two stopped being the same thing: Genesis 1 and Genesis 3 hand over nobody, and
+// Genesis 2 hands over two -- Adam at 2:7 and Eve at 2:24.
+// docs/design/11-followers.md#who-joins-after-what
+const ROSTER_ROWS = JSON.parse(
+  await readFile(resolve(ROOT, 'data/followers.json'), 'utf8'),
+).followers;
+const ROUTED = new Set(FINISHED);
+const MET = ROSTER_ROWS.filter((f) => ROUTED.has(f.passage)).length;
 store.set('scriptorium.progress', JSON.stringify({
   version: 6, stage: 1, translation: 'WEB', route: 'pilgrimage',
   position: { book: 'Genesis', chapter: 1, unit: 1 },
@@ -2376,6 +2537,127 @@ ok(boardPresence() === 1,
 ok(lectern().length === 0,
    'AND NOTHING OF THE LECTERN IS BEHIND IT YET, BECAUSE NOTHING HAS BEEN GIVEN UP',
    `${lectern().length} shapes in the band`);
+
+// --- one strip, two things to say, and neither of them lost ------------------
+//
+// Psalm 23 both hands over a figure and has a thread leaving it, so the strip is
+// asked for two sentences at one keystroke. The rarer wins it -- a thread is
+// offered five times in a player's life and a follower arrives twenty times --
+// and the other one *waits* rather than being counted down under it and lost.
+// That is not the tutorial wall arriving late: a coaching note is queued behind
+// nothing because its occasion comes round again, and a passage is finished once.
+// docs/design/11-followers.md#arriving-with-a-line
+await quiesce();
+store.set('scriptorium.progress', JSON.stringify({
+  version: 6, stage: 1, translation: 'WEB', route: 'pilgrimage',
+  position: { book: 'Psalms', chapter: 23, unit: 6 },
+  completed: [], discovered: [],
+  keyStats: {}, recent: {}, history: [],
+  gilding: false, gildOffered: true, firstRun: false, cloudEnabled: true,
+  notesSeen: ['space', 'error', 'dim'],
+}));
+await import(`${pathToFileURL(resolve(ROOT, 'build/platform/web/main.js')).href}?both`);
+await new Promise((r) => setTimeout(r, 400));
+const lastOfPsalm23 = () => /^Psalms 23:(6|\d+-6)$/.test(refText());
+await waitFor(() => lastOfPsalm23() && askedFor() !== null);
+tick(4);
+ok(lastOfPsalm23(), 'the harness is standing on the last stretch of Psalm 23', refText());
+await typeOutPart();
+await takeCardForward();
+tick(2);
+ok((offerNow() ?? '').includes('John 10'),
+   'A PASSAGE THAT DOES BOTH OFFERS ITS THREAD FIRST',
+   offerNow() ?? `strip: ${stripText().join(' | ') || '(empty)'}`);
+ok(arrivalNow() === undefined, 'and the arrival is not saying anything over the top of it',
+   stripText().join(' | '));
+for (let i = 0; i < HOLD + 2; i++) {
+  const k = askedFor();
+  if (k === null) break;
+  press(k);
+  tick();
+}
+ok(offerNow() === undefined && arrivalNow() === 'The shepherd walks with you.',
+   'AND THE ARRIVAL TAKES THE STRIP WHEN THE OFFER GOES, RATHER THAN BEING LOST',
+   stripText().join(' | ') || '(empty)');
+
+// --- taking the offer is one key, and it is the same crossing ----------------
+//
+// The strip says `tab:`, and the whole claim is that the key does what the
+// sentence says. It is the same thread the route screen travels -- `travelTo`
+// finds the edge again from the record rather than being handed one -- so this
+// is a shortcut onto the graph and not a second way onto it.
+//
+// A record with Genesis 1 behind it and nothing else, standing on the chapter's
+// last stretch: finishing it offers John 1, exactly as it did on the long run
+// above, and Tab takes it.
+await quiesce();
+store.set('scriptorium.progress', JSON.stringify({
+  version: 6, stage: 1, translation: 'WEB', route: 'pilgrimage',
+  position: { book: 'Genesis', chapter: 1, unit: 31 },
+  completed: ['Genesis 1'], discovered: [],
+  keyStats: {}, recent: {}, history: [],
+  gilding: false, gildOffered: true, firstRun: false, cloudEnabled: true,
+  notesSeen: ['space', 'error', 'dim'],
+}));
+await import(`${pathToFileURL(resolve(ROOT, 'build/platform/web/main.js')).href}?taken`);
+await new Promise((r) => setTimeout(r, 400));
+// Wait for *this* boot's level rather than for whichever game is still drawing:
+// every game booted above is still listening for keys, and typing into the one
+// on the way out is how a run measures the game it was trying to leave.
+await waitFor(() => refText() === 'Genesis 1:31' && askedFor() !== null);
+tick(4);
+ok(refText() === 'Genesis 1:31', 'the harness is standing on the last stretch of Genesis 1',
+   refText());
+await typeOutPart();
+ok(offerNow() !== undefined, 'the offer is standing over the report card, waiting',
+   offerNow() ?? `strip: ${stripText().join(' | ') || '(empty)'}`);
+await takeCardForward();
+tick(2);
+ok(offerNow() !== undefined,
+   'AND IT IS STILL THERE ON THE NEXT STRETCH OF VERSES, WHERE HE IS LOOKING',
+   offerNow() ?? `strip: ${stripText().join(' | ') || '(empty)'}`);
+const leftFrom = refText();
+press('Tab');
+const crossed = await waitFor(() => refText().startsWith('John 1'));
+ok(crossed, 'TAB TAKES THE THREAD THE STRIP IS NAMING', `${leftFrom} -> ${refText()}`);
+tick(4);
+ok(offerNow() === undefined, 'and the offer is spent by being taken',
+   offerNow() ?? '(nothing in the strip)');
+
+// --- and the offer is silent on a passage already travelled from --------------
+//
+// An offer that came back every time a chapter was finished would be nagging,
+// and this game has a rule about a tip that returns after you have understood
+// it. So one more boot, onto a record that has travelled the whole route and is
+// standing on the *last* stretch of Genesis 1 -- finishing which re-completes a
+// passage every thread out of which is already behind him.
+//
+// The positive case is asserted four hundred lines above, on a record that had
+// travelled nothing: the offer appeared, named John 1 and named the echo. This
+// is the silence being tested, not the wiring being absent.
+// docs/design/04-route.md#it-is-silent-on-a-passage-already-travelled-from
+await quiesce();
+store.set('scriptorium.progress', JSON.stringify({
+  version: 6, stage: 1, translation: 'WEB', route: 'pilgrimage',
+  position: { book: 'Genesis', chapter: 1, unit: 31 },
+  completed: FINISHED, discovered: FINISHED,
+  keyStats: {}, recent: {}, history: [],
+  gilding: false, gildOffered: true, firstRun: false, cloudEnabled: true,
+  notesSeen: ['space', 'error', 'dim'],
+}));
+await import(`${pathToFileURL(resolve(ROOT, 'build/platform/web/main.js')).href}?travelled`);
+await new Promise((r) => setTimeout(r, 400));
+await waitFor(() => refText() === 'Genesis 1:31' && askedFor() !== null);
+tick(4);
+const againAt = refText();
+await typeOutPart();
+const wentOnTo = record().position ?? {};
+ok(againAt === 'Genesis 1:31' && wentOnTo.book === 'Genesis' && wentOnTo.chapter === 2,
+   'the harness really did finish the last stretch of Genesis 1 again',
+   `${againAt} -> ${String(wentOnTo.book)} ${String(wentOnTo.chapter)}`);
+ok(offerNow() === undefined,
+   'THE OFFER IS SILENT ON A PASSAGE ALREADY TRAVELLED FROM',
+   offerNow() ?? '(nothing in the strip)');
 
 
 console.log('');

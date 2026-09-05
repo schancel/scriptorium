@@ -113,6 +113,25 @@ def shape_list(key):
     return lambda rows: {key: rows}
 
 
+def shape_followers(rows):
+    """The roster, with the optional join verse as a number rather than a cell.
+
+    Every other generated list is strings all the way down, and that is right
+    for an art id or a person's name. `verse` is a verse number -- it is
+    compared against the verse the player is standing in -- and a string that
+    has to be parsed at the far end is a string somebody eventually parses
+    twice. A blank cell stays null: the row joins when the passage is finished.
+    See docs/design/11-followers.md#who-joins-after-what
+    """
+    out = []
+    for r in rows:
+        row = dict(r)
+        verse = r.get("verse")
+        row["verse"] = None if verse is None else int(verse)
+        out.append(row)
+    return {"followers": out}
+
+
 SHAPERS = {
     "data/tuning.json": shape_tuning,
     "data/curriculum.json": shape_curriculum,
@@ -121,7 +140,7 @@ SHAPERS = {
     "data/scenes/defaults.json": shape_list("defaults"),
     "data/items.json": shape_list("items"),
     "data/themes.json": shape_list("themes"),
-    "data/followers.json": shape_list("followers"),
+    "data/followers.json": shape_followers,
 }
 
 

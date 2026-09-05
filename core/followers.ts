@@ -30,13 +30,21 @@
  *
  * ## Derived, never stored
  *
- * The party is `completed` and `discovered` from the progress record, and
- * nothing else, so there is no new field, no schema bump and no migration.
- * A derived party cannot drift out of step with the map; a stored one eventually
- * would. The price is that the line walks in the *route's* order rather than the
- * order the passages were actually finished, because two independently appended
- * lists cannot be interleaved back into one sequence -- see
+ * The party is `completed` and `discovered` from the progress record, plus
+ * *where the player is standing right now*, and nothing else -- so there is no
+ * new field, no schema bump and no migration. A derived party cannot drift out
+ * of step with the map; a stored one eventually would. The price is that the
+ * line walks in the *route's* order rather than the order the passages were
+ * actually finished, because two independently appended lists cannot be
+ * interleaved back into one sequence -- see
  * docs/design/11-followers.md#derived-never-stored.
+ *
+ * The standing is what makes a **verse-precise** join possible without storing
+ * anything. A row may name the verse its figure arrives on -- Adam at Genesis
+ * 2:7, where he is formed -- and that row joins when the passage is finished or
+ * when the player is standing in it at or past that verse. Both halves are read
+ * off things the game already knows, which is why the record is untouched.
+ * docs/design/11-followers.md#they-join-at-a-verse-not-at-the-end-of-a-chapter
  */
 
 import { frameAt } from './entities.js';
@@ -70,6 +78,17 @@ const IDLE_MS = 520; // tuning-exempt: animation cadence, art not difficulty
 export interface FollowerRow {
   /** Citation, spelled as the route table spells it. */
   readonly ref: string;
+  /**
+   * The verse the figure arrives on, or null for the end of the passage.
+   *
+   * Null is the ordinary case and the right default: Abraham is not *made*
+   * anywhere in Genesis 22, and Moriah is about the whole chapter rather than
+   * one line of it. A number is for a passage that names a moment -- Genesis 2
+   * forms the man in 2:7 and makes the woman a wife in 2:24 -- where waiting
+   * for the chapter to end would arrive four hundred keystrokes after the thing
+   * the figure is about.
+   */
+  readonly verse: number | null;
   /** The person, for the map. Never drawn in the world. */
   readonly who: string;
   readonly body: string;
@@ -123,6 +142,22 @@ function asOneOfOrNothing(value: unknown, allowed: readonly string[], what: stri
 }
 
 /**
+ * The join verse: a whole verse number, or null for the end of the passage.
+ *
+ * Strict about the number for the reason the art ids are strict: a verse that
+ * silently became zero would put Adam on the first keystroke of Genesis 2,
+ * which reads to the player as the game having got the story wrong rather than
+ * as a bad cell in a table.
+ */
+function asVerseOrNothing(value: unknown, what: string): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    throw new Error(`followers: ${what} is not a verse number`);
+  }
+  return value;
+}
+
+/**
  * Parse the roster file.
  *
  * Strict about the art ids for the same reason `core/route.ts` is strict about a
@@ -136,14 +171,31 @@ export function loadFollowers(parsed: unknown): Roster {
   const doc = asRecord(parsed, 'parsed file');
   const raw = doc['followers'];
   if (!Array.isArray(raw)) throw new Error('followers: parsed file has no "followers" array');
+  /*
+   * At most one figure per *arrival*, which is what the uniqueness key spells.
+   * Genesis 2 forms two people and names the verse of each, so it holds two
+   * rows; what may not happen is two figures arriving at the same instant,
+   * because there is one strip under the rail and one sentence fits in it. A
+   * blank verse claims the whole passage, so it collides with every row in it.
+   * docs/design/11-followers.md#who-joins-after-what
+   */
   const seen = new Set<string>();
+  const whole = new Set<string>();
+  const parts = new Set<string>();
   const rows: FollowerRow[] = raw.map((entry, index) => {
     const row = asRecord(entry, `followers[${String(index)}]`);
     const ref = asString(row['passage'], `followers[${String(index)}].passage`);
-    if (seen.has(ref)) throw new Error(`followers: two figures claim "${ref}"`);
-    seen.add(ref);
+    const verse = asVerseOrNothing(row['verse'], `"${ref}".verse`);
+    const cite = verse === null ? ref : `${ref}:${String(verse)}`;
+    if (seen.has(cite)) throw new Error(`followers: two figures claim "${cite}"`);
+    if (verse === null ? parts.has(ref) : whole.has(ref)) {
+      throw new Error(`followers: two figures claim "${ref}", one of them at a verse`);
+    }
+    seen.add(cite);
+    (verse === null ? whole : parts).add(ref);
     return {
       ref,
+      verse,
       who: asString(row['who'], `"${ref}".who`),
       body: asOneOf(row['body'], FOLLOWER_BODIES, `"${ref}".body`),
       cloth: asOneOf(row['cloth'], FOLLOWER_CLOTHS, `"${ref}".cloth`),
@@ -159,6 +211,8 @@ export function loadFollowers(parsed: unknown): Roster {
 /** One figure, ready to be named on the map or drawn in the world. */
 export interface Follower {
   readonly ref: string;
+  /** The verse joined at, or null for a figure who joins when the passage ends. */
+  readonly verse: number | null;
   readonly who: string;
   readonly bodyId: string;
   /** Null for a figure carrying nothing; see `FollowerRow.mark`. */
@@ -168,6 +222,7 @@ export interface Follower {
 function figureFor(row: FollowerRow): Follower {
   return {
     ref: row.ref,
+    verse: row.verse,
     who: row.who,
     bodyId: followerBodyId(row.body, row.cloth),
     markId: row.mark === null ? null : followerMarkId(row.mark),
@@ -175,25 +230,70 @@ function figureFor(row: FollowerRow): Follower {
 }
 
 /**
- * Who is walking with the scribe, in the route's order.
+ * Where this figure joined, as the route screen names it: `Genesis 2:7`.
+ *
+ * It is also the figure's identity, and it has to be, because a passage may
+ * hand over more than one person and the passage alone stopped being unique the
+ * day Adam and Eve both came out of Genesis 2. Spelled here rather than in the
+ * platform so that the screen and the "have I greeted this one" set cannot
+ * disagree about what counts as the same figure.
+ */
+export function followerCitation(follower: Follower): string {
+  return follower.verse === null ? follower.ref : `${follower.ref}:${String(follower.verse)}`;
+}
+
+/**
+ * Who is walking with the scribe, in the route's order, and inside a passage in
+ * the order its verses form them.
  *
  * A stop joins when it is finished and a secret joins when it is found, which is
  * the union of the record's two lists -- a room the player stepped into, turned
  * round and walked out of has still been found, and `core/route.ts` has held
  * that line since `discovered` existed.
  *
+ * `verseReached` is the verse the cursor is standing in, in the passage
+ * `state.current` names, and it is the whole of what makes a join verse-precise
+ * without anything being stored. A row that names a verse joins as soon as the
+ * player is standing at or past it -- Adam at Genesis 2:7, with the report card
+ * nowhere in sight -- and stays joined for good once the passage is finished.
+ * Zero is "nowhere in particular", which is what a fresh map and every screen
+ * that is not the rail pass in.
+ *
+ * The honest consequence is written down rather than worked around: leaving a
+ * passage before finishing it takes its verse-joined figures back out of the
+ * line, exactly as it leaves the passage unfinished on the route screen. The
+ * party says what the map says.
+ * docs/design/11-followers.md#derived-never-stored
+ *
  * A passage the roster has no row for contributes nobody rather than throwing:
  * `make check` is where a missing row is caught, and a player mid-passage is not
  * the person who should hear about it.
  */
-export function party(roster: Roster, route: Route, state: MapState): readonly Follower[] {
+export function party(
+  roster: Roster,
+  route: Route,
+  state: MapState,
+  verseReached = 0,
+): readonly Follower[] {
   const joined = new Set<string>([...state.completed, ...state.discovered]);
-  const byRef = new Map(roster.rows.map((row) => [row.ref, row]));
+  const byRef = new Map<string, FollowerRow[]>();
+  for (const row of roster.rows) {
+    const list = byRef.get(row.ref);
+    if (list === undefined) byRef.set(row.ref, [row]);
+    else list.push(row);
+  }
   const out: Follower[] = [];
   for (const ref of nodeRefs(route)) {
-    if (!joined.has(ref)) continue;
-    const row = byRef.get(ref);
-    if (row !== undefined) out.push(figureFor(row));
+    const rows = byRef.get(ref);
+    if (rows === undefined) continue;
+    const finished = joined.has(ref);
+    const standing = state.current === ref;
+    // Verse order inside a passage, so Adam is formed before Eve is built
+    // whichever order the table happened to be written in.
+    for (const row of [...rows].sort((a, b) => (a.verse ?? 0) - (b.verse ?? 0))) {
+      const here = row.verse !== null && standing && verseReached >= row.verse;
+      if (finished || here) out.push(figureFor(row));
+    }
   }
   return out;
 }

@@ -24,6 +24,10 @@
  *  - **The stage descriptions**, from `data/curriculum.json`, because they are
  *    not notes to ourselves: they are the promotion panel's lead sentence and
  *    the label beside every entry in the menu's stage picker.
+ *  - **Every sentence the thread offer can produce**, by asking the real graph
+ *    for the offer at every node in it. Like the card's two sentences, these are
+ *    generated rather than written, so nothing that reads the source file would
+ *    ever see them.
  *
  * ## Two corpora, and only one of them may not exclaim
  *
@@ -76,6 +80,9 @@ import {
 } from './draw.js';
 import { loadStages } from './curriculum.js';
 import { arrivalLines, loadFollowers } from './followers.js';
+import {
+  completePassage, createMap, loadRoute, nodeRefs, offerLine, threadOffer,
+} from './route.js';
 import { NOTES, OPENING } from './onboarding.js';
 import { loadTuning } from './tuning.js';
 import type { Key, KeyStat, Tuning } from './types.js';
@@ -95,6 +102,24 @@ const tuning: Tuning = loadTuning(JSON.parse(readRepoFile('data/tuning.json')) a
 const stages = loadStages(JSON.parse(readRepoFile('data/curriculum.json')) as unknown);
 const STAGE_1 = stages[1]?.keySet ?? [];
 const roster = loadFollowers(JSON.parse(readRepoFile('data/followers.json')) as unknown);
+const route = loadRoute(JSON.parse(readRepoFile('data/routes/pilgrimage.json')) as unknown);
+
+/**
+ * Every sentence the offer at the end of a passage can produce.
+ *
+ * Generated from the graph rather than written down, exactly like the report
+ * card's two sentences and a follower's arrival line, so a deny-list over the
+ * source file would never see them.
+ * docs/design/04-route.md#finishing-a-passage-offers-the-thread-it-leads-to
+ */
+function offerSentences(): readonly string[] {
+  const out: string[] = [];
+  for (const ref of nodeRefs(route)) {
+    const offer = threadOffer(route, completePassage(createMap(route), ref), ref);
+    if (offer !== null) out.push(offerLine(offer));
+  }
+  return out;
+}
 
 // --- gathering the copy ------------------------------------------------------
 
@@ -266,6 +291,7 @@ const EVALUATIVE: readonly string[] = [
  */
 const WORLD: readonly string[] = [
   ...arrivalLines(roster),
+  ...offerSentences(),
   prose(htmlWithout(EVALUATIVE_PANELS)),
 ];
 
@@ -296,6 +322,10 @@ test('the copy really was gathered, or these rules are asserting nothing', () =>
   assert.ok(
     cardSentences().some((s) => s.startsWith('Next:')),
     'the report card produced no advice',
+  );
+  assert.ok(
+    offerSentences().some((s) => s.includes('John 1')),
+    'the graph produced no thread offers, so this rule is reading nothing',
   );
 });
 

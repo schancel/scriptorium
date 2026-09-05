@@ -1,7 +1,8 @@
 {
   "followers": [
     {
-      "passage": "Genesis 1",
+      "passage": "Genesis 2",
+      "verse": 7,
       "who": "Adam",
       "body": "bare",
       "cloth": "light",
@@ -9,6 +10,7 @@
     },
     {
       "passage": "Genesis 2",
+      "verse": 24,
       "who": "Eve",
       "body": "gowned",
       "cloth": "robe",
@@ -16,6 +18,7 @@
     },
     {
       "passage": "Genesis 22",
+      "verse": null,
       "who": "Abraham",
       "body": "hooded",
       "cloth": "mid",
@@ -23,6 +26,7 @@
     },
     {
       "passage": "Exodus 3",
+      "verse": null,
       "who": "Moses",
       "body": "hooded",
       "cloth": "robe",
@@ -30,6 +34,7 @@
     },
     {
       "passage": "Exodus 12",
+      "verse": null,
       "who": "the firstborn",
       "body": "child",
       "cloth": "light",
@@ -37,6 +42,7 @@
     },
     {
       "passage": "Exodus 16",
+      "verse": null,
       "who": "the gatherer",
       "body": "bare",
       "cloth": "mid",
@@ -44,6 +50,7 @@
     },
     {
       "passage": "Numbers 21",
+      "verse": null,
       "who": "the one who looked",
       "body": "hooded",
       "cloth": "light",
@@ -51,6 +58,7 @@
     },
     {
       "passage": "Psalm 22",
+      "verse": null,
       "who": "the psalmist",
       "body": "hooded",
       "cloth": "robe",
@@ -58,6 +66,7 @@
     },
     {
       "passage": "Psalm 23",
+      "verse": null,
       "who": "the shepherd",
       "body": "bare",
       "cloth": "mid",
@@ -65,6 +74,7 @@
     },
     {
       "passage": "Jonah 1",
+      "verse": null,
       "who": "Jonah",
       "body": "hooded",
       "cloth": "robe",
@@ -72,6 +82,7 @@
     },
     {
       "passage": "Matthew 12",
+      "verse": null,
       "who": "the man with the withered hand",
       "body": "bare",
       "cloth": "light",
@@ -79,6 +90,7 @@
     },
     {
       "passage": "Matthew 27",
+      "verse": null,
       "who": "Simon of Cyrene",
       "body": "hooded",
       "cloth": "mid",
@@ -86,6 +98,7 @@
     },
     {
       "passage": "John 1",
+      "verse": null,
       "who": "John the Baptist",
       "body": "bare",
       "cloth": "robe",
@@ -93,6 +106,7 @@
     },
     {
       "passage": "John 3",
+      "verse": null,
       "who": "Nicodemus",
       "body": "hooded",
       "cloth": "light",
@@ -100,6 +114,7 @@
     },
     {
       "passage": "John 6",
+      "verse": null,
       "who": "the boy with the loaves",
       "body": "child",
       "cloth": "mid",
@@ -107,6 +122,7 @@
     },
     {
       "passage": "John 8",
+      "verse": null,
       "who": "the woman he did not condemn",
       "body": "gowned",
       "cloth": "light",
@@ -114,6 +130,7 @@
     },
     {
       "passage": "John 10",
+      "verse": null,
       "who": "the doorkeeper",
       "body": "hooded",
       "cloth": "mid",
@@ -121,6 +138,7 @@
     },
     {
       "passage": "John 19",
+      "verse": null,
       "who": "Joseph of Arimathaea",
       "body": "hooded",
       "cloth": "robe",
@@ -128,6 +146,7 @@
     },
     {
       "passage": "John 20",
+      "verse": null,
       "who": "Mary Magdalene",
       "body": "gowned",
       "cloth": "light",
@@ -135,6 +154,7 @@
     },
     {
       "passage": "Revelation 22",
+      "verse": null,
       "who": "the one who came to the water",
       "body": "bare",
       "cloth": "light",

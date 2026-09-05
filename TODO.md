@@ -9,13 +9,15 @@ find. Design *decisions* live in `docs/decisions/`; this is what is still open.
 Each is a judgement about the player, not about the code, so none were decided
 alone.
 
-1. ~~**Where you take a thread.**~~ *Decided, and not yet built.* Finishing a passage
-   offers the thread it leads to, naming the echo -- *John 1 opens by quoting this* --
-   and declined by carrying on reading. It is an offer and not a fork; reading onward
-   stays the default. Moved to *agreed, specified, not yet built* below.
-   → `docs/decisions/0012-the-route-must-not-skip-the-events.md`
-2. **The doorway key is Tab.** Nothing in the docs named one. Tab was free and is
-   not a curriculum key.
+1. ~~**Where you take a thread.**~~ *Decided, specified and now built.* See
+   *finishing a passage offers the thread it leads to* below.
+2. **The doorway key is Tab, and so is taking a thread.** Nothing in the docs named
+   one. Tab was free and is not a curriculum key -- and the offer at the end of a
+   passage now shares it, because both are "step through the thing the strip is
+   naming" and only ever one of them is named at a time. Two keys for one gesture
+   would be worse, and a second key nobody has met would be worse still. Worth a look
+   on the screen: it is the first time Tab means two things.
+   → `docs/design/04-route.md#finishing-a-passage-offers-the-thread-it-leads-to`
 3. **Reading mode cannot slow down** without leaving and re-entering. Deliberate —
    coming down is a decision you make — but it may just be annoying.
 4. **The report card leads with your worst key**, so for a beginner with any key
@@ -33,8 +35,9 @@ alone.
    across a window one verse either side of the boundary. At 0 the world changes
    between one verse and the next; much above 3 and Genesis 1 is one long crossfade
    with no places in it. Two was chosen on the argument, not on the screen.
-7. **Who joins after John 8.** *Genesis 1 and Genesis 2 are settled* — Adam then Eve,
-   after the owner's "Adam was created first"; the reasoning is beside the table in
+7. **Who joins after John 8.** *Genesis is settled* — Genesis 2 hands over both, Adam
+   at 2:7 and Eve at 2:24, after the owner's "Adam was created first"; Genesis 1 and
+   Genesis 3 hand over nobody at all. The reasoning is beside the table in
    `docs/design/11-followers.md#who-genesis-hands-over`. Still open: *John 8* hands over
    **the woman he did not condemn**, carrying the stone that was put down. It is the
    memorable image of the chapter and it is faithful, but it is the only figure in the
@@ -87,7 +90,7 @@ alone.
     music. It also means the tune the player hears most has no tune of its own. The fix is
     a new hand-authored tune file, not a table edit.
     → `docs/design/05-scenery-warps.md#why-hills-and-not-a-fourth-kind-of-desert`
-15. **Eve keeps the fruit, one chapter early.** She joins at Genesis 2 now and the fruit is
+15. **Eve keeps the fruit, one chapter early.** She joins at Genesis 2:24 now and the fruit is
     Genesis 3's image. It stays because a mark names the *person* rather than the verse
     they arrived on, because it is the one round shape in a set of uprights, and because
     Genesis 3 hands over nobody — so a mark tied to the chapter would have left the game
@@ -125,24 +128,50 @@ alone.
 
 ## Agreed, specified, not yet built
 
-All of these came out of the owner playing it. Each has its reasoning written down in the
-place named, so none of this depends on remembering a conversation.
-
-1. **Finishing a passage offers the thread it leads to.** Taking a thread requires
-   opening the map, so a player can finish Genesis 1, read onward, and never learn the
-   map or the threads exist. The offer names the echo — *John 1 opens by quoting this* —
-   and is declined by carrying on reading. It is an offer and not a fork: reading onward
-   stays the default and nothing is lost by ignoring it. Decided, not built.
-   → `docs/decisions/0012-the-route-must-not-skip-the-events.md`
-2. **Followers join at an authored verse, not on finishing a chapter.** The scenery went
-   verse-precise; followers did not. Adam belongs at Genesis 2:7 where he is formed and
-   Eve at 2:24 where she becomes a wife, rather than both arriving when a chapter ends.
-   The roster is keyed by chapter today, so this is a column and a join condition, not a
-   row edit. Eve is now in the right *chapter*, which is the half of it that was a data
-   change. → `docs/decisions/0012-the-route-must-not-skip-the-events.md`
+Nothing. Both items that stood here came out of the owner playing it, and both are in
+the section below. The heading stays because it is where the next one goes.
 
 ## Built since the last pass
 
+- **Finishing a passage offers the thread it leads to.** Taking a thread required
+  opening a screen a player has to go looking for, so the best idea in the game was
+  optional in the worst way: finish Genesis 1, read straight on into Genesis 2, and never
+  learn that the route or the threads existed. One sentence in the strip under the rail
+  names it now, in the doorway's own shape -- the key, where it goes, and the route's own
+  note about the echo:
+  *tab: a thread to John 1 · John opens by quoting Genesis word for word · or read on*.
+  **It is an offer and not a fork.** Reading onward is the default, the next stretch of
+  verses is already on the rail underneath the sentence, and typing is the declining --
+  nothing to dismiss, nothing recorded, nothing taken, and the thread still on the route
+  screen afterwards. **Genesis 1 has three threads leaving it and exactly one is named**,
+  because three in one line is a menu: the thread that lands where reading on already
+  lands is skipped outright (Genesis 1 → Genesis 2 is a description of the default, not an
+  offer), the route table's order picks between what is left, and the rest are counted --
+  *· 2 more on the route*. **It is silent on a passage already travelled from**: if any
+  passage a thread out of here leads to is finished, nothing is said, because a signpost
+  to somewhere you have been is not a signpost. All of it is derived from `completed`, so
+  there is no field, no schema bump and nothing that can disagree with the route screen.
+  **Tab takes it**, and only while it is the sentence on screen, so the key always does
+  the thing the player can read.
+  → `docs/design/04-route.md#finishing-a-passage-offers-the-thread-it-leads-to`
+- **Followers join at an authored verse, and Genesis 1 hands over nobody.** The scenery
+  went verse-precise and the roster did not: Adam used to arrive for finishing Genesis 1,
+  four hundred keystrokes and a report card away from Genesis 2:7, where the man is
+  actually formed. The table has a `verse` column now, blank for the eighteen rows that
+  are about a whole chapter and filled for the two that are about a moment -- **Adam at
+  2:7 and Eve at 2:24**, *"they will be one flesh"*, which is where a wife is acquired and
+  why her line does not use a name she is not given until 3:20. **Genesis 1 hands over
+  nobody**, which is the honest reading of it: it says *male and female he created them*
+  about mankind, and the man is formed in the next chapter. It joins Genesis 3, and *at
+  most one figure per node* became *at most one per arrival* -- Genesis 2 holds two rows,
+  and what the check refuses is two figures arriving on the same keystroke, because there
+  is one strip under the rail and one sentence fits in it. **The party is still derived**
+  and the record is untouched: a row with a verse joins when the passage is finished *or*
+  when the player is standing in it at or past that verse, and where he is standing is a
+  fact the scenery has read every frame since it went verse-precise. The price is written
+  down rather than worked around -- walk out of Genesis 2 before finishing it and the pair
+  walk out with you, exactly as the route screen leaves the chapter unfinished.
+  → `docs/design/11-followers.md#they-join-at-a-verse-not-at-the-end-of-a-chapter`
 - **Mistakes may stand, and be deleted.** A second setting, off by default, under
   *When you hit the wrong key*: the letter he actually typed stands in the cell the right
   one wanted, marked wrong, the cursor moves on, and **backspace takes it back and steps

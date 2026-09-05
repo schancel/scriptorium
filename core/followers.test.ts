@@ -29,6 +29,7 @@ import { readFileSync } from 'node:fs';
 import {
   EMPTY_LINE,
   arrivalLine,
+  followerCitation,
   followerCountX,
   followerLine,
   followerPoses,
@@ -148,21 +149,55 @@ function isFigure(cmd: DrawCmd): boolean {
 
 // --- the roster --------------------------------------------------------------
 
-test('AT MOST ONE FIGURE PER PASSAGE, AND NEVER A FIGURE OFF THE ROUTE', () => {
-  // It was *exactly* one, and it stopped being right when Eve moved to
-  // Genesis 2: Genesis 3 is the chapter where everyone is driven out, and there
-  // is nobody in it who joins you. A rule demanding a row per node is a rule
-  // demanding an invented companion wherever the text supplies no real person.
-  // What still has teeth is the other direction -- a row naming a passage the
-  // route does not have is a figure nobody can ever meet.
-  const rows = new Map(ROSTER.rows.map((row) => [row.ref, row]));
+test('AT MOST ONE FIGURE PER ARRIVAL, AND NEVER A FIGURE OFF THE ROUTE', () => {
+  // It was *exactly one per node*, and it stopped being right when Genesis 3
+  // stopped having anybody: it is the chapter where everyone is driven out, and
+  // there is nobody in it who joins you. A rule demanding a row per node is a
+  // rule demanding an invented companion wherever the text supplies no real
+  // person. Genesis 1 is now the second such node -- the man is *formed* in
+  // Genesis 2:7, and handing him over for finishing Genesis 1 attached a person
+  // to a famous chapter rather than to the verse that makes him.
+  //
+  // What still has teeth is the other direction, in two parts: a row naming a
+  // passage the route does not have is a figure nobody can ever meet, and two
+  // rows arriving at the same instant are two sentences for one strip.
   for (const row of ROSTER.rows) {
     assert.ok(NODES.includes(row.ref), `${row.who} joins after ${row.ref}, which is not on the route`);
   }
-  assert.equal(rows.size, ROSTER.rows.length, 'two figures claim one passage');
-  // And the empty node is the authored one, not a row somebody dropped.
-  const empty = NODES.filter((ref) => !rows.has(ref));
-  assert.deepEqual(empty, ['Genesis 3'], 'a node lost its figure');
+  const arrivals = new Set(ROSTER.rows.map((row) => `${row.ref}:${String(row.verse ?? 0)}`));
+  assert.equal(arrivals.size, ROSTER.rows.length, 'two figures arrive at the same place');
+  // And the empty nodes are the authored ones, not rows somebody dropped.
+  const held = new Set(ROSTER.rows.map((row) => row.ref));
+  assert.deepEqual(
+    NODES.filter((ref) => !held.has(ref)),
+    ['Genesis 1', 'Genesis 3'],
+    'a node lost its figure',
+  );
+  // Genesis 2 is the one passage that hands over two, and it names the verse of
+  // each: the man formed, then the woman made a wife.
+  assert.deepEqual(
+    ROSTER.rows.filter((row) => row.ref === 'Genesis 2').map((row) => [row.who, row.verse]),
+    [['Adam', 7], ['Eve', 24]], // tuning-exempt: Genesis 2:7 and 2:24
+  );
+});
+
+test('A ROW MAY NOT SHARE AN ARRIVAL, AT A VERSE OR OVER A WHOLE PASSAGE', () => {
+  // One strip under the rail, one sentence in it. Two rows in one chapter is
+  // fine -- Genesis 2 forms two people -- but never at the same moment, and a
+  // blank verse claims the whole passage so it collides with every verse in it.
+  // docs/design/11-followers.md#who-joins-after-what
+  const row = (over: Record<string, unknown>) => ({
+    passage: 'Genesis 2', verse: null, who: 'x', body: 'bare', cloth: 'light', mark: 'shoot', ...over,
+  });
+  assert.doesNotThrow(() => loadFollowers({ followers: [row({ verse: 7 }), row({ verse: 24 })] })); // tuning-exempt: test fixture
+  assert.throws(() => loadFollowers({ followers: [row({ verse: 7 }), row({ verse: 7 })] }), /two figures/); // tuning-exempt: test fixture
+  assert.throws(
+    () => loadFollowers({ followers: [row({}), row({ verse: 7 })] }), // tuning-exempt: test fixture
+    /one of them at a verse/,
+  );
+  // And a verse that is not a verse is a bad row, not a figure on verse zero.
+  assert.throws(() => loadFollowers({ followers: [row({ verse: 0 })] }), /verse number/);
+  assert.throws(() => loadFollowers({ followers: [row({ verse: '7' })] }), /verse number/);
 });
 
 test('EVE IS BUILT IN GENESIS 2, WHICH IS WHERE HER LINE BELONGS', () => {
@@ -238,10 +273,52 @@ test('a roster naming art that does not exist throws rather than walking empty-h
 
 test('a passage finished adds exactly one figure, and finishing it twice adds none', () => {
   assert.equal(party(ROSTER, ROUTE, stateWith([])).length, 0);
-  const one = party(ROSTER, ROUTE, stateWith(['Genesis 1']));
+  const one = party(ROSTER, ROUTE, stateWith(['Genesis 22']));
   assert.equal(one.length, 1);
-  assert.equal(one[0]?.ref, 'Genesis 1');
-  assert.equal(party(ROSTER, ROUTE, stateWith(['Genesis 1', 'Genesis 1'])).length, 1);
+  assert.equal(one[0]?.who, 'Abraham');
+  assert.equal(party(ROSTER, ROUTE, stateWith(['Genesis 22', 'Genesis 22'])).length, 1);
+  // And a passage the roster leaves empty adds nobody at all, which is the
+  // whole of what "at most one" bought. Genesis 1 is one of the two.
+  assert.equal(party(ROSTER, ROUTE, stateWith(['Genesis 1', 'Genesis 3'])).length, 0);
+});
+
+test('A FIGURE JOINS AT HIS VERSE, MID-PASSAGE, WITH NOTHING STORED', () => {
+  // Adam is formed in Genesis 2:7 and Eve becomes a wife in 2:24. Waiting for
+  // the chapter to end would put both of them four hundred keystrokes after the
+  // verse they are about, which is the mismatch ADR 0012 names: the scenery went
+  // verse-precise and the roster did not.
+  const inside = (verse: number) =>
+    party(ROSTER, ROUTE, arriveAt(createMap(ROUTE), 'Genesis 2'), verse).map((f) => f.who);
+  assert.deepEqual(inside(1), []); // tuning-exempt: Genesis 2:1
+  assert.deepEqual(inside(6), []); // tuning-exempt: the verse before the man is formed
+  assert.deepEqual(inside(7), ['Adam']); // tuning-exempt: Genesis 2:7
+  assert.deepEqual(inside(23), ['Adam']); // tuning-exempt: built, not yet a wife
+  assert.deepEqual(inside(24), ['Adam', 'Eve']); // tuning-exempt: Genesis 2:24
+  // Standing somewhere else, the verse means nothing: it is a verse *of the
+  // passage he is in*, and Genesis 3:24 is not Genesis 2:24.
+  assert.deepEqual(
+    party(ROSTER, ROUTE, arriveAt(createMap(ROUTE), 'Genesis 3'), 24).map((f) => f.who), // tuning-exempt: Genesis 3:24
+    [],
+  );
+});
+
+test('AND FINISHING THE PASSAGE KEEPS HIM, FROM ANYWHERE ON THE ROUTE', () => {
+  // The verse is how he arrives early, not a condition he has to keep meeting.
+  // Once Genesis 2 is finished the pair walk behind the scribe in Revelation 22.
+  let done = completePassage(createMap(ROUTE), 'Genesis 2');
+  done = arriveAt(done, 'Revelation 22');
+  assert.deepEqual(party(ROSTER, ROUTE, done).map((f) => f.who), ['Adam', 'Eve']);
+  // And the honest consequence, written down rather than worked around: walking
+  // out of a passage before finishing it takes the early arrivals back out of
+  // the line, exactly as it leaves the passage unfinished on the route screen.
+  // docs/design/11-followers.md#derived-never-stored
+  const left = arriveAt(createMap(ROUTE), 'Psalm 23');
+  assert.deepEqual(party(ROSTER, ROUTE, left, 24).map((f) => f.who), []); // tuning-exempt: a verse number he has left behind
+});
+
+test('a figure is named by where he joined, because a passage may hand over two', () => {
+  const both = party(ROSTER, ROUTE, stateWith(['Genesis 2', 'Genesis 22']));
+  assert.deepEqual(both.map(followerCitation), ['Genesis 2:7', 'Genesis 2:24', 'Genesis 22']);
 });
 
 test('A ROOM FOUND ADDS ITS FIGURE TOO: a secret leaves a visible trace', () => {
@@ -257,17 +334,21 @@ test('the party is derived from the record and nothing else is stored', () => {
   // Two states built from the same finished passages must produce the same
   // party, whatever order they were written in -- that is what "derived" buys,
   // and it is why there is no schema bump and nothing that can drift.
-  const forwards = party(ROSTER, ROUTE, stateWith(['Genesis 1', 'Exodus 3'], ['Jonah 1']));
-  const backwards = party(ROSTER, ROUTE, stateWith(['Exodus 3', 'Genesis 1'], ['Jonah 1']));
+  const forwards = party(ROSTER, ROUTE, stateWith(['Genesis 2', 'Exodus 3'], ['Jonah 1']));
+  const backwards = party(ROSTER, ROUTE, stateWith(['Exodus 3', 'Genesis 2'], ['Jonah 1']));
   assert.deepEqual(forwards, backwards);
-  // And it is the route's order, which is the map's order: see
+  // And it is the route's order, which is the map's order -- and inside a
+  // passage, the order its verses form them: see
   // docs/design/11-followers.md#derived-never-stored.
-  assert.deepEqual(forwards.map((f) => f.ref), ['Genesis 1', 'Exodus 3', 'Jonah 1']);
+  assert.deepEqual(forwards.map((f) => f.who), ['Adam', 'Eve', 'Moses', 'Jonah']);
 });
 
-test('the whole route gathers the whole company, less the node that hands over nobody', () => {
+test('the whole route gathers the whole company, less the nodes that hand over nobody', () => {
   assert.equal(fullParty().length, ROSTER.rows.length);
-  assert.equal(fullParty().length, NODES.length - 1);
+  // Two nodes hand over nobody -- Genesis 1 and Genesis 3 -- and one hands over
+  // two, so the count is not the node count and is not meant to be.
+  const empty = NODES.filter((ref) => !ROSTER.rows.some((row) => row.ref === ref));
+  assert.equal(fullParty().length, NODES.length - empty.length + 1);
 });
 
 // --- the cap -----------------------------------------------------------------
@@ -429,8 +510,21 @@ test('the count says how many walked on ahead, and is absent when nobody has', (
   // Counted over the nodes that actually hand somebody over: Genesis 3 hands
   // over nobody, so finishing it does not lengthen the line.
   const withFigures = NODES.filter((ref) => ROSTER.rows.some((row) => row.ref === ref));
+  /** The earliest passages whose figures come to exactly `n` of them. */
+  const finishedFor = (n: number): readonly string[] => {
+    const done: string[] = [];
+    let have = 0;
+    for (const ref of withFigures) {
+      const adds = ROSTER.rows.filter((row) => row.ref === ref).length;
+      if (have + adds > n) break;
+      done.push(ref);
+      have += adds;
+    }
+    assert.equal(have, n, 'the roster cannot make a party of exactly this size');
+    return done;
+  };
   const counted = (n: number): string | null => {
-    const company = party(ROSTER, ROUTE, stateWith(withFigures.slice(0, n)));
+    const company = party(ROSTER, ROUTE, stateWith(finishedFor(n)));
     const cmds = draw(frame({ followers: followerLine(company, TUNING) }));
     for (const cmd of cmds) if (cmd.op === 'text' && /^\+\d+$/.test(cmd.value)) return cmd.value;
     return null;

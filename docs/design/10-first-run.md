@@ -88,7 +88,7 @@ So the copy splits in two, and the two halves are held to different rules.
 | | What is in it | The rule |
 |---|---|---|
 | **Copy that evaluates the player** | the report card's note and its one piece of advice, the three coaching notes and the opening screen, the promotion panel and the stage descriptions it leads with | no exclamation mark, no praise for trivia, no verdict where a fact would do |
-| **Copy about the world** | a follower arriving, the menu, the map, the doorway, the scenery, the error lines | ordinary punctuation; still no praise for trivia, still no private vocabulary |
+| **Copy about the world** | a follower arriving, the [thread a finished passage offers](04-route.md#finishing-a-passage-offers-the-thread-it-leads-to), the menu, the map, the doorway, the scenery, the error lines | ordinary punctuation; still no praise for trivia, still no private vocabulary |
 
 Both halves keep the no-praise rule and the jargon rule. The only thing that narrows is the
 punctuation, on the half where punctuation was never the point.
@@ -114,9 +114,11 @@ Two tests hold the whole of it to the rule rather than leaving it to a reading.
 - `core/copy.test.ts` gathers the copy that can be gathered -- the opening screen and the
   three notes, every sentence `reportNote` and `reportAdvice` can produce, the stage
   descriptions from [the curriculum](06-curriculum.md#stages), the lines a
-  [follower](11-followers.md#arriving-with-a-line) arrives with, and `index.html` stripped
-  to its visible prose. It sorts them into the two corpora above, bans the exclamation mark
-  on the evaluative one, and asserts over *both* that there is no praise for trivia, no
+  [follower](11-followers.md#arriving-with-a-line) arrives with, every sentence the
+  [thread offer](04-route.md#finishing-a-passage-offers-the-thread-it-leads-to) can
+  produce over the whole graph, and `index.html` stripped to its visible prose. It sorts
+  them into the two corpora above, bans the exclamation mark on the evaluative one, and
+  asserts over *both* that there is no praise for trivia, no
   verdict where a fact would do, and no word that names a thing in the source tree and
   nothing on his screen. `candle` in the HUD is the precedent for that last rule, and
   `part` is the second one; see

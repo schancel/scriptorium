@@ -523,6 +523,87 @@ export function mapThreads(route: Route, state: MapState): readonly MapThreadVie
   }));
 }
 
+// --- the thread a finished passage offers ------------------------------------
+
+/**
+ * The one thread named when a passage is finished, and how many others there are.
+ *
+ * Taking a thread used to require opening the route screen, so a player could
+ * finish Genesis 1, read straight on into Genesis 2, and never learn that this
+ * graph existed at all. The best idea in the game was optional in the worst way:
+ * invisible. See docs/design/04-route.md#finishing-a-passage-offers-the-thread-it-leads-to
+ * and docs/decisions/0012-the-route-must-not-skip-the-events.md.
+ */
+export interface ThreadOffer {
+  readonly edge: RouteEdge;
+  /**
+   * Progression threads leaving the same passage that are not being named.
+   *
+   * Genesis 1 has three, and three of anything in one sentence under the rail is
+   * a menu rather than an invitation. The count is what the offer points at the
+   * route screen with; it is never a list.
+   */
+  readonly others: number;
+}
+
+/**
+ * True when `to` is the chapter that reading straight on from `from` reaches.
+ *
+ * `living-creature` runs Genesis 1 -> Genesis 2, and the keystroke after the
+ * last one of Genesis 1 is Genesis 2:1. An offer to go where the default already
+ * goes is not an offer, it is a description of the default.
+ */
+function readsOnTo(from: string, to: string): boolean {
+  const origin = parseReference(from);
+  const destination = parseReference(to);
+  return origin.book === destination.book && destination.chapter === origin.chapter + 1;
+}
+
+/**
+ * What to offer on finishing `ref`, or null for nothing at all.
+ *
+ * Two rules and no taste decide it, and both are derived from the record:
+ *
+ *  - **Silent on a passage already travelled from.** If any passage a thread out
+ *    of here leads to is already finished, nothing is offered: he has been where
+ *    the signpost points, whether he travelled the thread or read his way there.
+ *    An offer that came back every time a chapter ended would be nagging, which
+ *    is the thing docs/design/10-first-run.md#once-only-and-gone refuses.
+ *  - **One thread, in the route table's own order**, skipping the one that lands
+ *    where reading on lands. The rest are the route screen's to show.
+ */
+export function threadOffer(route: Route, state: MapState, ref: string): ThreadOffer | null {
+  const onward = edgesFrom(route, ref).filter((edge) => edge.kind === 'progression');
+  if (onward.length === 0) return null;
+  if (onward.some((edge) => state.completed.includes(edge.to))) return null;
+  const named = onward.find((edge) => !readsOnTo(edge.from, edge.to));
+  if (named === undefined) return null;
+  return { edge: named, others: onward.length - 1 };
+}
+
+/**
+ * The one sentence the offer is said in.
+ *
+ * It is the doorway's sentence in the same shape -- the key, where it goes, and
+ * the route's own note about the echo -- because the two are the same gesture
+ * and a player who has met one should recognise the other. `or read on` is the
+ * whole of the declining: reading onward is the default, the next stretch of
+ * verses is already under the sentence, and typing is what makes it go.
+ *
+ * The wording lives here beside the graph rather than in `platform/web/`, for
+ * the reason `core/onboarding.ts` gives about the first run's three notes: a
+ * string spelled in a DOM file is a string nothing tests.
+ */
+export function offerLine(offer: ThreadOffer): string {
+  const dot = '\u00b7';
+  // The others are counted rather than listed, and the count is a signpost to
+  // the one screen built to show them. Listing three threads in the strip would
+  // be a menu, and the strip is one line: nothing said here may be longer than
+  // the sentence a doorway already says in the same place.
+  const rest = offer.others === 0 ? '' : ` ${dot} ${String(offer.others)} more on the route`;
+  return `tab: a thread to ${offer.edge.to} ${dot} ${offer.edge.note} ${dot} or read on${rest}`;
+}
+
 /**
  * True when every required stop is done.
  *

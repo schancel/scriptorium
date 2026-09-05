@@ -45,6 +45,17 @@ def parse_range(ref: str):
     return book, a, int(m.group(5) or m.group(2)), None, None
 
 
+def chapter_units(edition: str, book: str, chapter: int) -> list[str] | None:
+    path = DATA / "texts" / edition / f"{book.lower().replace(' ', '')}.json"
+    if not path.exists():
+        return None
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    for s in doc["sections"]:
+        if s["name"] == str(chapter):
+            return list(s["units"])
+    return None
+
+
 def chapter_text(edition: str, book: str, chapter: int) -> str | None:
     path = DATA / "texts" / edition / f"{book.lower().replace(' ', '')}.json"
     if not path.exists():
@@ -160,6 +171,13 @@ def main() -> int:
     # `mark` may be null for the same reason, one level down: Mary Magdalene
     # carries nothing in John 20, and the jar tradition hands her is Luke's.
     # See docs/design/11-followers.md#a-figure-may-carry-nothing
+    #
+    # `verse` is where in the passage the figure arrives, and blank is the end of
+    # it. Two rows may share a passage -- Genesis 2 forms two people and names
+    # the verse of each -- but never an *arrival*: one strip under the rail, one
+    # sentence in it. A blank verse claims the whole passage, so it may not share
+    # one with a row that names a verse in it.
+    # See docs/design/11-followers.md#they-join-at-a-verse-not-at-the-end-of-a-chapter
     followers = load("followers.json")["followers"]
     art = (ROOT / "core" / "sprites.ts").read_text(encoding="utf-8")
 
@@ -169,13 +187,38 @@ def main() -> int:
 
     bodies, cloths, marks = art_keys("BODY_FRAMES"), art_keys("CLOTHS"), art_keys("MARK_ROWS")
     seen_refs: set[str] = set()
+    whole_passage: set[str] = set()
+    at_a_verse: set[str] = set()
+    editions_for_verses = (
+        [p.name for p in (DATA / "texts").glob("*")] if (DATA / "texts").exists() else []
+    )
     for f in followers:
         ref = f["passage"]
-        if ref in seen_refs:
-            errors.append(f"followers: two figures claim {ref}")
-        seen_refs.add(ref)
+        verse = f.get("verse")
+        cite = ref if verse is None else f"{ref}:{verse}"
+        if cite in seen_refs:
+            errors.append(f"followers: two figures claim {cite}")
+        seen_refs.add(cite)
+        if ref in (at_a_verse if verse is None else whole_passage):
+            errors.append(f"followers: two figures claim {ref}, one of them at a verse")
+        (whole_passage if verse is None else at_a_verse).add(ref)
         if ref not in routed:
             errors.append(f"followers: {ref} is not a passage the route names")
+        if verse is not None:
+            if not isinstance(verse, int) or verse < 1:
+                errors.append(f"followers: {cite} is not a verse number")
+            else:
+                # A verse the chapter does not have is a figure who never joins.
+                book, first, _ = parse_ref(ref)
+                for edition in editions_for_verses:
+                    units = chapter_units(edition, book, first)
+                    if units is None:
+                        continue
+                    if verse > len(units):
+                        errors.append(
+                            f"followers: {cite} is past the end of {ref} "
+                            f"in {edition}, which has {len(units)} verses"
+                        )
         for field, known in (("body", bodies), ("cloth", cloths), ("mark", marks)):
             value = f[field]
             if value is None and field == "mark":

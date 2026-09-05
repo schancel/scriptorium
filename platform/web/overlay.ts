@@ -261,6 +261,12 @@ export interface RouteThreadView {
  * HUD. See docs/design/11-followers.md#on-the-map.
  */
 export interface RoutePartyView {
+  /**
+   * Where the figure joined, with the verse when the row names one:
+   * `Genesis 2:7`. It is the citation and not the chapter, because Genesis 2
+   * hands over two people and two rows both reading "Genesis 2" would lose
+   * exactly what the verse column added.
+   */
   readonly ref: string;
   readonly who: string;
   /** False for a figure the capped line is not currently showing. */
