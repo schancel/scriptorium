@@ -21,9 +21,17 @@
  * between him and the music once he has. See
  * docs/design/09-music.md#audio-is-on-and-starts-on-the-first-keystroke.
  *
- * **The theme owns the tune.** A scene change swaps the tune and rewinds it,
- * so entering the tomb starts the Passion Chorale at its beginning rather than
- * wherever the desert happened to have got to.
+ * **The theme owns the tune, and the scenery owns the theme.** The picture is
+ * resolved per verse, so the music is too -- and a tune change *crossfades*
+ * rather than restarting, which is what makes that affordable: two sequencers
+ * run across a boundary, one falling and one rising, over the same window the
+ * palette eases across. The falling tune plays on from where it is; the rising
+ * one starts at its own beginning; and the two gains sum to one, so a boundary
+ * is never louder or quieter than a settled scene and two tunes at full gain
+ * cannot happen. It is driven by `blend.mix` -- the verse under the cursor and
+ * how far through it the player has typed -- and so, like everything else here,
+ * it does not move while the player is thinking.
+ * See docs/design/09-music.md#the-music-follows-the-scenery.
  *
  * **The combo drives the tempo.** The music accelerating under a clean run is
  * the whole reward mechanism -- see the design doc -- and `comboTempoRatio`
@@ -38,7 +46,6 @@ import {
   comboForFullTempo,
   comboTempoRatio,
   createSequencer,
-  rewindSequencer,
   startSequencer,
   stopSequencer,
 } from './sequencer.js';
@@ -129,18 +136,55 @@ const STRIKE_VELOCITY_FULL: Readonly<Record<StrikeCue, number>> = {
 
 // --- state ------------------------------------------------------------------
 
+/**
+ * One tune sounding: its own needle, and how loud it is in the mix.
+ *
+ * There are two of these only across a scene boundary, and one everywhere else.
+ * The pair is the whole of the crossfade: a voice is *held* for as long as its
+ * tune is wanted, so the falling tune keeps its place in the phrase, and a tune
+ * nobody wants any more is dropped -- which is why a tune that comes back later
+ * comes back at its beginning rather than in the middle of the bar it was in
+ * when the player last stood somewhere it played.
+ */
+export interface AudioVoice {
+  readonly tuneId: string;
+  /**
+   * 0..1. Where there are two, the pair sums to exactly 1: the scene under the
+   * cursor plays at `1 - mix` and the one over the boundary at `mix`. So the
+   * boundary is no louder and no quieter than a settled scene, and two tunes at
+   * full gain is not a state this record can hold.
+   */
+  readonly gain: number;
+  readonly seq: SequencerState;
+}
+
 export interface AudioState {
   /** Whether sound is wanted at all; see `audio_default_on`. On by default. */
   readonly on: boolean;
-  /** The theme whose tune is loaded, so a change can be detected. */
-  readonly theme: string;
-  readonly tuneId: string | null;
-  readonly seq: SequencerState;
+  /** What is sounding. At most two: the tune being left and the tune arriving. */
+  readonly voices: readonly AudioVoice[];
+  /** The tempo multiplier in force, so a change is announced once. */
+  readonly tempoRatio: number;
 }
 
 /** Everything the audio needs to know about this frame. */
 export interface SoundFrame {
   readonly theme: string;
+  /**
+   * The scene over the nearest boundary, and how far the crossfade has run.
+   *
+   * The same two numbers the palette is eased with, handed over rather than
+   * re-derived, so the picture and the music cross at the same instant and by
+   * the same arithmetic. `mix` is 0 at a settled scene and 0.5 at the boundary
+   * itself; it is a function of the verse under the cursor and how far through
+   * it the player has typed, and of nothing else -- so an idle frame moves the
+   * mix by exactly nothing.
+   * See docs/design/05-scenery-warps.md#between-two-scenes-the-palette-moves-and-the-tiles-cut.
+   */
+  readonly blend?: {
+    readonly theme: string;
+    readonly mix: number;
+  };
   /** Consecutive correct keystrokes; drives the tempo. */
   readonly combo: number;
   /** Things that happened since the last step. */
@@ -165,16 +209,16 @@ export interface SoundStep {
 export function createAudio(tuning: Tuning): AudioState {
   return {
     on: tuningValue(tuning, 'audio_default_on') === 1,
-    theme: '',
-    tuneId: null,
-    seq: createSequencer(),
+    voices: [],
+    tempoRatio: 1,
   };
 }
 
-/** Turn sound on or off. Turning it off stops the needle where it stands. */
+/** Turn sound on or off. Turning it off stops every needle where it stands. */
 export function setAudioOn(state: AudioState, on: boolean): AudioState {
   if (on === state.on) return state;
-  return { ...state, on, seq: on ? state.seq : stopSequencer(state.seq) };
+  if (on) return { ...state, on };
+  return { ...state, on, voices: state.voices.map((v) => ({ ...v, seq: stopSequencer(v.seq) })) };
 }
 
 /** The output gain the platform should set. The one loudness knob there is. */
@@ -204,12 +248,57 @@ function cueEvents(cues: readonly Cue[], combo: number, tuning: Tuning): SoundEv
   return cues.map((cue): SoundEvent => ({ type: 'sfx', id: cue, vel: cueVelocity(cue, combo, tuning) }));
 }
 
+/** The midpoint of a range, which is as far as a crossfade ever travels. */
+const HALF = 0.5; // tuning-exempt: the midpoint of a range, not a knob
+
+/** A tune that should be sounding this frame, and how loud. */
+interface Wanted {
+  readonly tune: Tune;
+  readonly gain: number;
+}
+
+/**
+ * What the mix should be, from where the player is standing.
+ *
+ * At most two, and **exactly** two only when the scene under the cursor and the
+ * scene over the nearest boundary have different tunes and the crossfade has
+ * actually begun. `blend` already resolves overlapping windows to the nearest
+ * boundary, which is what makes a third voice impossible here rather than
+ * something this function has to guard against: it is handed one boundary, so it
+ * can only ever name two tunes.
+ *
+ * Two themes sharing a tune -- which the songbook allows and has done before --
+ * is one voice at full gain rather than two at half, because the tune is not
+ * changing and there is nothing to fade.
+ */
+function wantedVoices(songbook: Songbook, frame: SoundFrame): readonly Wanted[] {
+  const here = tuneForTheme(songbook.library, songbook.themes, frame.theme);
+  const blend = frame.blend;
+  const mix = blend === undefined ? 0 : Math.min(HALF, Math.max(0, blend.mix));
+  const other = blend === undefined || mix <= 0
+    ? null
+    : tuneForTheme(songbook.library, songbook.themes, blend.theme);
+  // A theme whose tune is missing is silent rather than fatal, on either side --
+  // and a crossing into one is a fade toward silence rather than a cut to it,
+  // which is the same sentence the rest of this function is written in.
+  if (here === null) return other === null ? [] : [{ tune: other, gain: mix }];
+  if (other === null) return [{ tune: here, gain: 1 - mix }];
+  if (other.id === here.id) return [{ tune: here, gain: 1 }];
+  return [{ tune: here, gain: 1 - mix }, { tune: other, gain: mix }];
+}
+
 /**
  * One frame of sound.
  *
- * Order within the returned array matters and is stable: a tempo change is
- * announced first, then the notes that fell under the needle, then the cues.
- * The platform may execute them in one pass without sorting.
+ * Order within the returned array matters and is stable: a tempo change first,
+ * then every fader that moved, then the notes that fell under the needles, then
+ * the cues. The faders precede the notes so that a tune's gain is set before the
+ * first note that goes through it; the cues come last and pass through no fader
+ * at all. The platform may execute the array in one pass without sorting.
+ *
+ * Muted, this still runs and still returns nothing: the needles are stopped
+ * where they stand rather than being abandoned, so the toggle is a pause and not
+ * a reset.
  */
 export function stepSound(
   state: AudioState,
@@ -218,24 +307,46 @@ export function stepSound(
   dtMs: number,
   tuning: Tuning,
 ): SoundStep {
-  const tune: Tune | null = tuneForTheme(songbook.library, songbook.themes, frame.theme);
-  const tuneId = tune === null ? null : tune.id;
-
-  // A new theme starts its tune from the top rather than mid-phrase.
-  const changed = tuneId !== state.tuneId;
-  const base: AudioState = changed
-    ? { ...state, theme: frame.theme, tuneId, seq: rewindSequencer(state.seq) }
-    : { ...state, theme: frame.theme };
-
-  if (!base.on || tune === null) {
-    return { state: { ...base, seq: stopSequencer(base.seq) }, events: [] };
+  if (!state.on) {
+    const stopped = state.voices.map((voice) => ({ ...voice, seq: stopSequencer(voice.seq) }));
+    return { state: { ...state, voices: stopped }, events: [] };
   }
 
+  const wanted = wantedVoices(songbook, frame);
   const ratio = comboTempoRatio(frame.combo, tuning);
   const events: SoundEvent[] = [];
-  if (ratio !== base.seq.tempoRatio) events.push({ type: 'tempo', ratio });
+  if (ratio !== state.tempoRatio) events.push({ type: 'tempo', ratio });
 
-  const step = advanceSequencer(startSequencer(base.seq), tune, dtMs, ratio);
-  events.push(...step.events, ...cueEvents(frame.cues, frame.combo, tuning));
-  return { state: { ...base, seq: step.state }, events };
+  // A tune nobody wants any more is faded out rather than dropped mid-note: the
+  // platform is holding a gain node for it, and a level change that simply
+  // stopped sending notes would leave whatever was sounding hanging at full.
+  for (const gone of state.voices) {
+    if (gone.gain > 0 && !wanted.some((want) => want.tune.id === gone.tuneId)) {
+      events.push({ type: 'mix', tune: gone.tuneId, gain: 0 });
+    }
+  }
+  for (const want of wanted) {
+    const held = state.voices.find((voice) => voice.tuneId === want.tune.id);
+    // Announced when it changes and not otherwise, exactly as the tempo is --
+    // which is also what makes "an idle frame does not move the mix" a property
+    // anybody can see: an idle frame emits no mix event at all.
+    if (held === undefined || held.gain !== want.gain) {
+      events.push({ type: 'mix', tune: want.tune.id, gain: want.gain });
+    }
+  }
+
+  const voices: AudioVoice[] = [];
+  for (const want of wanted) {
+    const held = state.voices.find((voice) => voice.tuneId === want.tune.id);
+    // A held voice keeps its needle; an arriving one gets a fresh one, which is
+    // at the top of its tune. Each has its own state, so each crosses its own
+    // loop seam without the other's tempo or loop length reaching it.
+    const seq = startSequencer(held?.seq ?? createSequencer());
+    const step = advanceSequencer(seq, want.tune, dtMs, ratio);
+    events.push(...step.events);
+    voices.push({ tuneId: want.tune.id, gain: want.gain, seq: step.state });
+  }
+
+  events.push(...cueEvents(frame.cues, frame.combo, tuning));
+  return { state: { on: true, voices, tempoRatio: ratio }, events };
 }

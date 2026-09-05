@@ -63,9 +63,11 @@ export type SetpieceId =
   | 'swallowed'
   | 'bruised_reed'
   | 'darkness_at_noon'
+  | 'out_of_the_gate'
   | 'lifted_up'
   | 'loaves_multiplied'
   | 'lamps_kindled'
+  | 'up_to_the_temple'
   | 'gate_of_the_fold'
   | 'tree_of_life';
 
@@ -88,9 +90,11 @@ export const SETPIECE_IDS: readonly SetpieceId[] = [
   'swallowed',
   'bruised_reed',
   'darkness_at_noon',
+  'out_of_the_gate',
   'lifted_up',
   'loaves_multiplied',
   'lamps_kindled',
+  'up_to_the_temple',
   'gate_of_the_fold',
   'tree_of_life',
 ];
@@ -142,6 +146,19 @@ const SWELL_MS = 2600;              // tuning-exempt: art timing, a sea's swell
 const DRIFT_MS = 3100;              // tuning-exempt: art timing, manna drifting down
 const TURN_MS = 900;                // tuning-exempt: art timing, a blade turning every way
 
+/**
+ * How much of a passage a landmark takes to come up, pass and be gone, and how
+ * far into the passage it is abreast of the scribe.
+ *
+ * Art, on the same grounds as the flicker periods above: they choose how a city
+ * reads going past, not how hard anything is. At this span a landmark anchored
+ * at `GATE_AT` is in sight from about an eighth of the way through the passage
+ * and gone by rather over half of it, which leaves the rest of the stretch to
+ * whatever the passage arrives at.
+ */
+const PASS_SPAN = 0.45;             // tuning-exempt: art -- how much of a passage a landmark takes to cross
+const GATE_AT = 0.35;               // tuning-exempt: art -- how far in the gate is abreast of him
+
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
@@ -154,6 +171,22 @@ function wave(elapsedMs: number, periodMs: number): number {
 /** Progress squared: slow to start, then quick. Reads as gathering. */
 function gathering(progress: number): number {
   return progress * progress;
+}
+
+/**
+ * Where the scribe stands relative to a landmark anchored at `at`: 0 ahead of
+ * him and out of sight, 0.5 abreast of him, 1 behind him and gone.
+ *
+ * The one reading of a scalar this file has that is a *position* rather than a
+ * level, and the whole of what a city needed that a landscape did not -- "a city
+ * is a place you arrive at, not a texture that repeats". It is still a pure
+ * function of progress, so a landmark is carried past by the words the player
+ * types and by nothing else, and `core/draw.ts` turns the fraction into an x
+ * across the band and draws nothing at all at either end.
+ * See docs/design/05-scenery-warps.md#a-landmark-is-a-pass-fraction.
+ */
+function passing(progress: number, at: number): number {
+  return clamp01(HALF + (progress - at) / PASS_SPAN);
 }
 
 type Script = (input: SetpieceInput, progress: number) => Readonly<Record<string, number>>;
@@ -328,6 +361,37 @@ const SCRIPTS: Readonly<Record<SetpieceId, Script>> = {
     lift: progress,
     ember: wave(input.elapsedMs, FLAME_MS),
     quenched: 0,
+  }),
+
+  /**
+   * John 19:17-22 and Matthew 27:27-33: he is taken out of the city.
+   *
+   * `gate` is a pass fraction -- the gate comes up out of the right of the band,
+   * is abreast of him a third of the way through the stretch, and is gone behind
+   * him. `wall` is the city
+   * itself getting further away, so it falls rather than rises: this is the one
+   * flourish in the table whose main parameter runs *down* the passage, because
+   * the thing it draws is being left. `banner` is the only clock in it.
+   */
+  out_of_the_gate: (input, progress) => ({
+    gate: passing(progress, GATE_AT),
+    wall: 1 - progress,
+    banner: wave(input.elapsedMs, DRIFT_MS),
+  }),
+
+  /**
+   * John 8:1-11: early in the morning, up through the city to the temple.
+   *
+   * The same gate the other way round, and then something that arrives and
+   * *stays*: `wall` grows as he comes up under it, and `temple` stands the front
+   * up over the wall at the end of the stretch and holds it there. A landmark
+   * that receded here would be the scenery walking him past the building the
+   * rest of the chapter happens inside.
+   */
+  up_to_the_temple: (_input, progress) => ({
+    gate: passing(progress, GATE_AT),
+    wall: progress,
+    temple: gathering(progress),
   }),
 
   /** John 3: "as Moses lifted up the serpent" -- a standard rises, and the sky lightens. */

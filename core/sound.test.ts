@@ -3,7 +3,10 @@
  *
  * The promise this file exists to keep is the quiet one: `audio_default_on` is
  * 0, and until the player asks, `stepSound` returns an empty array no matter
- * what the game does. Everything else here is the theme-to-tune wiring.
+ * what the game does. Everything else here is the theme-to-tune wiring, and
+ * since the music follows the scenery, the crossfade that makes that bearable:
+ * two tunes at a boundary, never three, neither at full gain, and the mix moved
+ * by the player's typing rather than by a clock.
  */
 
 import { test } from 'node:test';
@@ -59,6 +62,9 @@ const songbook: Songbook = {
     themes: [
       { id: 'abbey', tune: 'hymn-a' },
       { id: 'tomb', tune: 'hymn-b' },
+      // Two themes on one tune: the songbook allows it and has shipped it, and
+      // walking between them is not a tune change and must not fade anything.
+      { id: 'cloister', tune: 'hymn-a' },
       { id: 'silent', tune: 'no-such-tune' },
     ],
   }),
@@ -68,8 +74,22 @@ function frame(theme: string, combo = 0, cues: readonly Cue[] = []) {
   return { theme, combo, cues };
 }
 
+/** A frame standing `mix` of the way across a boundary toward `other`. */
+function crossing(theme: string, other: string, mix: number, combo = 0) {
+  return { theme, blend: { theme: other, mix }, combo, cues: [] as readonly Cue[] };
+}
+
 function notes(events: readonly SoundEvent[]): readonly Extract<SoundEvent, { type: 'note' }>[] {
   return events.filter((e): e is Extract<SoundEvent, { type: 'note' }> => e.type === 'note');
+}
+
+function mixes(events: readonly SoundEvent[]): readonly Extract<SoundEvent, { type: 'mix' }>[] {
+  return events.filter((e): e is Extract<SoundEvent, { type: 'mix' }> => e.type === 'mix');
+}
+
+/** What one tune is sounding at, or 0 when it is not sounding at all. */
+function gainOf(state: AudioState, tuneId: string): number {
+  return state.voices.find((voice) => voice.tuneId === tuneId)?.gain ?? 0;
 }
 
 test('AUDIO STARTS ON, because audio_default_on says so', () => {
@@ -85,7 +105,8 @@ test('AUDIO STARTS ON, because audio_default_on says so', () => {
   // A bar of the game in full swing, and the music and the cues are both there.
   const step = stepSound(state, songbook, frame('abbey', 40, ['error', 'candle']), BAR_MS, tuning); // tuning-exempt: test fixture
   assert.ok(step.events.length > 0, 'a full bar produced no sound at all');
-  assert.equal(step.state.seq.playing, true);
+  assert.deepEqual(step.state.voices.map((v) => v.tuneId), ['hymn-a']);
+  assert.equal(step.state.voices[0]?.seq.playing, true);
 });
 
 test('and turning it off still stops everything', () => {
@@ -94,38 +115,146 @@ test('and turning it off still stops everything', () => {
   assert.equal(muted.on, false);
   const step = stepSound(muted, songbook, frame('abbey', 40, ['error', 'candle']), BAR_MS, tuning); // tuning-exempt: test fixture
   assert.deepEqual(step.events, []);
-  assert.equal(step.state.seq.playing, false);
+  assert.ok(step.state.voices.every((v) => !v.seq.playing));
 });
 
 test('turning sound on starts the theme’s tune', () => {
   const state = setAudioOn(createAudio(tuning), true);
   const step = stepSound(state, songbook, frame('abbey'), FRAME_MS, tuning);
   assert.deepEqual(notes(step.events).map((n) => n.midi), [HIGH]);
-  assert.equal(step.state.tuneId, 'hymn-a');
-  assert.equal(step.state.seq.playing, true);
+  assert.deepEqual(notes(step.events).map((n) => n.tune), ['hymn-a']);
+  assert.equal(gainOf(step.state, 'hymn-a'), 1);
+  assert.equal(step.state.voices[0]?.seq.playing, true);
+
+  // A settled scene announces its one tune at full and says nothing more.
+  assert.deepEqual(mixes(step.events), [{ type: 'mix', tune: 'hymn-a', gain: 1 }]);
+  const again = stepSound(step.state, songbook, frame('abbey'), FRAME_MS, tuning);
+  assert.deepEqual(mixes(again.events), []);
 
   // And turning it off again stops the needle where it stands.
   const off = setAudioOn(step.state, false);
-  assert.equal(off.seq.playing, false);
+  assert.ok(off.voices.every((v) => !v.seq.playing));
+  assert.equal(off.voices[0]?.seq.posTicks, step.state.voices[0]?.seq.posTicks);
   assert.deepEqual(stepSound(off, songbook, frame('abbey'), BAR_MS, tuning).events, []);
 });
 
-test('a theme change swaps the tune and rewinds it', () => {
+test('a theme change with no boundary swaps the tune, and the new one begins at its beginning', () => {
+  // What a *level* change is: the chapter under the player becomes another
+  // chapter, there is no verse boundary to ease across, and the tune that
+  // arrives has not been playing.
   let state: AudioState = setAudioOn(createAudio(tuning), true);
   state = stepSound(state, songbook, frame('abbey'), FRAME_MS, tuning).state;
-  assert.ok(state.seq.posTicks > 0);
+  assert.ok((state.voices[0]?.seq.posTicks ?? 0) > 0);
 
   const moved = stepSound(state, songbook, frame('tomb'), FRAME_MS, tuning);
-  assert.equal(moved.state.tuneId, 'hymn-b');
-  // Rewound, so the new tune's downbeat sounds rather than being skipped.
+  assert.deepEqual(moved.state.voices.map((v) => v.tuneId), ['hymn-b']);
+  // At its beginning, so the new tune's downbeat sounds rather than being skipped.
   assert.deepEqual(notes(moved.events).map((n) => n.midi), [LOW]);
+  // And the tune that left is faded out rather than abandoned at full gain.
+  assert.deepEqual(mixes(moved.events), [
+    { type: 'mix', tune: 'hymn-a', gain: 0 },
+    { type: 'mix', tune: 'hymn-b', gain: 1 },
+  ]);
+});
+
+test('TWO TUNES AT A BOUNDARY, NEITHER OF THEM AT FULL', () => {
+  // The whole of the crossfade: at the boundary itself the tune being left and
+  // the tune arriving are both at one half, which is the frame the tiles cut on.
+  // docs/design/09-music.md#two-machines-for-the-width-of-a-boundary
+  let state: AudioState = setAudioOn(createAudio(tuning), true);
+  state = stepSound(state, songbook, frame('abbey'), FRAME_MS, tuning).state;
+  const before = state.voices[0]?.seq.posTicks ?? 0;
+
+  const step = stepSound(state, songbook, crossing('abbey', 'tomb', 0.5), FRAME_MS, tuning); // tuning-exempt: the boundary itself
+  assert.deepEqual([...step.state.voices].map((v) => v.tuneId).sort(), ['hymn-a', 'hymn-b']);
+  assert.equal(gainOf(step.state, 'hymn-a'), 0.5); // tuning-exempt: half of a crossing
+  assert.equal(gainOf(step.state, 'hymn-b'), 0.5); // tuning-exempt: half of a crossing
+  for (const voice of step.state.voices) assert.ok(voice.gain < 1, 'a tune sounded at full gain mid-crossing');
+
+  // The falling tune is not cut off and not rewound: it carries on by exactly
+  // the tick this frame was worth, which is the objection this answers. The
+  // arriving one starts at the top, because it has not been playing.
+  const needle = (id: string): number =>
+    step.state.voices.find((v) => v.tuneId === id)?.seq.posTicks ?? -1;
+  assert.equal(needle('hymn-a'), before + 1);
+  assert.equal(needle('hymn-b'), 1);
+
+  // Both machines sound across a whole bar of the crossing, and every note says
+  // which one it came from -- without that the platform would put them on one
+  // pulse channel and they would cut each other to pieces.
+  const bar = stepSound(step.state, songbook, crossing('abbey', 'tomb', 0.5), BAR_MS, tuning); // tuning-exempt: the boundary itself
+  assert.deepEqual([...new Set(notes(bar.events).map((n) => n.tune))].sort(), ['hymn-a', 'hymn-b']);
+});
+
+test('the two gains sum to one all the way across, so nothing dips in the middle', () => {
+  let state: AudioState = setAudioOn(createAudio(tuning), true);
+  const STEPS = 10; // tuning-exempt: test fixture -- samples across one window
+  for (let i = 0; i <= STEPS; i += 1) {
+    // Toward the boundary as the old scene, and away from it as the new one:
+    // the ease is symmetrical, so the second half is the first half mirrored.
+    const mix = (i / STEPS) * 0.5; // tuning-exempt: half is as far as a crossing goes
+    const near = stepSound(state, songbook, crossing('abbey', 'tomb', mix), FRAME_MS, tuning);
+    const far = stepSound(state, songbook, crossing('tomb', 'abbey', mix), FRAME_MS, tuning);
+    for (const carried of [near, far]) {
+      const total = carried.state.voices.reduce((sum, v) => sum + v.gain, 0);
+      assert.ok(Math.abs(total - 1) < 1e-9, `the mix summed to ${String(total)}`); // tuning-exempt: floating-point noise floor
+      assert.ok(carried.state.voices.length <= 2, 'a third voice appeared at a boundary');
+    }
+    state = near.state;
+  }
+});
+
+test('THE MIX MOVES WITH THE PASSAGE AND NOT WITH THE CLOCK', () => {
+  // docs/decisions/0004-idle-threat-not-speed-timer.md, applied to the mix: the
+  // world must not change while the player is thinking. The needles still turn
+  // -- the music plays on -- but the balance between them is a function of the
+  // verse under the cursor, so an idle frame emits no mix event at all.
+  let state: AudioState = setAudioOn(createAudio(tuning), true);
+  const standing = crossing('abbey', 'tomb', 0.3); // tuning-exempt: partway across
+  state = stepSound(state, songbook, standing, FRAME_MS, tuning).state;
+
+  const gains = state.voices.map((v) => `${v.tuneId}:${String(v.gain)}`).sort();
+  for (let i = 0; i < 200; i += 1) { // tuning-exempt: test fixture -- a long think
+    const idle = stepSound(state, songbook, standing, FRAME_MS, tuning);
+    assert.deepEqual(mixes(idle.events), [], 'the mix moved while nobody was typing');
+    state = idle.state;
+  }
+  assert.deepEqual(state.voices.map((v) => `${v.tuneId}:${String(v.gain)}`).sort(), gains);
+  // And the music did keep playing through all of it.
+  assert.ok(state.voices.every((v) => v.seq.playing));
+});
+
+test('two themes on one tune is one voice at full, not two at half', () => {
+  const state = setAudioOn(createAudio(tuning), true);
+  const step = stepSound(state, songbook, crossing('abbey', 'cloister', 0.5), FRAME_MS, tuning); // tuning-exempt: the boundary itself
+  assert.deepEqual(step.state.voices.map((v) => v.tuneId), ['hymn-a']);
+  assert.equal(gainOf(step.state, 'hymn-a'), 1);
+});
+
+test('a boundary against a theme with no tune fades toward silence, not to a fault', () => {
+  const state = setAudioOn(createAudio(tuning), true);
+  const step = stepSound(state, songbook, crossing('abbey', 'silent', 0.5), FRAME_MS, tuning); // tuning-exempt: the boundary itself
+  assert.deepEqual(step.state.voices.map((v) => v.tuneId), ['hymn-a']);
+  assert.equal(gainOf(step.state, 'hymn-a'), 0.5); // tuning-exempt: half of a crossing
+});
+
+test('a tune that comes back later comes back at its beginning', () => {
+  // The sea returns on the fifth day of Genesis 1. It stopped, so it begins
+  // again rather than resuming a bar nobody was standing in.
+  let state: AudioState = setAudioOn(createAudio(tuning), true);
+  state = stepSound(state, songbook, frame('abbey'), FRAME_MS, tuning).state;
+  state = stepSound(state, songbook, frame('abbey'), FRAME_MS, tuning).state;
+  state = stepSound(state, songbook, frame('tomb'), FRAME_MS, tuning).state;
+  const back = stepSound(state, songbook, frame('abbey'), FRAME_MS, tuning);
+  assert.deepEqual(notes(back.events).map((n) => n.midi), [HIGH]);
+  assert.equal(back.state.voices[0]?.seq.posTicks, 1);
 });
 
 test('a theme whose tune is missing is silent, not fatal', () => {
   const state = setAudioOn(createAudio(tuning), true);
   const step = stepSound(state, songbook, frame('silent'), BAR_MS, tuning);
   assert.deepEqual(step.events, []);
-  assert.equal(step.state.tuneId, null);
+  assert.deepEqual(step.state.voices, []);
 
   const unknown = stepSound(state, songbook, frame('no-such-theme'), BAR_MS, tuning);
   assert.deepEqual(unknown.events, []);
@@ -137,7 +266,7 @@ test('a tempo change is announced once, and only when it changes', () => {
   // No combo, and the needle already runs at the authored tempo: nothing to say.
   const first = stepSound(state, songbook, frame('abbey', 0), FRAME_MS, tuning);
   assert.equal(first.events.filter((e) => e.type === 'tempo').length, 0);
-  assert.equal(first.state.seq.tempoRatio, 1);
+  assert.equal(first.state.tempoRatio, 1);
 
   // A rising combo speeds the music up, to the documented ceiling and no further.
   const ceiling = tuningValue(tuning, 'combo_tempo_max');

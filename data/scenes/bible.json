@@ -182,6 +182,24 @@
       "held": null
     },
     {
+      "range": "Matthew 27:1-26",
+      "theme": "city",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "Matthew 27:27-33",
+      "theme": "city",
+      "setpiece": "out_of_the_gate",
+      "held": null
+    },
+    {
+      "range": "Matthew 27:34-66",
+      "theme": "tomb",
+      "setpiece": "darkness_at_noon",
+      "held": null
+    },
+    {
       "range": "John 1",
       "theme": "daybreak",
       "setpiece": "light_from_dark",
@@ -206,6 +224,18 @@
       "held": null
     },
     {
+      "range": "John 8:1-11",
+      "theme": "city",
+      "setpiece": "up_to_the_temple",
+      "held": null
+    },
+    {
+      "range": "John 8:12-59",
+      "theme": "temple",
+      "setpiece": "lamps_kindled",
+      "held": "yes"
+    },
+    {
       "range": "John 10",
       "theme": "garden",
       "setpiece": "gate_of_the_fold",
@@ -213,6 +243,24 @@
     },
     {
       "range": "John 19",
+      "theme": "mountain",
+      "setpiece": "darkness_at_noon",
+      "held": null
+    },
+    {
+      "range": "John 19:1-16",
+      "theme": "city",
+      "setpiece": null,
+      "held": "yes"
+    },
+    {
+      "range": "John 19:17-22",
+      "theme": "city",
+      "setpiece": "out_of_the_gate",
+      "held": null
+    },
+    {
+      "range": "John 19:23-42",
       "theme": "mountain",
       "setpiece": "darkness_at_noon",
       "held": null

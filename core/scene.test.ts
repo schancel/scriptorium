@@ -37,7 +37,7 @@ import {
 } from './entities.js';
 import { createDamage } from './damage.js';
 import { CANDLE_UNLIT_FRAME, PALETTE_ROLES, SPRITE_SIZE, spriteFor } from './sprites.js';
-import { DEFAULT_THEME, WORLDS, blendThemeId, worldFor } from './worlds.js';
+import { DEFAULT_THEME, WORLDS, blendThemeId, roleIndex, worldFor } from './worlds.js';
 import { SETPIECE_IDS, setpieceState } from './setpieces.js';
 import { classify } from './illumination.js';
 import { overlayLayout } from './keyboard.js';
@@ -709,6 +709,68 @@ test('NO SET PIECE EVER REACHES THE RAIL, AT ANY PROGRESS OR PHASE', () => {
       }
     }
   });
+});
+
+test('A CITY LANDMARK ARRIVES, IS PASSED, AND IS GONE', () => {
+  // "A city is a place you arrive at, not a texture that repeats." The gateway
+  // -- the way *through* the gate, and the only themed `outline` rect a city
+  // frame draws -- is therefore the one thing in the band whose x is a function
+  // of how far through the passage the player has typed.
+  // docs/design/05-scenery-warps.md#a-landmark-is-a-pass-fraction
+  const gatewayX = (id: 'out_of_the_gate' | 'up_to_the_temple', progress: number): number | null => {
+    const piece = setpieceState(id, { elapsedMs: 0, progress });
+    const cmds = drawFrame(
+      frame(0, { scene: scene({ theme: 'city', setpiece: piece }) }),
+      createRail(0),
+      TUNING,
+    );
+    const ways = cmds.filter(
+      (cmd) => cmd.op === 'rect' && cmd.theme !== undefined && cmd.color === roleIndex('outline'),
+    );
+    assert.ok(ways.length <= 1, `${id} drew ${String(ways.length)} gateways`);
+    const way = ways[0];
+    return way === undefined || way.op !== 'rect' ? null : way.x;
+  };
+
+  for (const id of ['out_of_the_gate', 'up_to_the_temple'] as const) {
+    // Not in sight at the start of the passage, and gone by the end of it: a
+    // landmark that were merely a level rising would still be standing there.
+    assert.equal(gatewayX(id, 0), null, `${id} had its gate up before it was in sight`);
+    assert.equal(gatewayX(id, 1), null, `${id} never left its gate behind`);
+
+    // And in between it crosses the band, right to left, as the words are typed.
+    const STEPS = 12; // tuning-exempt: test fixture -- samples across the pass
+    let seen = 0;
+    let previous = Number.POSITIVE_INFINITY;
+    for (let i = 1; i < STEPS; i += 1) {
+      const x = gatewayX(id, i / STEPS);
+      if (x === null) continue;
+      seen += 1;
+      assert.ok(x < previous, `${id} moved its gate forward at ${String(i / STEPS)}`);
+      previous = x;
+    }
+    assert.ok(seen > 2, `${id} never had its gate on the screen`);
+  }
+});
+
+test('the temple arrives and stays, which is what a landmark you are going to does', () => {
+  const rectsAt = (progress: number): number => {
+    const piece = setpieceState('up_to_the_temple', { elapsedMs: 0, progress });
+    const cmds = drawFrame(
+      frame(0, { scene: scene({ theme: 'city', setpiece: piece }) }),
+      createRail(0),
+      TUNING,
+    );
+    return cmds.filter((cmd) => cmd.op === 'rect' && cmd.theme !== undefined).length;
+  };
+  // Nothing of it at the start, the whole front of it at the end -- and it is
+  // still there on the last verse, unlike the gate, because the rest of the
+  // chapter happens inside it.
+  assert.ok(rectsAt(1) > rectsAt(0), 'the temple never arrived');
+  // And it does not go past: the last verse of the stretch draws exactly what
+  // the one before it did, which is the difference between arriving somewhere
+  // and being carried past it.
+  assert.equal(rectsAt(1), rectsAt(0.9)); // tuning-exempt: test fixture -- the end of the stretch
 });
 
 test('a set piece never moves the reading column', () => {

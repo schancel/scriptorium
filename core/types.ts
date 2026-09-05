@@ -445,7 +445,27 @@ export type DrawCmd =
   | { op: 'rect'; x: number; y: number; w: number; h: number; color: number; alpha?: number; theme?: string }
   | { op: 'line'; x1: number; y1: number; x2: number; y2: number; color: number; width?: number };
 
+/**
+ * One frame of sound, as data. The audio half of the display list, under the
+ * same rules: plain serialisable records, executed in the order they arrive.
+ *
+ * A `note` names the `tune` it came from because a tune change *crossfades*
+ * rather than restarting, so for the width of a boundary two sequencers are
+ * running and the platform has to keep them apart -- one fader and one set of
+ * four voices each. Without the id the two tunes would share the pulse channels
+ * and cut each other off at every note, which is the exact failure the
+ * crossfade exists to prevent.
+ *
+ * A `mix` event is that fader moving: one tune's gain, announced when it
+ * changes and not otherwise, exactly as `tempo` is. The two gains at a boundary
+ * sum to one, so two tunes at full gain cannot be expressed here.
+ *
+ * An `sfx` carries no tune and no gain because a cue is not music: a candle, a
+ * stomp and a lost heart ring at their own weight wherever they fall.
+ * See docs/design/09-music.md#two-machines-for-the-width-of-a-boundary.
+ */
 export type SoundEvent =
-  | { type: 'note'; ch: 'pulse1' | 'pulse2' | 'triangle' | 'noise'; midi: number; vel: number; ms: number; duty?: number; arp?: readonly number[]; arpHz?: number }
+  | { type: 'note'; ch: 'pulse1' | 'pulse2' | 'triangle' | 'noise'; tune: string; midi: number; vel: number; ms: number; duty?: number; arp?: readonly number[]; arpHz?: number }
   | { type: 'sfx'; id: string; vel?: number }
-  | { type: 'tempo'; ratio: number };
+  | { type: 'tempo'; ratio: number }
+  | { type: 'mix'; tune: string; gain: number };

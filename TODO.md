@@ -26,13 +26,18 @@ alone.
    above 12% error that dominates for weeks and the deeper "you are reaching for
    that key" finding only ever appears in the note beneath. Swapping the order is
    two lines.
-5. **The music does not follow the scenery inside a chapter.** Genesis 1 now changes
-   world six times as you type it, and the hymn does not change with it: a theme owns
-   a tune and a tune restarts when the theme does, so following the picture would cut
-   the hymn off mid-phrase six times in one chapter. So the picture resolves per verse
-   and the music per chapter. Written down in
-   `docs/design/05-scenery-warps.md#verse-ranges`; it is a judgement about what the
-   room should sound like while it changes, and worth hearing before it is settled.
+5. ~~**The music does not follow the scenery inside a chapter.**~~ *Fixed, and the
+   objection answered rather than accepted.* A tune change **crossfades**: two
+   sequencers across the boundary, one falling and one rising, over the same window
+   the palette already eases across, so nothing is cut off mid-phrase because nothing
+   is cut off at all. Genesis 1 is now plainsong over the deep, opening into light,
+   then water, then a garden, then the stars — and `conditor-alme` and `addisons`,
+   which were composed for `void` and `firmament` and could not be heard by anybody,
+   are heard. The 1,158 chapters with no verse rows are untouched: one tune, at full,
+   throughout. **Worth listening to** — the crossing is two tunes at one half each for
+   about a verse either side of the boundary, and how that sits is a judgement about
+   the room rather than about the code.
+   → `docs/design/09-music.md#the-music-follows-the-scenery`
 6. **How fast the world should turn.** `scene_blend_verses` is 2 — the colour eases
    across a window one verse either side of the boundary. At 0 the world changes
    between one verse and the next; much above 3 and Genesis 1 is one long crossfade
@@ -49,7 +54,11 @@ alone.
    sits under the seven verse rows as the default, so a *warp* into Genesis 1 arrives on
    the daybreak rather than on the void, and only the level itself resolves finely. It
    is the documented behaviour — a chapter citation is a question about the chapter —
-   but the first frame of a crossing into verse 1 is arguably the void's.
+   but the first frame of a crossing into verse 1 is arguably the void's. Now that the
+   tune follows the verse rows too, a chapter row in a finely authored chapter has
+   exactly one job left: answering *what is this chapter* on the map and to a warp
+   arriving on it. Four rows are in that position — Genesis 1, Genesis 3, John 20 and
+   now John 19 and Matthew 27.
 9. **The epistles are open country too.** The Bible's default is `hills`, which is right
    for the narrative books, the histories, the psalms and Acts and was judged against all
    of them. Romans and Hebrews are not places at all — they are letters, read indoors —
@@ -127,6 +136,30 @@ alone.
     It is drawn from rects at band scale rather than from the 16px sprite, which is the
     only way to fill 130 px of band, and the composition is a guess made without a screen.
     → `docs/design/02-rail.md#how-it-arrives-and-how-it-is-drawn`
+20. **A crossfade is two machines, so the channel budget doubles for a verse or two.**
+    "Four voices, and no more" is the constraint the whole arrangement style is built
+    on, and across a scene boundary there are briefly eight: two sequencers, four
+    channels each, one fading out. The alternative is worse -- one set of channels
+    shared means the two tunes cut each other off at every note, which is the mid-phrase
+    chop this was all built to avoid -- and outside a boundary nothing changes. It is
+    written down rather than done quietly, and it is the one place the hardware model is
+    knowingly exceeded.
+    → `docs/design/09-music.md#two-machines-for-the-width-of-a-boundary`
+21. **John 8:12-59 is held: forty-eight verses with no lateral scroll.** It is right for
+    the text -- a dispute in the treasury does not travel -- and it is by far the longest
+    still stretch in the game, where every other held range is between one and sixteen
+    verses. The motion doc says held scenes are the natural rest and a session should
+    acquire a rhythm of travelling and standing; a whole hour-long chapter of standing
+    may cross from rest into a camera that looks broken. Worth typing once. One cell if
+    it wants to move again partway.
+    → `docs/design/05-scenery-warps.md#jerusalem-a-place-you-arrive-at`
+22. **Matthew 12 is still one `city` row, and it opens in a cornfield.** The chapter goes
+    grainfields, then a synagogue, then a crowd -- so `city` is honest for most of it and
+    wrong for the first eight verses, in the same way Matthew 27 was wrong for its first
+    thirty-three. It was left alone deliberately: it is the flashback source for Jonah,
+    `bruised_reed` belongs to the synagogue passage in the middle of it, and re-authoring
+    a chapter nobody has complained about was not worth the churn in the same pass. Say
+    if you want it done and it is three rows.
 
 ## Agreed, specified, not yet built
 
@@ -135,6 +168,43 @@ the section below. The heading stays because it is where the next one goes.
 
 ## Built since the last pass
 
+- **The music follows the scenery, by crossfade.** A tune followed the *chapter* row
+  while the picture followed the verse rows, on the argument that restarting a hymn six
+  times inside Genesis 1 would cut it off mid-phrase every time -- and the cost of that
+  compromise was two tunes, `conditor-alme` and `addisons`, composed for `void` and
+  `firmament`, verified against notation, and **unhearable by anybody**, because both
+  themes exist only as verse rows inside a chapter whose row is `daybreak`. The
+  objection is answered rather than accepted: **a tune change crossfades**. Two
+  sequencers run across the boundary, one falling and one rising, over the same window
+  the palette eases across, and the two gains are `1 - mix` and `mix` -- so the pair
+  always sums to one, the crossing is never louder or quieter than a settled scene, and
+  two tunes at full gain is not a state the model can hold. It is driven by the verse
+  under the cursor and how far through it the player has typed, so the mix does not move
+  while he is thinking. A chapter with no verse rows plays exactly one tune throughout,
+  which is 1,158 of 1,189 chapters and everything the player has already heard. Genesis 1
+  is now plainsong over the deep, light, water, a garden, the stars, water again and a
+  garden -- and John 20 opens on the passion chorale in the dark and turns with her on
+  verse 16. Every note carries the tune it came from and every gain change is a `mix`
+  event, so the platform gives each machine its own fader and its own four voices;
+  without that the two tunes would share a pulse channel and cut each other off at every
+  note. The cues do not pass through any of it.
+  → `docs/design/09-music.md#the-music-follows-the-scenery`
+- **Jerusalem has landmarks.** The third face of the resolution problem, and the owner's
+  own worry: *"Later on like moving through jerusalem and stuff might be tricky."* A
+  landscape is texture that repeats and a parallax band is good at that; a city is a
+  place you arrive at, and no amount of brick makes one, because brick is the part of a
+  city that repeats. So a **landmark is a pass fraction** -- 0 ahead of him, 0.5 abreast,
+  1 behind and gone -- which is one new *reading* of the scalars set pieces already
+  produce rather than a new mechanism: no new command, no new field, no per-frame script,
+  and nothing drawn at all at either end. `core/draw.ts` turns the fraction into an x
+  across the band. Two flourishes use it -- `out_of_the_gate` for John 19:17-22 and
+  Matthew 27:27-33, `up_to_the_temple` for John 8:1-11 -- and three chapters were
+  authored finely around them: Matthew 27 is no longer a tomb from its first verse while
+  it is still a city, John 19 stands still for the trial and travels for the way out, and
+  John 8 goes up to the temple and then stops, because a dispute in the treasury does not
+  travel. Everything stays behind the scribe and above the rail, and the smoke test
+  drives the built game to John 19 and watches the gate cross the band.
+  → `docs/design/05-scenery-warps.md#jerusalem-a-place-you-arrive-at`
 - **Finishing a passage offers the thread it leads to.** Taking a thread required
   opening a screen a player has to go looking for, so the best idea in the game was
   optional in the worst way: finish Genesis 1, read straight on into Genesis 2, and never
@@ -402,22 +472,28 @@ the section below. The heading stays because it is where the next one goes.
 
 ## Not done
 
-- Sound polish. The ten tunes were transcribed against real notation and are
-  correct, but they are only lightly heard in play. Three of the thirteen themes now
-  share a tune with another (`void` with the abbey, `firmament` with the mountain,
-  `hills` with the desert); none of the three has one of its own, and `hills` is the
-  theme the player hears most.
+- Sound polish. Thirteen themes, thirteen tunes, none of them borrowed any more, and
+  all of them now reachable: the music follows the scenery and crossfades between
+  scenes, so `void` and `firmament` are heard inside Genesis 1 rather than sitting
+  behind a chapter row nobody could get past. What is left is mixing rather than
+  authoring — the tunes were transcribed against real notation and nobody has yet sat
+  and listened to a long session of them against the cues.
 - More sprite art. Seventeen tiles cover thirteen themes; monsters are still two kinds.
   The twenty followers are deliberately *not* twenty sprites — four body
   silhouettes, three cloths and one small mark apiece, and one of them carries no mark
   at all — and that is the shape any further background art should take rather than an
   omission to fix.
   → `docs/design/11-followers.md#art-without-ten-bespoke-sprites`
-- **Jerusalem still has no landmarks.** `docs/design/05-scenery-warps.md#a-chapter-is-not-one-place`
-  names three faces of the same problem and two are now fixed: Genesis 1 moves, and every
-  Gospel passage the route names has a set piece. The third is the city — "a place you
-  arrive at, not a texture that repeats" — and it wants a gate, a wall and a temple
-  standing in the band rather than better brick. Nothing about it is built.
+- ~~**Jerusalem still has no landmarks.**~~ *Built.* All three faces of
+  `docs/design/05-scenery-warps.md#a-chapter-is-not-one-place` are now closed. A
+  landmark is a **pass fraction** — 0 ahead of him, 0.5 abreast, 1 behind — which is
+  one new reading of the scalars set pieces already produce and no new mechanism at
+  all. Two flourishes use it: `out_of_the_gate` (John 19:17-22 and Matthew 27:27-33 —
+  the gate passes, the wall falls away small, the banners stir) and `up_to_the_temple`
+  (John 8:1-11 — the gate passes the other way, the wall grows, and the temple front
+  stands up and stays). Matthew 27 stopped being a tomb from its first verse while it
+  is still a city, and John 19's trial stands still because a trial does not travel.
+  → `docs/design/05-scenery-warps.md#jerusalem-a-place-you-arrive-at`
 - Other routes. `Canonical`, `Narrative` and `Wisdom` are specified in
   `docs/design/04-route.md` and only `Pilgrimage` is authored.
 - Chronicle levels — the genealogies, skipped by default, available as opt-in

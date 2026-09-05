@@ -307,6 +307,17 @@ const PIECE = {
   fruitSize: 4,      // tuning-exempt: art -- one fruit
   treeW: 4,          // tuning-exempt: art -- a tree in the middle distance
   bladeW: 7,         // tuning-exempt: art -- the sword at its broadest, turning
+  // Jerusalem. A landmark's *position* is a pass fraction from
+  // `core/setpieces.ts`; these are how big the thing at that position is drawn.
+  // All of them are heights as a fraction of the drop from the top of the band
+  // to the ground line, or widths in virtual px, and all of them stand on the
+  // ground line inside the band -- so the largest thing this game draws is still
+  // behind the scribe and above the rail.
+  gateW: 30,         // tuning-exempt: art -- the gate tower, in virtual px
+  gateRise: 0.74,    // tuning-exempt: art -- how far up the band a gate tower stands
+  wallRun: 0.4,      // tuning-exempt: art -- how far up the band a city wall stands
+  templeW: 96,       // tuning-exempt: art -- the temple front, in virtual px
+  templeRise: 0.6,   // tuning-exempt: art -- how far up the band the temple stands, arrived
 } as const;
 
 /** The art role the sky behind the parallax takes; every theme supplies one. */
@@ -1389,6 +1400,75 @@ function inTurn(amount: number, index: number): number {
 }
 
 /**
+ * Where a landmark at pass fraction `p` stands, as the left edge of something
+ * `w` wide.
+ *
+ * Off the right of the band at 0, centred at 0.5, off the left at 1 -- so the
+ * whole of "a city is a place you arrive at" is one line of arithmetic over a
+ * scalar `core/setpieces.ts` already produced. Nothing is drawn at either end:
+ * the callers below skip a landmark that is not in sight, so a gate costs
+ * exactly nothing for the nine tenths of a passage it is not in.
+ * See docs/design/05-scenery-warps.md#a-landmark-is-a-pass-fraction.
+ */
+function passX(pass: number, w: number): number {
+  return M.vw - pass * (M.vw + w);
+}
+
+/** True while a landmark is somewhere between the two edges of the band. */
+function inSight(pass: number): boolean {
+  return pass > 0 && pass < 1;
+}
+
+/**
+ * The city wall running along behind him, with its merlons and its banners.
+ *
+ * Shared by both city flourishes because it is the same wall: what differs is
+ * whether `amount` is climbing (going up to the city) or falling away (being
+ * taken out of it), which is the passage's business and not this function's.
+ */
+function pushCityWall(
+  cmds: DrawCmd[],
+  theme: string,
+  ground: number,
+  rise: number,
+  amount: number,
+  banner: number,
+): void {
+  const h = rise * PIECE.wallRun * amount;
+  if (h <= 0) return;
+  const top = ground - h;
+  bandRect(cmds, theme, 'mid', 0, top, M.vw, h, PIECE.waterAlpha);
+  const step = M.vw / PIECE.motes;
+  for (let i = 0; i < PIECE.motes; i += 1) {
+    // A merlon, and a banner hung under it. The banner is the only thing on the
+    // wall that moves on its own, and it moves by a couple of pixels.
+    bandRect(cmds, theme, 'mid', i * step, top - PIECE.lintelH,
+      PIECE.markW + PIECE.markW, PIECE.lintelH, PIECE.waterAlpha);
+    bandRect(cmds, theme, 'accent', i * step + PIECE.markW / 2, top,
+      PIECE.markW, PIECE.fireH * (1 - banner / 2), amount);
+  }
+}
+
+/** The gate itself: a tower with a way through it, at the place it has got to. */
+function pushCityGate(
+  cmds: DrawCmd[],
+  theme: string,
+  ground: number,
+  rise: number,
+  pass: number,
+): void {
+  if (!inSight(pass)) return;
+  const h = rise * PIECE.gateRise;
+  const x = passX(pass, PIECE.gateW);
+  bandRect(cmds, theme, 'light', x, ground - h, PIECE.gateW, h, 1);
+  bandRect(cmds, theme, 'shade', x, ground - h - PIECE.lintelH,
+    PIECE.gateW, PIECE.lintelH, 1);
+  // The way through, which is the whole difference between a gate and a tower.
+  bandRect(cmds, theme, 'outline', x + PIECE.gateW / 2 - PIECE.markW,
+    ground - h / 2, PIECE.markW + PIECE.markW, h / 2, 1);
+}
+
+/**
  * One flourish, split into what is drawn behind the scribe and what is drawn
  * over him.
  *
@@ -1527,6 +1607,32 @@ function setpieceArt(
     }
     case 'darkness_at_noon': {
       veil(front, theme, 'outline', p('grey'));
+      break;
+    }
+    case 'out_of_the_gate': {
+      // He is taken out of the city: the gate comes up, is passed and is gone,
+      // and the wall it stood in falls away small behind him.
+      pushCityWall(back, theme, ground, rise, p('wall'), p('banner'));
+      pushCityGate(back, theme, ground, rise, p('gate'));
+      break;
+    }
+    case 'up_to_the_temple': {
+      // The same gate the other way round, and then something that arrives and
+      // stays: the front stands up over the wall and holds, because the rest of
+      // the chapter happens inside it.
+      pushCityWall(back, theme, ground, rise, p('wall'), 0);
+      pushCityGate(back, theme, ground, rise, p('gate'));
+      const arrived = p('temple');
+      const h = rise * PIECE.templeRise * arrived;
+      const x = M.vw - PIECE.templeW - PIECE.markInset;
+      bandRect(back, theme, 'light', x, ground - h, PIECE.templeW, h, 1);
+      const step = PIECE.templeW / PIECE.motes;
+      for (let i = 0; i < PIECE.motes; i += 1) {
+        bandRect(back, theme, 'highlight', x + i * step + step / 2, ground - h,
+          PIECE.markW, h, arrived);
+      }
+      bandRect(back, theme, 'accent', x - PIECE.markW, ground - h - PIECE.lintelH,
+        PIECE.templeW + PIECE.markW + PIECE.markW, PIECE.lintelH, arrived);
       break;
     }
     case 'lifted_up': {

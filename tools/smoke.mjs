@@ -181,15 +181,57 @@ globalThis.localStorage = {
 // noise voice chains `noise.connect(filter).connect(gain)`, and an AudioParam
 // carries the full schedule API.
 const audio = { contexts: 0, started: 0, notes: 0, ctx: null };
-function shimParam(value = 0) {
-  return {
-    value,
-    setValueAtTime() {}, linearRampToValueAtTime() {},
-    exponentialRampToValueAtTime() {}, cancelScheduledValues() {},
+
+/**
+ * The mixer graph, recorded the way an audio engineer would read one.
+ *
+ * A crossfade is invisible in a stream of notes. It is **two gain nodes under
+ * the master**, one coming down while the other goes up, and the only honest way
+ * to see one from outside the game is to watch what the running bundle actually
+ * builds and what it writes to each fader. So every node it constructs is kept,
+ * with what it was connected to, and every value written to a gain in call
+ * order. docs/design/09-music.md#two-machines-for-the-width-of-a-boundary
+ */
+const graph = { nodes: [], edges: [], writes: [] };
+const DESTINATION = -1;
+/**
+ * Pushed into the write log at the top of every frame the harness runs.
+ *
+ * The mix is asserted **per frame**, not per write, because the two halves of
+ * one crossfade step -- the tune coming down and the tune going up -- are two
+ * calls scheduled at the same instant on the audio clock. Reading between them
+ * would see a sum of 1.05 that nothing ever heard.
+ */
+const FRAME_MARK = { node: null, value: null };
+
+function shimParam(owner, value = 0) {
+  const param = {
+    get value() { return value; },
+    set value(v) { value = v; graph.writes.push({ node: owner, value: v }); },
+    setValueAtTime(v) { param.value = v; },
+    // A ramp is recorded at the value it is heading for: what matters here is
+    // which gain a fader was told to reach, not where it was halfway up.
+    linearRampToValueAtTime(v) { param.value = v; },
+    exponentialRampToValueAtTime(v) { param.value = v; },
+    cancelScheduledValues() {},
   };
+  return param;
 }
-function shimNode(extra = {}) {
-  return { connect: (to) => to, disconnect() {}, start() {}, stop() {}, ...extra };
+function shimNode(kind, extra = {}) {
+  const id = graph.nodes.length;
+  const node = {
+    id,
+    kind,
+    // Which device built it. Several booted games are still running by the end
+    // of this file, each with an `AudioContext` of its own, and reading two of
+    // their faders as one mix would report a crossfade nobody ever heard.
+    ctx: audio.contexts,
+    connect(to) { graph.edges.push([id, to?.id ?? DESTINATION]); return to; },
+    disconnect() {}, start() {}, stop() {},
+    ...extra,
+  };
+  graph.nodes.push(node);
+  return node;
 }
 class AudioCtxShim {
   constructor() {
@@ -197,17 +239,97 @@ class AudioCtxShim {
     audio.contexts += 1;
     audio.ctx = this;
   }
-  createGain() { return shimNode({ gain: shimParam(1) }); }
+  createGain() {
+    const node = shimNode('gain');
+    node.gain = shimParam(node.id, 1);
+    return node;
+  }
   createOscillator() {
     audio.notes += 1;
-    return shimNode({ frequency: shimParam(), type: 'square', setPeriodicWave() {} });
+    const node = shimNode('osc', { type: 'square', setPeriodicWave() {} });
+    node.frequency = shimParam(node.id);
+    return node;
   }
   createBuffer(c, l) { return { getChannelData: () => new Float32Array(l) }; }
-  createBufferSource() { audio.notes += 1; return shimNode({ buffer: null }); }
-  createBiquadFilter() { return shimNode({ type: '', frequency: shimParam(), Q: shimParam() }); }
+  createBufferSource() { audio.notes += 1; return shimNode('buffer', { buffer: null }); }
+  createBiquadFilter() {
+    const node = shimNode('filter', { type: '' });
+    node.frequency = shimParam(node.id);
+    node.Q = shimParam(node.id);
+    return node;
+  }
   createPeriodicWave() { return {}; }
   resume() { this.state = 'running'; audio.started += 1; return Promise.resolve(); }
   close() { this.state = 'closed'; return Promise.resolve(); }
+}
+
+/** The master gain of one device: its node wired to the destination. */
+function masterNode(ctxId) {
+  const edge = graph.edges.find(
+    ([from, to]) => to === DESTINATION && graph.nodes[from]?.ctx === ctxId,
+  );
+  return edge === undefined ? null : edge[0];
+}
+
+/**
+ * The device whose mix is actually moving: the one that wrote a gain last.
+ *
+ * Several games are booted over the course of this file and each opens a device
+ * of its own -- but only one is ever *running*, because there is a single
+ * `requestAnimationFrame` slot and the newest boot owns it. "The newest context"
+ * is not the same thing (a device is reopened whenever a tab-suspend test closes
+ * one), so the live one is found by asking which device the game last spoke to.
+ */
+function liveCtx(before = graph.writes.length) {
+  for (let i = before - 1; i >= 0; i -= 1) {
+    const write = graph.writes[i];
+    if (write !== FRAME_MARK) return graph.nodes[write.node]?.ctx ?? audio.contexts;
+  }
+  return audio.contexts;
+}
+
+/**
+ * The faders: gain nodes under the master that no *source* feeds.
+ *
+ * One per tune the game has sounded this sitting. A note's own envelope gain
+ * also hangs under the master when it is a cue, but an oscillator or a filter
+ * feeds that one, and nothing feeds a fader except other gains.
+ */
+function faders(ctxId = liveCtx()) {
+  const master = masterNode(ctxId);
+  if (master === null) return [];
+  const sourced = new Set(
+    graph.edges.filter(([from]) => graph.nodes[from]?.kind !== 'gain').map(([, to]) => to),
+  );
+  const out = [];
+  for (const [from, to] of graph.edges) {
+    if (to !== master || graph.nodes[from]?.kind !== 'gain') continue;
+    if (sourced.has(from) || out.includes(from)) continue;
+    out.push(from);
+  }
+  return out;
+}
+
+/** Every write to a fader since `from`, in the order the game made them. */
+function mixWrites(from = 0, ctxId = liveCtx()) {
+  const ids = new Set(faders(ctxId));
+  return graph.writes.slice(from).filter((write) => ids.has(write.node));
+}
+
+/**
+ * Replay the mix from the beginning and hand every intermediate state to
+ * `watch`, as a map of fader -> gain. What the player's ear would have had.
+ */
+function watchMix(watch, from = 0, ctxId = liveCtx(from)) {
+  const ids = new Set(faders(ctxId));
+  const level = new Map();
+  for (const [i, write] of graph.writes.entries()) {
+    if (write === FRAME_MARK) {
+      if (level.size > 0 && i >= from) watch(level);
+      continue;
+    }
+    if (ids.has(write.node)) level.set(write.node, write.value);
+  }
 }
 globalThis.AudioContext = AudioCtxShim; globalThis.webkitAudioContext = AudioCtxShim;
 
@@ -236,7 +358,10 @@ globalThis.fetch = async (url) => {
 await import(pathToFileURL(resolve(ROOT, 'build/platform/web/main.js')).href);
 await new Promise((r) => setTimeout(r, 400));
 
-const step = (t) => { const cb = rafCb; rafCb = null; if (cb) cb(t); };
+const step = (t) => {
+  graph.writes.push(FRAME_MARK);
+  const cb = rafCb; rafCb = null; if (cb) cb(t);
+};
 const settle = (n = 60, base = 0) => { for (let i = 0; i < n; i++) step(base + i * 16); };
 const press = (k) => (listeners.keydown ?? []).forEach((h) =>
   h({ key: k, preventDefault() {}, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false }));
@@ -580,6 +705,49 @@ ok(!audioToggled && audio.notes > 0,
    'and the tune is actually being sounded, not merely enabled',
    `${audio.notes} voice(s) started`);
 
+// --- and the music followed the scenery across Genesis 1 ---------------------
+//
+// Two tunes were composed for `void` and `firmament`, verified against real
+// notation, and could never be heard by anybody: both themes exist only as
+// verse rows inside a chapter whose row is `daybreak`, and the tune followed the
+// chapter. It follows the scenery now, and a tune change *crossfades* rather
+// than restarting -- which is the only reason following it is affordable.
+//
+// `core/sound.test.ts` proves the arithmetic on fixtures. None of that says a
+// second tune ever reached a device: the mix is assembled per frame from the
+// verse under the cursor, and a game that resolved its music once at chapter
+// open would pass every unit test in the repository and still be one hymn.
+// So this reads the faders the running bundle actually built.
+// docs/design/09-music.md#the-music-follows-the-scenery
+const genesisFaders = faders();
+ok(genesisFaders.length > 1,
+   'TYPING GENESIS 1 SOUNDS MORE THAN ONE TUNE',
+   `${genesisFaders.length} tune(s) given a fader of their own`);
+
+// Never two at full. The two gains at a boundary are `1 - mix` and `mix`, so
+// the pair sums to one and neither can be above a half at the same moment as
+// the other: the crossing is never louder, never quieter, and never doubled.
+let loudest = 0;
+let bothUp = 0;
+let overFull = null;
+watchMix((level) => {
+  const up = [...level.values()].filter((gain) => gain > 0);
+  const total = up.reduce((sum, gain) => sum + gain, 0);
+  if (up.length > 1) bothUp += 1;
+  loudest = Math.max(loudest, total);
+  const full = up.filter((gain) => gain > 0.5).length;
+  if (full > 1 && overFull === null) overFull = up.join(' + ');
+});
+ok(overFull === null,
+   'AND NEVER TWO OF THEM AT FULL GAIN',
+   overFull ?? `loudest moment was ${loudest.toFixed(3)} across every fader`);
+ok(loudest <= 1.0001,
+   'the whole mix is never louder than one tune',
+   `peak ${loudest.toFixed(3)}`);
+ok(bothUp > 0,
+   'and two of them really did overlap, or nothing above this was tested',
+   `${bothUp} frames with two tunes sounding`);
+
 // Every tune in the songbook, through the built loader, against the built
 // synth's ceiling.
 //
@@ -879,10 +1047,22 @@ ok(early !== null && late !== null && early !== late,
 // must not change while the player is thinking. Sit for ten seconds of frames
 // without touching a key and the sky must be the colour it was.
 const restingBefore = skyColour();
+const mixWritesBefore = graph.writes.length;
 for (let i = 0; i < 600; i++) tick();
 ok(restingBefore !== null && skyColour() === restingBefore,
    'THE WORLD DOES NOT CHANGE WHILE HE IS THINKING',
    `${restingBefore} became ${skyColour()}`);
+
+// And the same rule for the ear. The music keeps *playing* through a long think
+// -- notes are still being scheduled, which is the point of it being music --
+// but the balance between two tunes is a function of the verse under the cursor
+// and how far through it he has typed, so ten seconds of frames with nobody
+// typing must move no fader at all.
+// docs/design/09-music.md#the-music-follows-the-scenery
+const idleMix = mixWrites(mixWritesBefore);
+ok(idleMix.length === 0,
+   'AND NEITHER DOES THE MIX: TEN SECONDS OF THINKING MOVES NO FADER',
+   `${idleMix.length} fader move(s) with nobody typing`);
 
 // --- the report card ---------------------------------------------------------
 //
@@ -2820,6 +3000,134 @@ ok(againAt === 'Genesis 1:31' && wentOnTo.book === 'Genesis' && wentOnTo.chapter
 ok(offerNow() === undefined,
    'THE OFFER IS SILENT ON A PASSAGE ALREADY TRAVELLED FROM',
    offerNow() ?? '(nothing in the strip)');
+
+
+// --- a chapter with no verse rows still plays exactly one tune ----------------
+//
+// The other half of the crossfade, and the one that matters most: 1,158 of the
+// Bible's 1,189 chapters have no verse rows at all, so almost the whole book
+// must sound exactly as it did before any of this existed -- one tune, at full,
+// from the first verse to the last. Genesis 2 is such a chapter: `Genesis 2-3`
+// is a chapter row, and the verse rows in that range are all in Genesis 3.
+// docs/design/09-music.md#the-music-follows-the-scenery
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-book').value = 'Genesis';
+stubEl('menu-chapter').value = '2';
+stubEl('menu-go').click();
+await waitFor(() => refText().startsWith('Genesis 2') && askedFor() !== null);
+tick(4);
+
+const settledFrom = graph.writes.length;
+await typeOutPart();
+let settledFrames = 0;
+let doubled = 0;
+let dipped = 0;
+watchMix((level) => {
+  const up = [...level.values()].filter((gain) => gain > 0);
+  settledFrames += 1;
+  if (up.length !== 1) doubled += 1;
+  else if (up[0] !== 1) dipped += 1;
+}, settledFrom);
+ok(settledFrames > 0 && doubled === 0 && dipped === 0,
+   'A CHAPTER WITH NO VERSE ROWS PLAYS ONE TUNE, AT FULL, ALL THE WAY THROUGH',
+   `${settledFrames} frames, ${doubled} with two tunes, ${dipped} below full`);
+
+// And the device is asked which one, rather than it being inferred from the
+// number of faders: the menu's diagnostic reads the gain off the node itself.
+stubEl('menu-open').click();
+tick(2);
+const playing = String(stubEl('menu-audio-detail').textContent);
+ok(/playing: [a-z-]+ 100%/.test(playing) && !/\+/.test(playing),
+   'and the device says which tune, and names exactly one',
+   playing);
+press('Escape');
+tick(4);
+
+// --- Jerusalem has landmarks in it, and they stay out of the reading band -----
+//
+// The third face of the resolution problem in
+// docs/design/05-scenery-warps.md#a-chapter-is-not-one-place, and the owner's
+// own words: "Later on like moving through jerusalem and stuff might be
+// tricky." A city is a place you arrive at rather than a texture that repeats,
+// so the gate has to come up, pass and be left behind -- and, being the largest
+// thing this game draws, it has to do all of that behind the scribe and above
+// the words. John 19:17 is where he is taken out of the city.
+const { worldFor: builtWorldFor } = await import(
+  pathToFileURL(resolve(ROOT, 'build/core/worlds.js')).href
+);
+const { PALETTE_ROLES: ROLES } = await import(
+  pathToFileURL(resolve(ROOT, 'build/core/sprites.js')).href
+);
+const CITY = builtWorldFor('city');
+const cityInk = (role) => `#${CITY.palette[ROLES.indexOf(role)].toString(16).padStart(6, '0')}`;
+// Everything the city is painted in. A themed `rect` is the only kind of fill
+// that speaks this vocabulary -- tiles and sprites arrive through `drawImage` --
+// so a fill in one of these colours *is* a piece of the scenery.
+const CITY_INK = new Set(CITY.palette.map(
+  (colour) => `#${colour.toString(16).padStart(6, '0')}`,
+));
+// The way through the gate: the only thing in a city frame drawn in the
+// theme's own outline, so where it is is where the gate is.
+const GATEWAY = cityInk('outline');
+
+await quiesce();
+store.set('scriptorium.progress', JSON.stringify({
+  version: 6, stage: 1, translation: 'WEB', route: 'pilgrimage',
+  position: { book: 'John', chapter: 19, unit: 17 },
+  completed: FINISHED, discovered: FINISHED,
+  keyStats: {}, recent: {}, history: [],
+  gilding: false, gildOffered: true, firstRun: false, cloudEnabled: true,
+  notesSeen: ['space', 'error', 'dim'],
+}));
+await import(`${pathToFileURL(resolve(ROOT, 'build/platform/web/main.js')).href}?city`);
+await new Promise((r) => setTimeout(r, 400));
+const inTheCity = await waitFor(() => refText().startsWith('John 19') && askedFor() !== null);
+tick(4);
+ok(inTheCity, 'the harness is standing where he is taken out of the city', refText());
+
+/** The reading band: `M.bandTop` to `M.bandTop + M.bandH`, where the words are. */
+const READING_BAND_BOTTOM = RAIL_BAND_TOP + 62;
+const gateXs = [];
+let cityRects = 0;
+let intoTheBand = null;
+for (let part = 0; part < 2; part++) {
+  for (let i = 0; i < 4000; i++) {
+    const k = askedFor();
+    if (k === null) break;
+    press(k);
+    tick();
+    for (const fill of calls.fills) {
+      if (!CITY_INK.has(fill.color)) continue;
+      cityRects += 1;
+      // Above the rail, always. The clamp is in `core/draw.ts`; this is the
+      // built renderer being watched execute it.
+      // The reading band, which is what all of this is in service of. Below it
+      // is the keyboard, and the lectern the scribe writes at is themed and
+      // stands there on purpose (docs/design/02-rail.md#the-scribe-at-his-lectern)
+      // -- so this is the strip the words are on, not simply "anything lower".
+      if (fill.y < READING_BAND_BOTTOM && fill.y + fill.h > RAIL_BAND_TOP && intoTheBand === null) {
+        intoTheBand = `${fill.color} at y ${fill.y}..${fill.y + fill.h}`;
+      }
+      // The gate, and only in the band: below the rail the same ink paints the
+      // lectern the scribe writes at, which is furniture and not scenery.
+      if (fill.color === GATEWAY && fill.y + fill.h <= RAIL_BAND_TOP) gateXs.push(fill.x);
+    }
+  }
+  tick(2);
+  await takeCardForward();
+}
+
+ok(cityRects > 0, 'the city is actually painted while he is in it',
+   `${cityRects} pieces of scenery drawn`);
+ok(gateXs.length > 2, 'A CITY GATE STANDS IN THE BAND AND IS PASSED',
+   `${gateXs.length} frames with the gate on screen`);
+ok(gateXs.length > 2 && gateXs[gateXs.length - 1] < gateXs[0],
+   'AND IT IS LEFT BEHIND: IT CROSSES THE BAND AS THE VERSES ARE WRITTEN',
+   `x ${gateXs[0]} -> ${gateXs[gateXs.length - 1]}`);
+ok(intoTheBand === null,
+   'AND NOTHING OF THE CITY EVER ENTERS THE READING BAND',
+   intoTheBand ?? `${cityRects} pieces of scenery, none of them on the words`);
 
 
 console.log('');

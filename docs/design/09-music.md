@@ -166,6 +166,63 @@ Rules that keep it honest:
 - **Sound cues are unaffected.** A defeat, a candle and a stomp are not music and do not
   fade.
 
+### Two machines for the width of a boundary
+
+A crossfade is a **mixing-desk** operation and not something a 2A03 could do, so it is
+worth saying plainly what it costs. For the width of one boundary there are two
+sequencers, each with the four voices [the channel budget](#the-channel-budget) allows:
+one falling, one rising. The budget is per machine and stays four; what is briefly
+doubled is the number of machines. Outside a boundary -- which is all of the game but a
+few verses of it -- there is one.
+
+That is not a technicality, it is the whole reason the events say which tune they came
+from. Two tunes sharing one set of four voices would cut each other off at every note,
+because a channel is monophonic by design -- and a hymn chopped by the hymn replacing it
+is precisely the failure this section exists to avoid.
+
+Three rules, all of them in `core/sound.ts`:
+
+- **A tune keeps its needle for as long as it is sounding.** The falling tune is not
+  rewound and not restarted; it plays on from where it was while its gain comes down. The
+  rising tune starts at its own beginning, because it has not been playing. A tune that
+  stopped and comes back later -- the sea returns on the fifth day of Genesis 1 -- starts
+  from the top, which is right: it is beginning again rather than continuing.
+- **The two gains sum to one.** The scene under the cursor plays at `1 - mix` and the
+  scene over the boundary at `mix`, where `mix` is the same 0..0.5 the palette eases by:
+  zero at a settled scene, one half at the boundary itself. So the pair is never louder
+  than one tune and never quieter than one either, there is no dip in the middle of the
+  crossing, and **two tunes at full gain is arithmetically impossible.**
+- **Overlapping windows resolve to the nearest boundary**, which is the rule the palette
+  already follows and the reason a third voice cannot appear. Two verse rows a verse
+  apart do not stack three tunes; the nearer boundary wins and the further one waits.
+
+What the platform is handed is two new things and nothing else: every `note` names the
+`tune` it came from, and a gain change is a `mix` event naming one tune. So
+`platform/web/web_audio.ts` can keep one gain node per sounding tune, between its notes
+and the master gain, and give each machine its own four voices. The move on a `mix` event
+is a ramp of a few milliseconds -- a de-click, the same kind of number as the scheduler's
+lookahead, and **not** a fade. The fade is the sequence of small steps the player's typing
+makes; nothing in the audio path has an opinion about how long a crossing takes.
+
+**The cues do not pass through any of it.** `error`, `candle`, `stomp`, `ink` and the rest
+connect to the master gain directly, so a skeleton felled halfway across a boundary is
+struck at exactly the weight it would be struck at anywhere else. A cue still takes the
+channel it rings on from every machine at once, which is the behaviour it always had: on
+the hardware there is one pulse channel, and the candle interrupting the melody is the
+sound of that being true.
+
+### Two seams, not one
+
+`TICK_EPSILON` in `core/sequencer.ts` exists because the residue of a few parts in 10^13
+of a tick crossed the loop point, wrapped, and re-fired the downbeat a hair early -- once
+per lap, on every channel at tick 0, audible as a flam on the first beat of every repeat.
+
+Two sequencers means **two loop points**, at two tempos, wrapping at two unrelated
+moments. The guard therefore has to hold per needle rather than per frame, and it does:
+it is inside `advanceSequencer`, which each machine calls with its own state, so neither
+can see the other's seam and neither can be dragged over it by the other. `sequencer.test.ts`
+asserts it of two tunes advanced together across a shared frame clock.
+
 ## Tunes
 
 All melodies below are public domain. Where a date is given it is first publication.

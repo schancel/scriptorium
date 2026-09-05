@@ -63,7 +63,7 @@ const route = loadRoute(loadDataFile('routes/pilgrimage.json'));
 const themes = new Set(loadThemes(loadDataFile('themes.json')).map((t) => t.id));
 const tuning: Tuning = loadTuning(loadDataFile('tuning.json'));
 
-const ROW_COUNT = 41; // tuning-exempt: rows in docs/design/05-scenery-warps.md#set-pieces
+const ROW_COUNT = 49; // tuning-exempt: rows in docs/design/05-scenery-warps.md#set-pieces
 
 /** The seven scenes Genesis 1 is authored as, first verse of each. */
 const GENESIS_1: readonly (readonly [number, string])[] = [
@@ -349,6 +349,10 @@ test('nothing else in the table stands still, so the world still travels', () =>
   const heldRows = scenes.rows.filter((row) => row.held).map((row) => row.range);
   assert.deepEqual(heldRows, [
     'Genesis 3:1-5', 'Genesis 3:6', 'Genesis 3:7', 'Genesis 3:8-23', 'Genesis 4:11-15',
+    // The two city conversations: a dispute in the treasury and a trial in the
+    // Praetorium. Neither goes anywhere, so neither scrolls.
+    // docs/design/05-scenery-warps.md#jerusalem-a-place-you-arrive-at
+    'John 8:12-59', 'John 19:1-16',
   ]);
   for (const [verse] of GENESIS_1) {
     assert.equal(sceneAtVerse(scenes, 'Genesis 1', verse, tuning).held, false);

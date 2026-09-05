@@ -104,8 +104,9 @@ tune, and the wilderness was lending its music to almost the whole book. `hills`
 own now, `kingsfold`, and `desert` keeps `cwm-rhondda`; walking from one into the other
 changes the music because it is the one theme change in this game the player will make
 over and over, and it should be audible. What the borrowing argument was actually
-protecting — that the music not restart every few verses — is the
-[tune-per-chapter rule](#verse-ranges), and that still holds on its own.
+protecting — that the music not restart every few verses — is now held by
+[the crossfade](#verse-ranges) rather than by the borrowing, which is a better place for
+it: walking out of the country into the wilderness changes the hymn without cutting one.
 
 Two new tiles, and the ground reused. `tile_ridge` is the far band: two crests of
 *unequal* height with a saddle between them, because this file already says of the wave
@@ -164,11 +165,21 @@ shade as its sky, which is what "formless" looks like when the parallax is still
 and `firmament` is a night sky with the land already under it, which no other theme is.
 The sea returns on day five because the text does: the waters swarm before the land does.
 
-**The tune follows the chapter's row, not the verse's.** A theme owns a tune, and a tune
-restarts when the theme changes; at verse granularity that is six restarts inside Genesis 1,
-each one cutting a hymn off mid-phrase. So the picture resolves per verse and the music
-per chapter. The scenery serves the rail, and a hymn beginning again every five verses is
-the scenery asking to be noticed.
+**The tune follows the scenery too, and crossfades rather than restarting.** It followed
+the *chapter* row for a while, and the argument for that was real: a theme owns a tune, a
+tune restarted when the theme changed, and at verse granularity that is six restarts
+inside Genesis 1, each one cutting a hymn off mid-phrase. The cost of the compromise was
+two tunes nobody could ever hear -- `conditor-alme` and `addisons` were composed for
+`void` and `firmament`, and both themes exist *only* as verse rows inside a chapter whose
+row is `daybreak`.
+
+So the objection is answered rather than accepted: **a tune change crossfades**, one
+sequencer falling and one rising, across the same window the palette eases over. Nothing
+is cut off mid-phrase because nothing is cut off at all, and Genesis 1 becomes plainsong
+over the deep, opening into light, then water, then a garden -- which is what the chapter
+is. A chapter row still keys the tune wherever there are no verse rows, which is 1,158 of
+the Bible's 1,189 chapters, so nothing about the rest of the book changes.
+See [the music follows the scenery](09-music.md#the-music-follows-the-scenery).
 
 ### Between two scenes, the palette moves and the tiles cut
 
@@ -331,17 +342,112 @@ agreeing with the error. One verse later he says her name, and the palette has a
 easing toward green for half the window, so the world arrives at the same moment she does.
 
 **The chapter row is `daybreak` and is never drawn**, exactly as Genesis 1's is. Three
-verse rows cover all thirty-one verses, so the chapter row's only jobs are to answer *what
-is John 20* on the map and to choose the hymn, which
-[follows the chapter and not the verse](#verse-ranges). `daybreak` is the right answer to
-both: this file already says the theme "carries the first day of Genesis 1, John 1's light
-in the darkness and the new creation equally well". A tune keyed on `tomb` would open the
-resurrection with a passion chorale and then hold it for thirty-one verses.
+verse rows cover all thirty-one verses, so the chapter row's only job is to answer *what is
+John 20* -- on the map, and to a warp arriving on the chapter rather than inside it.
+`daybreak` is the right answer to that: this file already says the theme "carries the first
+day of Genesis 1, John 1's light in the darkness and the new creation equally well".
+
+It used to choose the hymn as well, and the objection to keying that on `tomb` was that it
+would open the resurrection with a passion chorale and hold it for thirty-one verses. That
+is no longer the choice on offer. The tune follows the verse rows and crossfades between
+them, so the chapter opens on the passion chorale *while it is still dark outside a grave*,
+turns with her on verse 16, and is indoors by verse 19 -- three tunes over thirty-one
+verses, none of them held past the place it belongs to and none of them cut off.
 
 **The last third is the abbey, and this is the first row in the table that means it.**
 Verses 19 to 31 are indoors: evening, a shut door, a room with people in it. That is what
 the theme is a picture of, and it can be used for it now that it is not also the picture of
 every chapter nobody has authored.
+
+### Jerusalem: a place you arrive at
+
+The third face of [the resolution problem](#a-chapter-is-not-one-place), and the one that
+stayed open longest. The owner: *"Later on like moving through jerusalem and stuff might
+be tricky."*
+
+He is right, and the fix is not a better `tile_brick`. A landscape is texture that
+repeats, and a parallax band is very good at that: one ridge is every ridge and nobody
+minds, because one hill really is like the next one. A city is not like that. It is a
+wall you walk along, a gate you go through, and a building you can see from anywhere in
+it -- and what makes it a *place* rather than a pattern is that those things arrive in an
+order and are left behind. No amount of brick does that, because brick is the part of a
+city that repeats.
+
+#### A landmark is a pass fraction
+
+A set piece is [named scalars in 0..1](#set-pieces) and that does not change here. What is
+added is one *reading* of a scalar. Every other parameter in the table is a thing rising
+or falling -- `water`, `smoke`, `lift`, `cover`. A landmark's parameter is a **position
+relative to the scribe**:
+
+| the number | what it means |
+|---|---|
+| 0 | ahead of him, not in sight |
+| 0.5 | abreast of him |
+| 1 | behind him, gone |
+
+`core/draw.ts` turns that into an x across the band -- off the right edge at 0, centred at
+0.5, off the left edge at 1 -- and draws nothing at all at either end. So a gate comes up,
+passes and goes, moved by the words the player types and by nothing else.
+
+That is deliberately **not** a new mechanism. It needs no new command, no new field, no
+per-frame script and no state: it is the same pure function of progress to fractions that
+the flood and the fig leaves are, read as a position instead of as a level. The two things
+it does need are small and both are art rather than tuning -- how much of a passage a
+landmark takes to cross the band, and how wide it is drawn -- so they live beside the
+flame periods in `core/setpieces.ts` and the band composition in `core/draw.ts`, for the
+same reason the parallax depths live in `core/worlds.ts`.
+
+Two rules it inherits, and both matter more here than anywhere else in this file:
+
+- **Behind the scribe and above the rail.** Landmarks are drawn in the scenery band with
+  everything else, before the scribe, and clamped into it by the same `bandRect` every
+  other flourish is clamped by. A city gate is the largest thing this game draws; it is
+  still scenery, and scenery serves the text.
+- **Nothing is arrived *at* that the player has to do anything about.** A landmark is not
+  a checkpoint, is not collected, cannot be missed and costs nothing. It is the world
+  saying where he is, which is the register every set piece in this file is written in.
+
+#### What was authored, and where
+
+Three chapters, and only where the text itself moves through the city. Most passages need
+nothing, which is why the table is still mostly one row a chapter.
+
+| range | theme | setpiece | held | reads as |
+|---|---|---|---|---|
+| `John 8:1-11` | `city` | `up_to_the_temple` | — | early in the morning, up through the city: the gate comes on and passes, the wall runs alongside, and the temple front stands up ahead and stays |
+| `John 8:12-59` | `temple` | `lamps_kindled` | yes | the treasury at the feast, and nobody travels while it is being said |
+| `John 19:1-16` | `city` | — | yes | the Praetorium and the Pavement: a trial, and a trial does not go anywhere |
+| `John 19:17-22` | `city` | `out_of_the_gate` | — | *"he went out"* -- the gate passes and the wall falls away small behind him |
+| `John 19:23-42` | `mountain` | `darkness_at_noon` | — | the cross, and the garden and the new tomb at the end of it |
+| `Matthew 27:1-26` | `city` | — | — | morning in the city: bound and led away, the potter's field, the judgment hall |
+| `Matthew 27:27-33` | `city` | `out_of_the_gate` | — | out of the common hall to the place called Golgotha, the same way out |
+| `Matthew 27:34-66` | `tomb` | `darkness_at_noon` | — | the cross, the darkness over all the land, and the sealed tomb at evening |
+
+**Matthew 27 was a tomb from its first verse, and it is not one until verse 57.** The
+chapter opens in the city at daybreak with a council, a betrayer and a governor in it, and
+rendering that as a grave is the same class of untruth as
+[an abbey for Genesis 4](#the-default-is-a-property-of-the-text-and-the-bibles-is-open-country):
+a place asserted that the text does not support. The chapter row stays `tomb`, because
+`tomb` is the honest one-word answer to *what is Matthew 27* on the map, and the two thirds
+of it that happen before the hill now say so.
+
+**The two crucifixion rows keep exactly the theme and the flourish their chapter rows
+already had**, which is deliberate: Matthew 27 arrives at the passion chorale on the verse
+the cross is raised, John 19 arrives at the mountain on the same verse, and neither is a
+change to anything anyone has already heard. The only new claim either chapter makes is
+about the part of it that is Jerusalem.
+
+**John 19:1-16 is [held](#held-scenes-not-every-passage-is-a-journey) and John 8:12-59 is
+too**, for the reason Genesis 3 is: a trial and a dispute are conversations, and sliding a
+landscape past a conversation is the game insisting on movement the text does not have.
+It also means the landmarks stand still while nobody is travelling, which is what a
+landmark does.
+
+**Exodus 12 is a `city` passage and gets none of this.** The theme is not only Jerusalem
+-- it is sandstone, walls and doorways, and Exodus 12 is a street in Egypt on the night
+the doorposts are marked. Putting a gate of Jerusalem into it would be the scenery making
+a claim the passage does not, so it keeps `blood_on_doorposts` and nothing is added to it.
 
 ## Set pieces
 
@@ -382,12 +488,20 @@ scene, so most passages need only a theme and the memorable ones can be special.
 | Jonah 1-2 | `storm` | `swallowed` | — |
 | Matthew 12 | `city` | `bruised_reed` | — |
 | Matthew 27 | `tomb` | `darkness_at_noon` | — |
+| Matthew 27:1-26 | `city` | — | — |
+| Matthew 27:27-33 | `city` | `out_of_the_gate` | — |
+| Matthew 27:34-66 | `tomb` | `darkness_at_noon` | — |
 | John 1 | `daybreak` | `light_from_dark` | — |
 | John 3 | `city` | `lifted_up` | — |
 | John 6 | `desert` | `loaves_multiplied` | — |
 | John 8 | `temple` | `lamps_kindled` | — |
+| John 8:1-11 | `city` | `up_to_the_temple` | — |
+| John 8:12-59 | `temple` | `lamps_kindled` | yes |
 | John 10 | `garden` | `gate_of_the_fold` | — |
 | John 19 | `mountain` | `darkness_at_noon` | — |
+| John 19:1-16 | `city` | — | yes |
+| John 19:17-22 | `city` | `out_of_the_gate` | — |
+| John 19:23-42 | `mountain` | `darkness_at_noon` | — |
 | John 20 | `daybreak` | `light_from_dark` | — |
 | John 20:1-15 | `tomb` | `light_from_dark` | — |
 | John 20:16-18 | `garden` | — | — |
@@ -436,6 +550,20 @@ tableau is the only thing moving on the screen:
 | Genesis 3:7 | `fig_leaves` | leaves close along the ground one after another until the band's floor is covered |
 | Genesis 3:8-23 | `walking_in_the_garden` | the light cools toward evening, the trees stir, and a shade gathers over them -- something moving in the garden, and nobody drawn |
 | Genesis 3:24 | `flaming_sword` | the way behind them closes and a blade turns every way in front of it, while the world scrolls again for the first time in the chapter |
+
+The two city flourishes are the same two verbs the
+[landmark section](#jerusalem-a-place-you-arrive-at) describes, and they are the only
+flourishes in the table whose parameters are *positions* rather than levels:
+
+| passage | setpiece | what the world does |
+|---|---|---|
+| John 8:1-11 | `up_to_the_temple` | the gate comes on out of the right of the band, passes and is gone; the wall grows along the horizon as he goes up; the temple front rises at the end of it and stays |
+| John 19:17-22, Matthew 27:27-33 | `out_of_the_gate` | the same gate, the other way round: it passes and is left behind, the wall falls away small, and the banners on it stir |
+
+Between them they are the gate, the wall and the temple the owner asked for, and there are
+two rather than one because *going up to* a city and *being taken out of* it are not the
+same picture -- in one the wall grows and something arrives to stay, in the other
+everything gets smaller behind you.
 
 `rising_water` physically raises the level as the flood does. `parted_walls` stands the
 sea up on either side of the rail. `darkness_at_noon` drains the palette to greyscale

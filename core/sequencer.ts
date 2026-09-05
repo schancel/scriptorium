@@ -22,6 +22,18 @@
  * nothing else, so a tune played fast is the same tick data read faster. That
  * keeps the loop point exact at every tempo -- a sequencer that scaled the tick
  * positions instead would accumulate rounding error and drift off the seam.
+ *
+ * There is no rewind here, and that is deliberate. A tune change *crossfades*
+ * (docs/design/09-music.md#the-music-follows-the-scenery), so nothing is ever
+ * moved back to the top: a tune that is sounding plays on from where it is
+ * while its gain comes down, and a tune that is not sounding has no needle to
+ * move -- `core/sound.ts` gives an arriving tune a fresh one. A tune therefore
+ * only ever begins at its beginning.
+ *
+ * And a crossfade means **two of these advancing at once**, at unrelated
+ * tempos and over unrelated loop lengths. Every seam guard below is per state
+ * rather than per frame for that reason: two machines cannot see each other's
+ * loop point and neither can drag the other over it.
  */
 
 import { msPerTick } from './synth.js';
@@ -54,11 +66,6 @@ export function startSequencer(state: SequencerState): SequencerState {
 
 export function stopSequencer(state: SequencerState): SequencerState {
   return { ...state, playing: false };
-}
-
-/** Back to the top. Used when the theme changes and a different tune takes over. */
-export function rewindSequencer(state: SequencerState): SequencerState {
-  return { ...state, posTicks: 0 };
 }
 
 // --- tempo ------------------------------------------------------------------
@@ -124,6 +131,7 @@ const TICK_EPSILON = 1e-9; // tuning-exempt: floating-point noise floor, not a m
 /** Notes on one track whose onset falls in `[from, to)`, appended in order. */
 function collect(
   track: TuneTrack,
+  tuneId: string,
   from: number,
   to: number,
   perTick: number,
@@ -131,7 +139,7 @@ function collect(
 ): void {
   for (const note of track.notes) {
     if (note.t < from || note.t >= to) continue;
-    into.push(noteEvent(track, note, perTick));
+    into.push(noteEvent(track, tuneId, note, perTick));
   }
 }
 
@@ -145,11 +153,24 @@ function collect(
  * the event type marks them optional and `exactOptionalPropertyTypes` means an
  * explicit `undefined` is not the same thing as an absent key. It also keeps
  * the events small and cleanly JSON-serialisable, which is the contract.
+ *
+ * `tune` is not optional, and it is the one field here that is about the mix
+ * rather than the note. A tune change crossfades, so two sequencers run across
+ * a boundary and the platform gives each its own fader and its own four voices
+ * -- and a note that could not say which machine it came from would be played
+ * on whichever one happened to be sounding, cutting the other off mid-phrase.
+ * See docs/design/09-music.md#two-machines-for-the-width-of-a-boundary.
  */
-function noteEvent(track: TuneTrack, note: TuneNote, perTick: number): SoundEvent {
+function noteEvent(
+  track: TuneTrack,
+  tuneId: string,
+  note: TuneNote,
+  perTick: number,
+): SoundEvent {
   const event: {
     type: 'note';
     ch: TuneTrack['ch'];
+    tune: string;
     midi: number;
     vel: number;
     ms: number;
@@ -159,6 +180,7 @@ function noteEvent(track: TuneTrack, note: TuneNote, perTick: number): SoundEven
   } = {
     type: 'note',
     ch: track.ch,
+    tune: tuneId,
     midi: note.midi,
     vel: note.vel,
     ms: note.dur * perTick,
@@ -195,7 +217,7 @@ export function advanceSequencer(
   while (remaining > TICK_EPSILON && laps <= MAX_LAPS_PER_STEP) {
     const room = tune.loop - pos;
     const span = Math.min(remaining, room);
-    for (const track of tune.tracks) collect(track, pos, pos + span, perTick, events);
+    for (const track of tune.tracks) collect(track, tune.id, pos, pos + span, perTick, events);
     pos += span;
     remaining -= span;
     if (tune.loop - pos <= TICK_EPSILON) {

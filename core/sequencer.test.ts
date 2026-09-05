@@ -16,7 +16,6 @@ import {
   comboForFullTempo,
   comboTempoRatio,
   createSequencer,
-  rewindSequencer,
   startSequencer,
   stopSequencer,
 } from './sequencer.js';
@@ -119,6 +118,65 @@ test('a frame that straddles the seam still lands every note once', () => {
   assert.deepEqual(straddled, [60, 62, 64, 65, 60]); // tuning-exempt: test fixture
 });
 
+test('TWO SEQUENCERS CROSS TWO SEAMS, AND NEITHER DRAGS THE OTHER OVER ONE', () => {
+  // A crossfade runs two of these at once, at unrelated tempos and over
+  // unrelated loop lengths, so the seam guard has to hold per needle rather
+  // than per frame. Advanced together, each has to produce exactly the stream
+  // it produces alone. docs/design/09-music.md#two-seams-not-one
+  const OTHER = loadTune({
+    id: 'other', name: 'Other', source: 'written for this test',
+    // A different tempo and a shorter loop, so its seam never lines up with the
+    // fixture's: 90 bpm at 3 ppq is a tick of 222.2 ms, which does not divide
+    // into anything above and is exactly the ragged case the epsilon is for.
+    bpm: 90, ppq: 3, loop: 5, // tuning-exempt: test fixture -- an awkward second machine
+    tracks: [
+      {
+        ch: 'pulse1', duty: 0.25, // tuning-exempt: test fixture
+        notes: [
+          { t: 0, dur: 1, midi: 72, vel: 90 },  // tuning-exempt: test fixture
+          { t: 3, dur: 1, midi: 74, vel: 90 },  // tuning-exempt: test fixture
+        ],
+      },
+    ],
+  });
+
+  const frames = repeat(60, 137); // tuning-exempt: test fixture -- ragged frames, several laps of both
+  const alone = (tune: Tune): number[] => {
+    let state: SequencerState = startSequencer(createSequencer());
+    const out: SoundEvent[] = [];
+    for (const dtMs of frames) {
+      const step = advanceSequencer(state, tune, dtMs, 1);
+      state = step.state;
+      out.push(...step.events);
+    }
+    return pitches(out);
+  };
+
+  let a: SequencerState = startSequencer(createSequencer());
+  let b: SequencerState = startSequencer(createSequencer());
+  const fromA: SoundEvent[] = [];
+  const fromB: SoundEvent[] = [];
+  for (const dtMs of frames) {
+    const stepA = advanceSequencer(a, BAR, dtMs, 1);
+    const stepB = advanceSequencer(b, OTHER, dtMs, 1);
+    a = stepA.state;
+    b = stepB.state;
+    fromA.push(...stepA.events);
+    fromB.push(...stepB.events);
+  }
+  assert.deepEqual(pitches(fromA), alone(BAR));
+  assert.deepEqual(pitches(fromB), alone(OTHER));
+
+  // Each stream also names its own tune, which is what keeps the two machines
+  // off one another's channels once the platform has them.
+  const named = (events: readonly SoundEvent[]): string[] => [...new Set(
+    events.filter((e): e is Extract<SoundEvent, { type: 'note' }> => e.type === 'note')
+      .map((e) => e.tune),
+  )];
+  assert.deepEqual(named(fromA), ['fixture']);
+  assert.deepEqual(named(fromB), ['other']);
+});
+
 test('the same dtMs sequence always produces the same events', () => {
   const frames = [17, 33, 250, 1, 999, 16, 16, 480, 250]; // tuning-exempt: test fixture -- ragged frame times
   assert.deepEqual(run(frames), run(frames));
@@ -163,12 +221,15 @@ test('tempo scaling is bounded above by combo_tempo_max', () => {
   assert.equal(comboTempoRatio(Number.MAX_SAFE_INTEGER, tuning), ceiling);
 });
 
-test('rewinding returns to the top; stopping holds the needle where it is', () => {
+test('a fresh needle is at the top; stopping holds one where it is', () => {
+  // There is no rewind: a tune change crossfades, so a sounding tune is never
+  // moved back to the top and an arriving one has nowhere else to start.
+  // docs/design/09-music.md#two-machines-for-the-width-of-a-boundary
   let state = startSequencer(createSequencer());
   state = advanceSequencer(state, BAR, TICK_MS * 3, 1).state; // tuning-exempt: test fixture
   assert.equal(state.posTicks, 3); // tuning-exempt: test fixture
 
   assert.equal(stopSequencer(state).posTicks, 3); // tuning-exempt: test fixture
-  assert.equal(rewindSequencer(state).posTicks, 0);
+  assert.equal(createSequencer().posTicks, 0);
   assert.deepEqual(advanceSequencer(stopSequencer(state), BAR, BAR_MS, 1).events, []);
 });

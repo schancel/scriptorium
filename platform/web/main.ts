@@ -57,7 +57,7 @@ import {
 } from '../../core/draw.js';
 import {
   heldAt, loadSceneDefaults, loadScenes, sceneAtVerse, sceneFor as sceneAt,
-  type Scene, type SceneAt, type SceneMap,
+  type SceneAt, type SceneMap,
 } from '../../core/scenes.js';
 import { setpieceState, type SetpieceState } from '../../core/setpieces.js';
 import {
@@ -699,12 +699,6 @@ interface Level {
 
   // --- the world this part is set in ---------------------------------------
   /**
-   * The authored scene: a theme, and a set piece for the handful of passages
-   * that have one. Resolved by `core/scenes.ts` from the range table, never
-   * inferred from a character of the prose.
-   */
-  readonly scene: Scene;
-  /**
    * The authored map the scenery is resolved against, per frame.
    *
    * Carried on the level rather than reached for, because `core/scenes.ts` now
@@ -908,10 +902,12 @@ function setpieceFor(level: Level, scene: SceneAt): SetpieceState | null {
 /**
  * The scene under the cursor *right now*, not the one the chapter opened in.
  *
- * `level.scene` is the chapter's row and stays fixed for the level's life --
- * the tune is keyed on it, and a hymn restarted every five verses would be the
- * scenery competing with the rail. The picture is resolved per verse instead,
- * which is what makes Genesis 1 seven places rather than one.
+ * The chapter's own row decides where the level *stands* -- its ground line and
+ * its layout are built from it once -- and everything the player then sees and
+ * hears is resolved from here, per frame, off the verse under the cursor. That
+ * is what makes Genesis 1 seven places rather than one, and since the music
+ * crossfades rather than restarting it is now what makes it seven tunes as well.
+ * See docs/design/05-scenery-warps.md#verse-ranges.
  */
 function sceneNow(level: Level, tuning: Tuning): SceneAt {
   return sceneAtVerse(level.sceneMap, level.ref, versePosition(level), tuning);
@@ -1398,7 +1394,6 @@ async function boot(): Promise<void> {
       reporting: false,
       started: false,
       bookmark: verseAt[typing.cursor] ?? chunk.first,
-      scene,
       sceneMap: scenes,
       ref,
       doorways: doorwaysIn(ref, glyphs, verseAt),
@@ -2844,6 +2839,7 @@ async function boot(): Promise<void> {
       notesScheduled: report.notesScheduled,
       sampleRate: report.sampleRate,
       lastError: report.lastError,
+      music: report.music,
     };
   }
 
@@ -3185,12 +3181,29 @@ async function boot(): Promise<void> {
    * it is the thing that holds the needle: skipping it while muted would leave
    * the sequencer at whatever tick it was stopped at and restart the hymn
    * mid-phrase. Muted, it simply returns no events.
+   *
+   * The theme it is given is the one under the *cursor*, not the chapter's, and
+   * it comes with the same boundary and the same 0..0.5 the palette is eased
+   * with -- the picture and the music cross together, off one arithmetic, and a
+   * tune change crossfades rather than restarting. In the 1,158 chapters with no
+   * verse rows there is no boundary to hand over and nothing about this changes.
+   * See docs/design/09-music.md#the-music-follows-the-scenery.
    */
   function stepAudio(dtMs: number): void {
+    const scene = sceneNow(level, tuning);
     const step = stepSound(
       audio,
       songbook,
-      { theme: level.scene.theme, combo: damage.combo, cues },
+      {
+        theme: scene.theme,
+        // Spread rather than set to null, like the picture's own blend: absent
+        // is not the same as a crossfade that has not started.
+        ...(scene.blendTheme === null || scene.blendMix <= 0
+          ? {}
+          : { blend: { theme: scene.blendTheme, mix: scene.blendMix } }),
+        combo: damage.combo,
+        cues,
+      },
       dtMs,
       tuning,
     );

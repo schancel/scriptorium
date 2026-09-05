@@ -17,11 +17,22 @@
  * suspended and the first note is swallowed, which reads as "the sound is
  * broken" rather than "the sound is blocked".
  *
- * **Voices are monophonic per channel.** The 2A03 has one oscillator per
- * channel, so a new note cuts the one before it. That is emulation, not
- * economy: polyphonic pulse channels would quietly dissolve the constraint the
- * whole arrangement style is built on, and the tunes would stop sounding like
- * the machine they are written for.
+ * **Voices are monophonic per channel, per machine.** The 2A03 has one
+ * oscillator per channel, so a new note cuts the one before it. That is
+ * emulation, not economy: polyphonic pulse channels would quietly dissolve the
+ * constraint the whole arrangement style is built on, and the tunes would stop
+ * sounding like the machine they are written for.
+ *
+ * *Per machine* is the one qualification, and it is what a crossfade costs. A
+ * tune change fades one tune into another over a scene boundary
+ * (docs/design/09-music.md#two-machines-for-the-width-of-a-boundary), so for the
+ * width of that boundary two sequencers are running -- and each gets its own
+ * four voices and its own gain node, keyed on the tune id the note carries. One
+ * shared set of channels would have the two tunes cutting each other off at
+ * every note, which is precisely the mid-phrase chop the crossfade exists to
+ * avoid. A cue is not on either machine: it rings straight into the master gain,
+ * unfaded, and it still takes the channel it rings on away from both of them,
+ * because that part *is* the hardware being honest.
  */
 
 import { masterGain, type Cue } from '../../core/sound.js';
@@ -51,6 +62,26 @@ const LOOKAHEAD = 0.012;
 
 /** Extra seconds a node is kept alive past its release, so it is never cut mid-ramp. */
 const TAIL = 0.05;
+
+/**
+ * Seconds a fader takes to reach a gain it has been given.
+ *
+ * A de-click, not a fade. The crossfade itself is driven by how far through the
+ * passage the player has typed and arrives here as a stream of small steps; this
+ * only stops each of those steps being a discontinuity in the waveform. It is
+ * the same kind of number as `LOOKAHEAD` above -- about the audio clock, not
+ * about the music -- and nothing a player could feel is decided by it.
+ */
+const MIX_RAMP = 0.02;
+
+/**
+ * The slot the cues sound on: not a tune, so no fader touches it.
+ *
+ * A defeat, a candle and a stomp are not music. They are struck at the weight
+ * `core/sound.ts` gives them wherever they fall, including halfway across a
+ * boundary. See docs/design/09-music.md#two-machines-for-the-width-of-a-boundary.
+ */
+const CUE_SLOT = '';
 
 /** A short-lived note in flight on one channel. */
 interface Voice {
@@ -138,6 +169,23 @@ export interface AudioReport {
   readonly sampleRate: number;
   /** What the last `start()` threw, or `''` if none has thrown. */
   readonly lastError: string;
+  /**
+   * What is audible, loudest first: the gain each tune's fader is actually at,
+   * read off the node rather than remembered.
+   *
+   * The fourth silent-machine question, after "is there a device", "will it run"
+   * and "has anything been sent to it": *is any of it turned up?* A running
+   * context taking notes with every fader at zero is a real state and it sounds
+   * exactly like a broken songbook, so the diagnostic says so rather than
+   * leaving it to be inferred. Two entries means a crossfade is in progress.
+   */
+  readonly music: readonly PlayingTune[];
+}
+
+/** One tune the device is sounding, and the gain its fader stands at. */
+export interface PlayingTune {
+  readonly tune: string;
+  readonly gain: number;
 }
 
 export interface WebAudio {
@@ -183,7 +231,27 @@ export function createWebAudio(tuning: Tuning): WebAudio {
   }
 
   const waves = new Map<number, PeriodicWave>();
-  const voices = new Map<Channel, Voice>();
+  /**
+   * What is sounding, keyed by machine *and* channel.
+   *
+   * The slot is the tune id for a note and `CUE_SLOT` for a cue, so two tunes
+   * crossfading do not share a pulse channel and cut each other to pieces.
+   */
+  const voices = new Map<string, Voice>();
+  /** One fader per sounding tune, between its notes and the master gain. */
+  const layers = new Map<string, GainNode>();
+  /**
+   * The gain each tune was last given, kept across a context being closed and
+   * reopened.
+   *
+   * `core/sound.ts` announces a gain when it *changes*, so a device rebuilt in
+   * the middle of a settled passage would otherwise have to guess -- and a fader
+   * that guessed zero would be a silent game with every other diagnostic green.
+   * A tune nobody has announced yet is full, for the same reason: an unheard
+   * announcement must fail loud rather than silent.
+   * See docs/decisions/0009-fallbacks-must-announce-themselves.md.
+   */
+  const mixLevels = new Map<string, number>();
 
   /**
    * A pulse wave of the given duty, as a Fourier series.
@@ -216,16 +284,63 @@ export function createWebAudio(tuning: Tuning): WebAudio {
     return buffer;
   }
 
-  /** Cut whatever this channel was sounding; the hardware has one voice each. */
-  function release(ch: Channel, at: number): void {
-    const voice = voices.get(ch);
+  /** Which voice a machine's channel is: one slot, one channel, one oscillator. */
+  function voiceKey(slot: string, ch: Channel): string {
+    return `${slot}:${ch}`;
+  }
+
+  /** Cut whatever this machine was sounding on this channel. */
+  function release(slot: string, ch: Channel, at: number): void {
+    const key = voiceKey(slot, ch);
+    const voice = voices.get(key);
     if (voice === undefined) return;
-    voices.delete(ch);
+    voices.delete(key);
     const gain = voice.gain.gain;
     gain.cancelScheduledValues(at);
     gain.setValueAtTime(Math.max(gain.value, 0), at);
     gain.linearRampToValueAtTime(0, at + TAIL);
     voice.source.stop(at + TAIL + TAIL);
+  }
+
+  /**
+   * Cut this channel everywhere -- every machine, and the cues.
+   *
+   * What a cue does, and the one place the old single-machine behaviour has to
+   * be preserved deliberately: on the hardware there is one pulse channel, and
+   * a candle interrupting the melody is that being true. A cue that only cut
+   * *one* of two crossfading tunes would be half-audible over the other.
+   */
+  function releaseChannel(ch: Channel, at: number): void {
+    for (const slot of [...layers.keys(), CUE_SLOT]) release(slot, ch, at);
+  }
+
+  /**
+   * The fader for one tune, made on demand and connected to the master gain.
+   *
+   * Bounded by the songbook: at most one node per tune the game has played this
+   * sitting, and only ever two of them above zero at once.
+   */
+  function layerFor(context: AudioContext, out: GainNode, tune: string): GainNode {
+    const found = layers.get(tune);
+    if (found !== undefined) return found;
+    const node = context.createGain();
+    node.gain.value = mixLevels.get(tune) ?? 1;
+    node.connect(out);
+    layers.set(tune, node);
+    return node;
+  }
+
+  /** Move one tune's fader to the gain core says it should be at. */
+  function setMix(tune: string, gain: number): void {
+    mixLevels.set(tune, gain);
+    const context = ctx;
+    const out = master;
+    if (context === null || out === null) return;
+    const param = layerFor(context, out, tune).gain;
+    const at = context.currentTime + LOOKAHEAD;
+    param.cancelScheduledValues(at);
+    param.setValueAtTime(param.value, at);
+    param.linearRampToValueAtTime(gain, at + MIX_RAMP);
   }
 
   /** Write an ADSR onto a gain node for a note of `seconds` starting at `at`. */
@@ -243,6 +358,7 @@ export function createWebAudio(tuning: Tuning): WebAudio {
   }
 
   function playNote(
+    slot: string,
     ch: Channel,
     midi: number,
     vel: number,
@@ -252,11 +368,19 @@ export function createWebAudio(tuning: Tuning): WebAudio {
     arpHz: number | undefined,
   ): void {
     const context = ctx;
-    const out = master;
-    if (context === null || out === null) return;
+    const masterOut = master;
+    if (context === null || masterOut === null) return;
 
     const at = context.currentTime + LOOKAHEAD;
-    release(ch, at);
+    // A cue takes the channel from everything; a tune takes it from itself and
+    // from whatever cue was ringing on it, and leaves the other machine alone.
+    if (slot === CUE_SLOT) {
+      releaseChannel(ch, at);
+    } else {
+      release(slot, ch, at);
+      release(CUE_SLOT, ch, at);
+    }
+    const out = slot === CUE_SLOT ? masterOut : layerFor(context, masterOut, slot);
 
     const seconds = Math.max(ms, 0) / MS_PER_SECOND;
     const gain = context.createGain();
@@ -298,7 +422,7 @@ export function createWebAudio(tuning: Tuning): WebAudio {
     gain.connect(out);
     source.start(at);
     source.stop(endsAt + TAIL);
-    voices.set(ch, { source, gain });
+    voices.set(voiceKey(slot, ch), { source, gain });
   }
 
   function playCue(id: string, vel: number | undefined): void {
@@ -306,7 +430,7 @@ export function createWebAudio(tuning: Tuning): WebAudio {
     // lookup is widened here rather than the table being widened above.
     const cue: CueVoice | undefined = (CUES as Partial<Record<string, CueVoice>>)[id];
     if (cue === undefined) return;
-    playNote(cue.ch, cue.midi, vel ?? 100, cue.ms, cue.duty, cue.arp, cue.arpHz);
+    playNote(CUE_SLOT, cue.ch, cue.midi, vel ?? 100, cue.ms, cue.duty, cue.arp, cue.arpHz);
   }
 
   return {
@@ -348,8 +472,15 @@ export function createWebAudio(tuning: Tuning): WebAudio {
     async stop(): Promise<void> {
       const context = ctx;
       if (context === null) return;
-      for (const ch of [...voices.keys()]) release(ch, context.currentTime);
+      for (const key of [...voices.keys()]) {
+        const voice = voices.get(key);
+        voices.delete(key);
+        voice?.source.stop(context.currentTime);
+      }
       voices.clear();
+      // The faders go with the context they were built in; the *levels* do not,
+      // so a device reopened mid-passage comes back at the mix it was at.
+      layers.clear();
       waves.clear();
       noiseBuffer = null;
       ctx = null;
@@ -363,9 +494,14 @@ export function createWebAudio(tuning: Tuning): WebAudio {
       if (ctx === null || ctx.state !== 'running') return;
       for (const event of events) {
         if (event.type === 'note') {
-          playNote(event.ch, event.midi, event.vel, event.ms, event.duty, event.arp, event.arpHz);
+          playNote(
+            event.tune, event.ch, event.midi, event.vel, event.ms,
+            event.duty, event.arp, event.arpHz,
+          );
         } else if (event.type === 'sfx') {
           playCue(event.id, event.vel);
+        } else if (event.type === 'mix') {
+          setMix(event.tune, event.gain);
         } else {
           ratio = event.ratio;
         }
@@ -377,12 +513,17 @@ export function createWebAudio(tuning: Tuning): WebAudio {
     },
 
     report(): AudioReport {
+      const music = [...layers.entries()]
+        .map(([tune, node]): PlayingTune => ({ tune, gain: node.gain.value }))
+        .filter((playing) => playing.gain > 0)
+        .sort((a, b) => b.gain - a.gain);
       return {
         state: ctx === null ? 'none' : ctx.state,
         contexts,
         notesScheduled,
         sampleRate: ctx === null ? 0 : ctx.sampleRate,
         lastError,
+        music,
       };
     },
 

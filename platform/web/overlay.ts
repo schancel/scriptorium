@@ -18,6 +18,7 @@ import { isMotionSetting, type MotionSetting } from '../../core/motion.js';
 import { OPENING } from '../../core/onboarding.js';
 import type { HistoryEntry, Promotion } from '../../core/progress.js';
 import type { Finger, KeyboardLayout, Thumb } from '../../core/types.js';
+import type { PlayingTune } from './web_audio.js';
 
 /** What the caller must be able to do when a button is pressed. */
 export interface OverlayHandlers {
@@ -164,6 +165,14 @@ export interface AudioMenuView {
   readonly notesScheduled: number;
   readonly sampleRate: number;
   readonly lastError: string;
+  /**
+   * What is audible and how loud, read off the device's own faders.
+   *
+   * Two entries is a tune crossfading into another, which is what a scene
+   * boundary sounds like; none, with notes being sent, is the shape of a game
+   * that is doing everything right into a fader nobody turned up.
+   */
+  readonly music: readonly PlayingTune[];
 }
 
 export interface MenuView {
@@ -572,10 +581,14 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
    */
   function renderAudio(view: AudioMenuView): void {
     audioState.textContent = AUDIO_SENTENCE[view.indicator];
+    const playing = view.music
+      .map((tune) => `${tune.tune} ${String(Math.round(tune.gain * PERCENT))}%`)
+      .join(' + ');
     const parts = [
       `Device: ${view.state}`,
       `opened this sitting: ${String(view.contexts)}`,
       `notes sent: ${String(view.notesScheduled)}`,
+      `playing: ${playing === '' ? 'nothing' : playing}`,
       `sample rate: ${view.sampleRate === 0 ? 'none' : `${String(Math.round(view.sampleRate))} Hz`}`,
     ];
     if (view.lastError !== '') parts.push(`last refusal: ${view.lastError}`);

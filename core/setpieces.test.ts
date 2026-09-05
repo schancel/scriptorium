@@ -145,6 +145,7 @@ test('THE GOSPEL FLOURISHES ARE THE WORLD RESPONDING, NEVER THE PLAYER GAINING',
   // that the *only* things a set piece produces are named numbers in 0..1.
   const gospel: readonly SetpieceId[] = [
     'bruised_reed', 'lifted_up', 'loaves_multiplied', 'lamps_kindled', 'gate_of_the_fold',
+    'out_of_the_gate', 'up_to_the_temple',
   ];
   for (const id of gospel) {
     const at = (progress: number) => setpieceState(id, { elapsedMs: 0, progress });
@@ -161,6 +162,7 @@ test('every Gospel passage the route names has a flourish, and no two are the sa
   const gospel: readonly SetpieceId[] = [
     'light_from_dark', 'bruised_reed', 'darkness_at_noon',
     'lifted_up', 'loaves_multiplied', 'lamps_kindled', 'gate_of_the_fold',
+    'out_of_the_gate', 'up_to_the_temple',
   ];
   const shapes = new Set<string>();
   for (const id of gospel) {
@@ -168,6 +170,57 @@ test('every Gospel passage the route names has a flourish, and no two are the sa
     shapes.add(Object.keys(state.params).sort().join(','));
   }
   assert.equal(shapes.size, gospel.length, 'two Gospel flourishes produce the same parameters');
+});
+
+test('A LANDMARK IS A POSITION, NOT A LEVEL: IT ARRIVES, IS PASSED AND RECEDES', () => {
+  // The one thing a city needed that a landscape did not. Every other parameter
+  // in the table is a level rising or falling; `gate` is where the scribe is
+  // standing relative to a thing -- ahead of it, level with it, past it.
+  // docs/design/05-scenery-warps.md#a-landmark-is-a-pass-fraction
+  for (const id of ['out_of_the_gate', 'up_to_the_temple'] as const) {
+    const gate = (progress: number): number =>
+      setpieceParam(setpieceState(id, { elapsedMs: 0, progress }), 'gate');
+    assert.equal(gate(0), 0, `${id}: the gate was in sight before the passage began`);
+    assert.equal(gate(1), 1, `${id}: the gate was still there at the end`);
+    // Level with him somewhere in the first half, and never going backwards.
+    let previous = 0;
+    let abreast = false;
+    for (let i = 0; i <= STEPS; i += 1) {
+      const now = gate(i / STEPS);
+      assert.ok(now >= previous, `${id}: the gate came back toward him`);
+      if (previous < HALF_WAY && now >= HALF_WAY) abreast = true;
+      previous = now;
+    }
+    assert.ok(abreast, `${id}: the gate never drew level with him`);
+
+    // And it is carried by the words, not by a clock -- the same rule the flood
+    // is under. Nothing about a gate reads `elapsedMs` at all.
+    assert.equal(
+      setpieceParam(setpieceState(id, { elapsedMs: LONG_MS, progress: HALF_WAY }), 'gate'),
+      setpieceParam(setpieceState(id, { elapsedMs: 0, progress: HALF_WAY }), 'gate'),
+    );
+  }
+});
+
+test('the wall falls away when he is taken out, and rises when he goes up', () => {
+  // The two directions are the whole reason there are two flourishes rather
+  // than one with a flag: going up to a city and being taken out of it are not
+  // the same picture.
+  const wall = (id: 'out_of_the_gate' | 'up_to_the_temple', progress: number): number =>
+    setpieceParam(setpieceState(id, { elapsedMs: 0, progress }), 'wall');
+  assert.ok(wall('out_of_the_gate', 1) < wall('out_of_the_gate', 0));
+  assert.ok(wall('up_to_the_temple', 1) > wall('up_to_the_temple', 0));
+
+  // The temple is the one landmark that arrives and stays, so it only climbs.
+  let previous = 0;
+  for (let i = 0; i <= STEPS; i += 1) {
+    const now = setpieceParam(
+      setpieceState('up_to_the_temple', { elapsedMs: 0, progress: i / STEPS }), 'temple',
+    );
+    assert.ok(now >= previous, 'the temple receded');
+    previous = now;
+  }
+  assert.equal(previous, 1);
 });
 
 test('a set piece emits parameters, never draw commands', () => {
