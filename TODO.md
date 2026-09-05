@@ -105,15 +105,17 @@ alone.
     much smaller effect would make the first one quieter, so it is not marked. Worth
     revisiting the first time the curve shows a step across one.
     → `docs/design/08-stats.md#the-mode-is-marked-on-the-curve-because-a-mode-change-is-not-progress`
-18. **The earned fade-out now removes the key and reads a lifetime.** It used to remove
-    only the *highlight*, and it was judged over the part in front of the player -- a
-    hundred and fifty keystrokes across nine fingers, which is under `mastery_min_samples`
-    on most of them, so in practice almost nothing ever retired and what did came back at
-    the top of the next stretch. Both halves changed together, because the lectern has
-    nothing to fill without them. It is the right reading of "the crutch removes itself
-    key by key, as it is earned", and it is also a bigger change to what a returning
-    player sees than either half sounds. Worth one look on the screen.
-    → `docs/design/06-curriculum.md#breaking-the-looking-down-habit`
+18. **The earned fade-out reads a lifetime, not the stretch in front of you.** The
+   key-removal half of this is fixed — the owner asked why keys were missing from the
+   keyboard, and a board with holes violated the layout invariant in
+   `docs/design/06-curriculum.md`. Every key is drawn now and the board recedes instead.
+   What remains open is the other half: mastery is judged over the lifetime table rather
+   than the current stretch, because judged over a stretch almost nothing ever retired and
+   what did came back at the top of the next one. That is the right reading of "the crutch
+   removes itself as it is earned", but it means a returning player's board looks
+   different from how he left it. Worth one look.
+
+
 19. **The lectern has not been seen.** Every rule about it is asserted -- below the rail,
     never gold, nothing said, nothing moving without a keystroke, the page filling as the
     stretch is copied -- and none of that is a claim that it *looks* like a man at a desk.
