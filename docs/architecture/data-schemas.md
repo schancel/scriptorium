@@ -96,7 +96,7 @@ Browser local storage, exportable to a file. Written by
 `core/progress.ts`.
 
 ```json
-{ "version": 7, "stage": 3, "translation": "WEB", "route": "pilgrimage",
+{ "version": 8, "stage": 3, "translation": "WEB", "route": "pilgrimage",
   "layout": "ansi", "spaceThumb": "rt",
   "position": { "book": "Genesis", "chapter": 1, "unit": 7 },
   "completed": ["Genesis 1"],
@@ -105,10 +105,11 @@ Browser local storage, exportable to a file. Written by
                        "latencies": [340], "confusions": { "s": 4 } } },
   "recent": { "a": [ { "ok": true, "ms": 312 }, { "ok": false, "ms": null } ] },
   "history": [ { "date": "2026-09-03", "stage": 3, "ref": "Genesis 1:1-3",
-                 "wpm": 14.2, "accuracy": 0.97, "promoted": false } ],
+                 "wpm": 14.2, "accuracy": 0.97, "promoted": false,
+                 "gilding": false } ],
   "gilding": false, "gildOffered": false,
   "firstRun": false, "notesSeen": ["greyed", "wrong", "space"],
-  "cloudEnabled": true, "motion": "auto" }
+  "cloudEnabled": true, "mistakesStand": false, "motion": "auto" }
 ```
 
 `position` is the bookmark: the translation is `translation`, and `unit` is the
@@ -166,6 +167,24 @@ decides nothing else in the game. See
 [motion and comfort](../design/12-motion-and-comfort.md#how-it-is-reached) and
 [ADR 0011](../decisions/0011-respect-reduced-motion.md).
 
+`mistakesStand` is whether a wrong key leaves its letter on the page and backspace takes
+it back, rather than holding the cursor until the right one is produced. Off by default,
+because blocking is a real service to a beginner who does not yet know where the keys are.
+It is its own field and not a flag on `gilding`: the two serve the same person and are
+different axes, and somebody may want to correct his own mistakes without being asked for
+every letter. Like `gilding` and `cloudEnabled` it is a fact about the person at the
+keyboard, it is stored rather than held for the session, and it touches nothing else — not
+the stage, not the window, not the gate. See
+[ADR 0010](../decisions/0010-mistakes-may-stand-and-be-deleted.md).
+
+`gilding` **on a history entry** is which mode that stretch was typed in, which is not the
+same question as the record's own `gilding` — that is the mode he is in *now*. The chart
+draws a rule where two neighbouring entries disagree, because a stretch typed with every
+character asked for and a stretch typed with the ones a stage teaches are two different
+jobs and their WPM is not comparable. Without it the switch draws a cliff that reads as a
+breakthrough: the owner went from 22 wpm to 75 across one, and later to 102, without
+typing any faster. See [stats](../design/08-stats.md#history).
+
 `promoted` marks the session that opened the gate. The history view needs it: the
 sessions *after* a promotion are slower, because a new stage lights up more of the page,
 and an unexplained dip in the curve is the single most likely reason a beginner concludes
@@ -183,8 +202,8 @@ not optional.
 | 4 | added `firstRun` and `notesSeen` | every version 3 field is carried across unchanged — stage, translation, route, layout, `spaceThumb`, position, `completed`, `keyStats`, `recent`, the whole history, `gilding` and `gildOffered`. The two new fields default to *already done*: `firstRun` to false and `notesSeen` to every note. That is the only correct default, because a stored record is by definition one somebody has already been playing, and starting to explain the game to a player three weeks in would be worse than never having explained it at all. Nothing is dropped. |
 | 5 | added `discovered` | every version 4 field is carried across unchanged. `discovered` defaults to empty, which is the only honest default: nothing recorded a found room before the field existed, so the game does not know of any. It costs the player nothing — a flashback is optional by construction, and re-finding one is the same walk it was the first time. Nothing is dropped. |
 | 6 | added `cloudEnabled` | every version 5 field is carried across unchanged — stage, translation, route, layout, `spaceThumb`, position, `completed`, `discovered`, `keyStats`, `recent`, the whole history, `gilding`, `gildOffered`, `firstRun` and `notesSeen`. `cloudEnabled` defaults to `true`, and it is read as true unless the stored value is explicitly `false`. That is exactly what a version 5 record meant: the switch was held for the session only, so every session that record ever had began with the cloud armed. Defaulting it off would silently remove the game's only pressure from every player who has ever played it. Nothing is dropped. |
-
 | 7 | added `motion` | every version 6 field is carried across unchanged. `motion` defaults to `"auto"`, which is the setting a version 6 record was already getting in effect: nothing consulted `prefers-reduced-motion` at all, so the player had never been asked and had never chosen. Defaulting to `"auto"` is the only value that can start honouring the operating system for the people who had already told it, without overriding a choice anybody made. An unrecognised stored value reads as `"auto"` for the same reason. Nothing is dropped. |
+| 8 | added `mistakesStand`, and `gilding` on every history entry | every version 7 field is carried across unchanged — stage, translation, route, layout, `spaceThumb`, position, `completed`, `discovered`, `keyStats`, `recent`, the whole history, `gilding`, `gildOffered`, `firstRun`, `notesSeen`, `cloudEnabled` and `motion`. Both new fields default to `false` and both require an explicit `true`. For `mistakesStand` that is what a version 7 record meant: the mode did not exist, so a wrong key blocked, and defaulting it on would hand a beginner a game nobody asked for. For a history entry it is the honest reading of an unmarked stretch — the mode existed and the record did not say — and it is also what keeps the *mark* honest, since a rule is drawn only where two entries disagree and a whole history of unmarked stretches therefore draws none rather than inventing one at the version boundary. Nothing is dropped. |
 
 `core/progress.ts` defaults every field individually rather than trusting the stored
 blob, so a partially corrupt record loses the corrupt field and keeps the history.

@@ -30,7 +30,7 @@ import {
   type FrameState,
   type SceneState,
 } from './draw.js';
-import { createRail, focalX } from './rail.js';
+import { CELL_W, createRail, focalX } from './rail.js';
 import {
   beginStrike, burstDurationMs, createCloud, createEntity, idleThresholdMs, stepCloud,
   stepEntities, stepMonsters, stepStrikes, strikeReachPx, strikeSpanMs, strikeWord, type Strike,
@@ -40,7 +40,10 @@ import { CANDLE_UNLIT_FRAME, PALETTE_ROLES, SPRITE_SIZE, spriteFor } from './spr
 import { DEFAULT_THEME, WORLDS, blendThemeId, worldFor } from './worlds.js';
 import { SETPIECE_IDS, setpieceState } from './setpieces.js';
 import { classify } from './illumination.js';
-import type { BlotCloud, DamageState, DrawCmd, Glyph, Key, Score, Tuning } from './types.js';
+import { overlayLayout } from './keyboard.js';
+import type {
+  BlotCloud, DamageState, DrawCmd, Glyph, Key, KeyStat, Score, Tuning,
+} from './types.js';
 
 /** The rows data/tuning.json carries that any of this path reads. */
 const TUNING: Tuning = { rail_cursor_x: 0.5, rail_scroll_lerp: 0.25, focal_guide_width: 40, gate_accuracy: 0.95, mastery_min_samples: 20, report_trend_parts: 20, report_finger_min_hits: 12, report_reach_ratio: 2.0, report_key_min_attempts: 12, report_worst_key_rate: 0.12, smudge_max: 100, smudge_per_error_base: 12, smudge_per_error_step: 1, smudge_decay_per_key: 3, hearts_start: 3, hearts_max: 5, idle_base_ms: 8000, idle_step_ms: 400, idle_floor_ms: 3000, cloud_approach_ms: 2500, cloud_smudge: 25, monster_burst_ms: 320, strike_reach: 36, stomp_ms: 460, ink_ms: 420, strike_hop_px: 12, strike_contact_px: 7, strike_bounce_ratio: 0.6, strike_nib_arc_px: 14, strike_rise_travel: 0.7, reduced_parallax: 0, reduced_anim_scale: 0.35, reduced_camera_lerp: 0.5 }; // tuning-exempt: test fixture mirroring data/tuning.json
@@ -877,4 +880,124 @@ test('the fallback banner is still the last command with a world mid-transition'
   );
   const last = cmds[cmds.length - 1];
   assert.ok(last !== undefined && last.op === 'text' && lines.includes(last.value));
+});
+
+
+// --- the scribe at his lectern -----------------------------------------------
+//
+// docs/design/02-rail.md#the-scribe-at-his-lectern. The keyboard band is a
+// scaffold that retires a key at a time, and what is behind it is the scribe
+// writing. Three rules, and all three are properties of the display list.
+
+/** The top of the keyboard's band; mirrors `M.kbTop` in core/draw.ts. */
+const KB_TOP = 210;     // tuning-exempt: band composition, mirrored from core/draw.ts
+/** One key unit less its padding, which is how a key face is told from the rest. */
+const KEY_FACE_H = 22;  // tuning-exempt: band composition, mirrored from core/draw.ts
+
+/** A lifetime table in which every key of the stage has earned its fade-out. */
+function earned(keys: readonly Key[]): Record<Key, KeyStat> {
+  const out: Record<Key, KeyStat> = {};
+  const samples = Math.trunc(TUNING['mastery_min_samples'] ?? 0);
+  for (const key of keys) {
+    out[key] = { hits: samples, errors: 0, totalMs: 0, latencies: [], confusions: {} };
+  }
+  return out;
+}
+
+type RectCmd = Extract<DrawCmd, { op: 'rect' }>;
+
+function inBand(cmds: readonly DrawCmd[]): RectCmd[] {
+  return cmds.filter((c): c is RectCmd => c.op === 'rect' && c.y >= KB_TOP);
+}
+
+const lecternIn = (cmds: readonly DrawCmd[]): RectCmd[] =>
+  inBand(cmds).filter((c) => c.h !== KEY_FACE_H);
+const facesIn = (cmds: readonly DrawCmd[]): RectCmd[] =>
+  inBand(cmds).filter((c) => c.h === KEY_FACE_H);
+
+const shapeOf = (cmds: readonly DrawCmd[]): string =>
+  lecternIn(cmds).map((c) => `${String(c.x)},${String(c.y)},${String(c.w)},${String(c.h)}`).join(' ');
+
+const withEarned = (over: Partial<FrameState> = {}): FrameState => frame(0, {
+  report: { keyStats: earned(KEYS), history: [] },
+  ...over,
+});
+
+test('NOTHING IS EARNED, SO THE BOARD IS WHOLE AND THERE IS NOTHING BEHIND IT', () => {
+  // The reward *is* the crutch leaving. It cannot arrive before the crutch has
+  // been earned away, and a beginner's frame is what it always was.
+  const cmds = drawFrame(frame(0), createRail(0), TUNING);
+  assert.equal(lecternIn(cmds).length, 0, 'nothing but key faces below the rail');
+  assert.equal(facesIn(cmds).length, overlayLayout('ansi').length,
+    'and every key is drawn');
+});
+
+test('A KEY THAT HAS EARNED ITS FADE-OUT IS NOT DRAWN AT ALL', () => {
+  const whole = drawFrame(frame(0), createRail(0), TUNING);
+  const retired = drawFrame(withEarned(), createRail(0), TUNING);
+  assert.ok(facesIn(retired).length < facesIn(whole).length,
+    'the board did not retire anything');
+  // Only the *taught* keys go. An untaught key is still dim on the board,
+  // because it is still something he has not been given.
+  assert.ok(facesIn(retired).length > 0, 'the whole board went, untaught keys included');
+});
+
+test('AND THE SCRIBE AT HIS LECTERN IS BEHIND IT, BELOW THE RAIL AND INSIDE THE BAND', () => {
+  const cmds = drawFrame(withEarned(), createRail(0), TUNING);
+  const shapes = lecternIn(cmds);
+  assert.ok(shapes.length > 0, 'nothing was drawn in the band the board vacated');
+  for (const c of shapes) {
+    assert.ok(c.y >= KB_TOP, `a shape at y ${String(c.y)} is above the keyboard band`);
+    assert.ok(c.y + c.h <= 360, // tuning-exempt: the virtual design resolution
+      `a shape at y ${String(c.y + c.h)} runs off the bottom of the frame`);
+    assert.ok(c.theme !== undefined, 'he is painted in the world he is walking in');
+  }
+  // Never gold. Gold is how the game says *press this key next*, and a picture
+  // that borrowed it would compete with the one thing the player has to act on.
+  const gold = PALETTE_ORDER.indexOf('gold');
+  assert.ok(!shapes.some((c) => c.theme === undefined && c.color === gold));
+});
+
+test('THE QUILL MOVES ONLY WHEN THE PLAYER TYPES', () => {
+  // An hour of frames with nobody typing, and every line of the page and every
+  // dab of the quill is on the pixel it was drawn on. Same rule as the rest of
+  // the world -- docs/decisions/0004-idle-threat-not-speed-timer.md -- and it
+  // holds here by construction, because nothing this draws reads a clock.
+  const still = shapeOf(drawFrame(withEarned(), createRail(0), TUNING));
+  const later = shapeOf(drawFrame(
+    withEarned({ scene: scene({ animMs: HOUR_MS, walking: true, cameraX: 500 }) }), // tuning-exempt: a fixture
+    createRail(0),
+    TUNING,
+  ));
+  assert.equal(later, still, 'the quill moved with nobody typing');
+});
+
+test('and it moves the moment he does, filling the page as he copies', () => {
+  const start = shapeOf(drawFrame(withEarned(), createRail(0), TUNING));
+  const on = shapeOf(drawFrame(
+    withEarned({ cursor: Math.floor(GLYPHS.length / 2) }),
+    createRail(0),
+    TUNING,
+  ));
+  const end = shapeOf(drawFrame(
+    withEarned({ cursor: GLYPHS.length }), createRail(0), TUNING,
+  ));
+  assert.notEqual(on, start, 'the cursor moved and the page did not');
+  assert.notEqual(end, on);
+  // The written lines only ever accumulate: a page that emptied as he typed on
+  // would be the one picture in the game that takes work back.
+  const inked = (cursor: number): number => lecternIn(
+    drawFrame(withEarned({ cursor }), createRail(0), TUNING),
+  ).filter((c) => c.h === 2 && c.w > CELL_W).length; // tuning-exempt: the ink line's own height
+  assert.ok(inked(GLYPHS.length) >= inked(0));
+  assert.ok(inked(GLYPHS.length) > 0, 'a finished stretch leaves a written page');
+});
+
+test('reading mode gets neither the board nor the quill', () => {
+  // The mode asks for no keys, so no board is drawn -- and a quill moving for
+  // somebody who is deliberately not typing would be exactly the lie the rule
+  // above exists to prevent.
+  const cmds = drawFrame(withEarned({ mode: 'lectio' }), createRail(0), TUNING);
+  assert.equal(lecternIn(cmds).length, 0);
+  assert.equal(facesIn(cmds).length, 0);
 });

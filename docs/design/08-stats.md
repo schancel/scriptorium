@@ -286,6 +286,46 @@ about to watch fall has a cause attached to it.
 The session that opened the gate is flagged in the record (`promoted`), which is what
 lets the chart mark the transition rather than infer it from a stage number changing.
 
+### The mode is marked on the curve, because a mode change is not progress
+
+Gilded and ungilded stretches shared one line with nothing separating them, and they are
+not comparable. With the mode off a stage asks for the characters it has taught — 46% of
+the page at stage 1 — and with it on the same verse asks for every character in it. The
+WPM either side of that switch is measured over two different jobs.
+
+The owner found out by doing it. **22 wpm to 75 in one sitting, and later 102.** On the
+curve that draws a cliff, and a cliff reads as a breakthrough. It is not one: what changed
+is the question, and a chart that says otherwise is lying to the one player whose whole
+motivation for the first month is the shape of that line.
+
+So **every history entry carries the mode it was typed in** (`gilding`), and the chart
+draws a **rule at the boundary** — between the last bar of one run and the first bar of
+the next. Three things about the mark, and each of them is a decision:
+
+- **It is a rule, not a colour.** Gold already means *a stage opened on this bar*.
+  Giving it a second meaning would make one bar say two things, and the two events are
+  not alike: a promotion happens *on* a stretch, and a mode is a property of every
+  stretch on one side of the line.
+- **It marks the boundary, not the run.** Recolouring every gilded bar would be a second
+  encoding of the same fact and would swamp the promotions. One rule says everything the
+  player needs: *from here, a different question*.
+- **It is never drawn at the left edge of the window.** A boundary is a disagreement
+  between two neighbours, and the first bar shown has nothing to its left to disagree
+  with. Marking it would claim a switch that may have happened weeks ago, or never.
+
+And it is **said, not left to be inferred**, in the same register and the same three
+places as the promotion dip: on the report card of the stretch that follows the switch,
+beside the marked row in the history, and under the chart in the menu. The wording says
+what changed — *the question moved, rather than your hands* — because "these numbers are
+not comparable" is a fact about the chart and not something a player can act on.
+
+**The mode is the only thing marked this way, for now.** Letting mistakes stand
+([ADR 0010](../decisions/0010-mistakes-may-stand-and-be-deleted.md)) also moves WPM a
+little — a repair costs the seconds it takes — but it changes how a stretch is *typed*
+rather than what the stretch *asks for*, and the effect is nothing like the near-doubling
+gilding produces. A second mark for a much smaller effect would make the first one
+quieter. Worth revisiting if the curve ever shows a step across one.
+
 ## Resuming
 
 The record holds a **bookmark**: translation, book, chapter and the verse to resume on.

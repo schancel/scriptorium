@@ -148,12 +148,67 @@ export interface TypingState {
    * gate structurally unable to see them.
    */
   readonly gilded: number;
+  /**
+   * The standing mode: a wrong key leaves its letter in the expected letter's
+   * cell, the cursor advances, and backspace removes it and steps back.
+   *
+   * Off by default, and off is exactly today's behaviour -- a wrong key holds
+   * the cursor and nothing is left on the page. It rides here beside `gilding`
+   * for the same reason `gilding` does: `applyKey`, `deleteBack` and `tick`
+   * must agree about it on every frame, and it is a statement about the person
+   * at the keyboard rather than about the passage.
+   *
+   * It is its *own* setting and not part of gilding. Typing every letter and
+   * correcting your own mistakes are different requests, and someone may
+   * reasonably want the second without the first. See
+   * docs/decisions/0010-mistakes-may-stand-and-be-deleted.md.
+   */
+  readonly standing: boolean;
+  /**
+   * The wrong character struck at a cell, by glyph index, and not taken back.
+   *
+   * Two jobs, and they are the same fact read twice:
+   *
+   *  - In the standing mode this is what the page *shows*: the letter he
+   *    actually typed, sitting in the cell the right one wanted, marked wrong.
+   *    That is what makes backspace meaningful -- there is something on screen
+   *    to delete. `core/draw.ts` draws these and only these.
+   *  - In **both** modes it is what says a word was not typed clean, which is
+   *    what fells a monster and what does not. See
+   *    docs/design/03-pacing.md#a-monster-is-felled-by-a-clean-word-not-by-any-word.
+   *
+   * An entry is removed by exactly one thing: a backspace over that cell. In
+   * the blocking mode, where backspace does nothing, an entry therefore stands
+   * for the rest of the passage -- which is right, because a word fumbled and
+   * then typed correctly was still not typed clean. In the standing mode a
+   * repair really does take it back, which is the owner's ruling: the WPM lost
+   * while repairing is penalty enough.
+   */
+  readonly faults: Readonly<Record<number, string>>;
+  /**
+   * Correct characters taken back off the page by backspace.
+   *
+   * Accuracy counts every keypress and never unwinds one -- `keystrokes`,
+   * `correct` and `keyStats` are cumulative, so nothing a backspace does can
+   * hide an error. But WPM is a count of the page: a character deleted is a
+   * character not standing on it, and without this a player who backspaced over
+   * four correct letters and retyped them would be credited with eight. So the
+   * two questions are answered by two numbers, and this is the second.
+   */
+  readonly deleted: number;
   /** Time spent typing this passage. */
   readonly elapsedMs: number;
   /** Time since the last keystroke; drives the blot-cloud. */
   readonly sinceKeyMs: number;
   readonly keyStats: Readonly<Record<Key, KeyStat>>;
-  /** True when the last keystroke was wrong; the cursor is held. */
+  /**
+   * True when the last keystroke was wrong and the cursor is held.
+   *
+   * Only ever true in the blocking mode. In the standing mode a wrong key
+   * advances the cursor, so there is nothing being held and the caret must not
+   * say there is -- what shows the mistake there is the letter left standing in
+   * the cell, which is a mark on the page rather than a state of the cursor.
+   */
   readonly blocked: boolean;
 }
 

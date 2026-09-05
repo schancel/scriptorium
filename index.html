@@ -151,6 +151,8 @@
   #menu-history { margin: 0; padding: 0; list-style: none; font-size: .85rem; max-height: 12rem; overflow: auto; }
   #menu-history li { display: flex; gap: .6rem; padding: .12rem 0; border-bottom: 1px solid rgba(122, 107, 80, .18); }
   #menu-history li.promoted { color: var(--gold); border-bottom-color: rgba(240, 180, 41, .35); }
+  /* The same boundary in the list: a rule above the first row of the new run. */
+  #menu-history li.switched { border-top: 1px solid var(--dim); }
   #menu-history .when { color: var(--dim); min-width: 6.5rem; }
   #menu-history .what { flex: 1; }
   #menu-history .how { font-variant-numeric: tabular-nums; }
@@ -210,6 +212,11 @@
   #hands-curve { display: flex; align-items: flex-end; gap: 2px; height: 4rem; margin: .6rem 0 .2rem; }
   #hands-curve i { flex: 1; min-width: 2px; background: rgba(200, 189, 166, .45); border-radius: 1px 1px 0 0; }
   #hands-curve i.promoted { background: var(--gold); }
+  /* Where what the page asks for changed. A rule on the left edge of the first
+     bar of the new run, so it divides two stretches rather than marking one --
+     gold already means "a stage opened here" and a second meaning for it would
+     make one bar say two things. docs/design/08-stats.md#history */
+  #hands-curve i.switched { box-shadow: -2px 0 0 var(--dim); margin-left: 2px; }
   #hands-advice { color: var(--gold); }
   .file input { display: none; }
   .file { cursor: pointer; border: 1px solid var(--dim); border-radius: .3em; padding: .3em .7em; color: var(--bright); }
@@ -277,7 +284,10 @@
     </p>
     <p class="dim">
       Either answer is fine and this is the only time you will be asked. The
-      menu has the switch from now on, under <i>Typing the dim letters</i>.
+      menu has the switch from now on, under <i>Typing the dim letters</i> —
+      and beside it, under <i>When you hit the wrong key</i>, is the other
+      setting for people who already type: let a wrong letter stand and take it
+      back with backspace. Neither turns the other on.
     </p>
     <div class="row">
       <button id="gild-yes" class="primary" type="button">Turn gilding on</button>
@@ -470,6 +480,34 @@
       not taught turn gold as you type them, and gilding every verse in a stretch
       earns gold leaf, which multiplies your score for the rest of the chapter. It does not
       move your stage — a stage opens on the keys it teaches, in either mode.
+    </p>
+
+    <!-- Its own setting, and next door to gilding rather than folded into it.
+         The two serve the same person and are different axes: typing every
+         letter and correcting your own mistakes are different requests, and
+         somebody may want the second without the first. They sit together so
+         whoever wants one finds the other. ADR 0010. -->
+    <h3>When you hit the wrong key</h3>
+    <div class="row">
+      <label>Wrong keys
+        <select id="menu-mistakes">
+          <option value="block">Nothing moves until you get it right</option>
+          <option value="stand">The letter stands — backspace to fix it</option>
+        </select>
+      </label>
+    </div>
+    <p class="dim">
+      By default a wrong key does not move you along: the cursor waits where it
+      is until you type the letter the page is asking for. If you are still
+      learning where the keys are, leave it there — it stops you typing a whole
+      wrong word without noticing.
+    </p>
+    <p class="dim">
+      The other setting is what every other keyboard does. The letter you
+      actually typed stands in the cell, marked wrong, and the cursor carries
+      on; <b>backspace</b> takes it back and steps you onto it again. Your
+      accuracy counts every key you press either way, so nothing is hidden by
+      it.
     </p>
 
     <!-- The one pressure in the game, and the switch that turns it off.

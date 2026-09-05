@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import type { Glyph, KeyStat, Stage, Tuning } from './types.js';
 import {
-  applyKey, askedFor, atEnd, createTypingState, gildScore, median, score, tick,
+  applyKey, askedFor, atEnd, cleanRange, createTypingState, deleteBack, gildScore, median,
+  score, tick,
 } from './typing.js';
 import { classify } from './illumination.js';
 import { evaluateGate, keySetFor, loadStages } from './curriculum.js';
@@ -545,4 +546,200 @@ test('gilding still snaps past a character no keyboard can make', () => {
   const after = applyKey(state, 'a', tuning);
   assert.equal(after.cursor, 2, 'the em dash was not snapped past');
   assert.equal(atEnd(applyKey(after, 's', tuning)), true);
+});
+
+
+// --- mistakes may stand, and be deleted -------------------------------------
+//
+// docs/decisions/0010-mistakes-may-stand-and-be-deleted.md. An opt-in mode, off
+// by default, in which a wrong key leaves its letter in the expected letter's
+// cell and backspace removes it. The default is unchanged, and the first test
+// in this file is what proves it: a wrong key still holds the cursor.
+
+/** The same passage, in the standing mode. */
+function standing(text: string, stage = 0): ReturnType<typeof createTypingState> {
+  return createTypingState(at(stage, text), false, true);
+}
+
+test('OFF, NOTHING CHANGES AND BACKSPACE DOES NOTHING AT ALL', () => {
+  // The beginner's game, byte for byte. "A wrong key doesn't move you along"
+  // has to stay true word for word, or the first run is lying to him.
+  const start = createTypingState(at(0, 'fjf'));
+  const wrong = applyKey(start, 'j', tuning);
+  assert.equal(wrong.cursor, start.cursor, 'the cursor is still held');
+  assert.equal(wrong.blocked, true);
+
+  const back = deleteBack(wrong);
+  assert.deepEqual(back, wrong, 'backspace is inert with the mode off');
+
+  const right = applyKey(wrong, 'f', tuning);
+  assert.deepEqual(deleteBack(right), right, 'even over a correct character');
+  assert.equal(right.deleted, 0);
+});
+
+test('ON, THE WRONG LETTER STANDS IN THE CELL AND THE CURSOR MOVES ON', () => {
+  const start = standing('fjf');
+  const wrong = applyKey(start, 'k', tuning);
+
+  assert.equal(wrong.cursor, start.cursor + 1, 'the cursor advanced');
+  assert.equal(wrong.blocked, false, 'nothing is being held, so nothing says it is');
+  assert.equal(wrong.faults[0], 'k', 'what he actually typed is on the page');
+  // Charged exactly as it always was. Nothing is hidden by letting it stand.
+  assert.equal(wrong.keystrokes, 1);
+  assert.equal(wrong.correct, 0);
+  assert.equal(wrong.keyStats['f']?.errors, 1);
+  assert.equal(wrong.keyStats['f']?.confusions['k'], 1);
+
+  // And the cell it advanced onto is the next one, asked for as normal.
+  const on = applyKey(wrong, 'j', tuning);
+  assert.equal(on.correct, 1);
+  assert.equal(on.cursor, 2);
+});
+
+test('BACKSPACE REMOVES IT AND STEPS BACK, AS IN ANY TEXT FIELD', () => {
+  const wrong = applyKey(standing('fjf'), 'k', tuning);
+  const back = deleteBack(wrong);
+
+  assert.equal(back.cursor, 0, 'the cursor is back on the cell it left');
+  assert.equal(back.faults[0], undefined, 'and the cell is empty again');
+  // The error is not unwound. Accuracy counts every keypress; a backspace that
+  // could erase one would make the number a lie.
+  assert.equal(back.keystrokes, wrong.keystrokes);
+  assert.equal(back.keyStats['f']?.errors, 1);
+
+  const made = applyKey(back, 'f', tuning);
+  assert.equal(made.correct, 1);
+  assert.equal(made.cursor, 1);
+  // Two keypresses, one of them right. The mistake is still in the number.
+  assert.equal(score(made, tuning).accuracy, made.correct / made.keystrokes);
+});
+
+test('backspace over a correct character takes it off the page, not out of accuracy', () => {
+  // The fluent case: he mistypes, types on, notices two letters later, and
+  // fires backspace three times. It has to walk back over correct characters or
+  // it stops working exactly where it is needed.
+  let state = standing('fjf');
+  state = applyKey(state, 'f', tuning);
+  state = applyKey(state, 'j', tuning);
+  assert.equal(state.cursor, 2);
+
+  const one = deleteBack(state);
+  assert.equal(one.cursor, 1);
+  assert.equal(one.deleted, 1);
+  assert.equal(one.correct, 2, 'both keys really were struck correctly');
+  assert.equal(one.keystrokes, 2, 'and a backspace is not an attempt at a character');
+
+  const two = deleteBack(one);
+  assert.equal(two.cursor, 0);
+  assert.equal(two.deleted, 2);
+
+  // At the start of the passage there is nothing left to take back.
+  assert.deepEqual(deleteBack(two), two);
+});
+
+test('WPM COUNTS THE PAGE AND ACCURACY COUNTS THE KEYS', () => {
+  // Without `deleted`, backspacing over four correct letters and retyping them
+  // would credit the player with eight characters of page -- which is the same
+  // lie in the other direction as letting a backspace erase an error.
+  const glyphs = at(0, 'fff');
+  let state = createTypingState(glyphs, false, true);
+  const gapMs = tuningValue(tuning, 'gate_latency_floor_ms');
+  for (const glyph of glyphs) {
+    state = applyKey(tick(state, gapMs), glyph.ch, tuning);
+  }
+  const straight = score(state, tuning);
+
+  // Now take two back and retype them: more keys pressed, the same page.
+  let repaired = deleteBack(deleteBack(state));
+  for (let i = 0; i < 2; i += 1) {
+    repaired = applyKey(tick(repaired, gapMs), 'f', tuning);
+  }
+  assert.equal(repaired.correct - repaired.deleted, glyphs.length,
+    'the same page, however many keys it took'); // tuning-exempt: a fixture length
+  assert.equal(repaired.keystrokes, glyphs.length + 2,
+    'every keypress counted, the two retypes included'); // tuning-exempt: a fixture length
+  assert.ok(
+    score(repaired, tuning).wpm < straight.wpm,
+    'the repair cost time and nothing else -- which the owner ruled is penalty enough',
+  );
+  assert.equal(atEnd(repaired), true);
+});
+
+test('the cursor walks back over an untaught run exactly as it walked forward', () => {
+  // "Dim letters are not a complication." The wrong character occupies the
+  // expected character's cell; the cursor then skips the dim run as it always
+  // does, and backspace walks back over it symmetrically.
+  const glyphs = at(1, 'a q s');
+  assert.ok(glyphs.some((g) => !g.live), 'the fixture has no untaught character in it');
+
+  let state = createTypingState(glyphs, false, true);
+  const forward: number[] = [state.cursor];
+  while (!atEnd(state)) {
+    const glyph = state.glyphs[state.cursor];
+    if (glyph === undefined) break;
+    state = applyKey(state, glyph.ch, tuning);
+    forward.push(state.cursor);
+  }
+
+  const backward: number[] = [state.cursor];
+  let back = state;
+  for (;;) {
+    const next = deleteBack(back);
+    if (next.cursor === back.cursor) break;
+    back = next;
+    backward.push(back.cursor);
+  }
+  assert.deepEqual(backward, [...forward].reverse().slice(0, backward.length));
+  assert.equal(back.cursor, forward[0]);
+});
+
+test('a passage can be finished with a mistake still standing in it', () => {
+  // Mistakes may *stand*. Nothing about leaving one there can wall the player
+  // in, which is the difference between an opt-in mode and a second gate.
+  let state = standing('fj');
+  state = applyKey(state, 'k', tuning);
+  state = applyKey(state, 'j', tuning);
+  assert.equal(atEnd(state), true);
+  assert.equal(state.faults[0], 'k');
+});
+
+// --- what fells a monster ----------------------------------------------------
+//
+// docs/design/03-pacing.md#a-monster-is-felled-by-a-clean-word-not-by-any-word
+
+/** Glyphs in each word of the `fj fj` fixture below. */
+const WORD = 'fj'.length;
+
+test('A CLEAN WORD IS CLEAN AND A FUMBLED ONE IS NOT, IN EITHER MODE', () => {
+  const blocking = applyKey(createTypingState(at(0, 'fj fj')), 'k', tuning);
+  assert.equal(cleanRange(blocking.faults, 0, WORD), false, 'the fumbled word');
+  assert.equal(cleanRange(blocking.faults, WORD + 1, WORD + 1 + WORD), true,
+    'and not the next one');
+
+  // Blocking has no way to take it back, so the fumble stands for good: he
+  // types the right letter, the cursor moves on, and the word is still not one
+  // he typed clean.
+  const made = applyKey(blocking, 'f', tuning);
+  assert.equal(cleanRange(made.faults, 0, WORD), false);
+});
+
+test('A WORD REPAIRED WITH BACKSPACE STILL FELLS THE MONSTER', () => {
+  // The owner's ruling, and it overrides the design doc where they disagree:
+  // the WPM lost while repairing is penalty enough.
+  let state = standing('fj fj');
+  state = applyKey(state, 'k', tuning);
+  assert.equal(cleanRange(state.faults, 0, WORD), false, 'a mistake is standing in it');
+  state = deleteBack(state);
+  assert.equal(cleanRange(state.faults, 0, WORD), true, 'and now it is not');
+  state = applyKey(state, 'f', tuning);
+  state = applyKey(state, 'j', tuning);
+  assert.equal(cleanRange(state.faults, 0, WORD), true, 'the whole word, typed and made good');
+});
+
+test('a mistake on the space between two words belongs to neither of them', () => {
+  const state = applyKey(applyKey(applyKey(standing('fj fj'), 'f', tuning), 'j', tuning), 'x', tuning);
+  assert.equal(state.faults[WORD], 'x', 'it is on the separator');
+  assert.equal(cleanRange(state.faults, 0, WORD), true, 'the word behind it is clean');
+  assert.equal(cleanRange(state.faults, WORD + 1, WORD + 1 + WORD), true,
+    'and so is the word ahead');
 });

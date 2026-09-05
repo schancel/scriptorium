@@ -41,11 +41,13 @@ import {
 import { loadTuning, tuningValue } from '../../core/tuning.js';
 import { keySetFor, loadStages, stageAt } from '../../core/curriculum.js';
 import { classify } from '../../core/illumination.js';
-import { applyKey, atEnd, createTypingState, gildScore, score, tick } from '../../core/typing.js';
+import {
+  applyKey, atEnd, cleanRange, createTypingState, deleteBack, gildScore, score, tick,
+} from '../../core/typing.js';
 import { CELL_W, createRail, layoutRail, stepRail } from '../../core/rail.js';
 import {
-  animScale, cameraLerp, isHeldWord, reducedMotion, travelledTotal, travelledWords,
-  type MotionSetting,
+  animScale, cameraLerp, deferredWords, isHeldWord, reducedMotion, travelledTotal,
+  travelledWords, type MotionSetting,
 } from '../../core/motion.js';
 import {
   VIRTUAL_W, drawFrame, reportAdvice, reportCard, reportNote, reportTrend, sceneLayout,
@@ -119,6 +121,7 @@ import {
   setCloudEnabled,
   setMotion,
   setGilding,
+  setMistakesStand,
   setStage,
   shouldOfferGilding,
   withGildOffered,
@@ -439,6 +442,21 @@ function wordProgress(breaks: readonly number[], cursor: number, count: number):
 }
 
 /**
+ * The half-open glyph range one word occupies.
+ *
+ * The word's own characters and not the space after it: `breaks` holds the
+ * index of each separator, so word `w` runs from just after the previous
+ * separator up to its own. That boundary matters, because a mistake struck on
+ * the space *between* two words belongs to neither of them -- and charging it
+ * to the word behind would fell nothing for a slip the player made after he had
+ * finished writing it.
+ */
+function wordSpan(breaks: readonly number[], word: number, count: number): [number, number] {
+  const start = word === 0 ? 0 : (breaks[word - 1] ?? -1) + 1;
+  return [start, breaks[word] ?? count];
+}
+
+/**
  * For every word in the ribbon, whether the verse it sits in stands still.
  *
  * A held scene does not translate the camera -- "the serpent and the woman are
@@ -655,6 +673,13 @@ interface Level {
   readonly stage: number;
   /** Whether this part was built in gilding mode; fixed for its lifetime. */
   readonly gilding: boolean;
+  /**
+   * Whether this part was built with mistakes standing; fixed for its lifetime,
+   * for the same reason `gilding` is -- the mode a part was opened in is the
+   * mode it is played in, or a switch taken mid-verse would change what the
+   * cursor does halfway through a word.
+   */
+  readonly standing: boolean;
   readonly layout: KeyboardLayout;
   readonly spaceThumb: Thumb;
   typing: TypingState;
@@ -735,6 +760,16 @@ interface Level {
    */
   strikes: Strike[];
   /**
+   * The camera's target, in words, at the moment the blow now playing began --
+   * or null when nothing is playing.
+   *
+   * Set on the keystroke that starts the first strike of a burst, cleared when
+   * the last of them is spent. It is a value the word count produced rather
+   * than a clock reading, which is what keeps the camera word-driven while it
+   * stands still for a blow. See `cameraTarget`.
+   */
+  strikeHold: number | null;
+  /**
    * The PRNG state the drop rolls draw from.
    *
    * Its own stream, seeded from the passage, so which monsters leave an ink pot
@@ -795,7 +830,7 @@ function versePosition(level: Level): number {
 
 /**
  * Where the camera wants to be: one stride per *travelled* word behind the
- * cursor.
+ * cursor, less whatever a blow landing has deferred.
  *
  * Travelled rather than typed, because a word finished inside a held scene moves
  * the tableau instead of the world. Subtracting them as they happen is what
@@ -803,11 +838,23 @@ function versePosition(level: Level): number {
  * camera and releasing it -- would jump a whole conversation's worth of
  * landscape in one frame.
  * See docs/design/05-scenery-warps.md#held-scenes-not-every-passage-is-a-journey.
+ *
+ * And deferred while a blow is landing, which is `level.strikeHold`. The scribe
+ * leaps from a fixed screen column toward a monster whose column the camera
+ * decides, so a camera still closing on it eats the leap: at speed the world
+ * takes a stride out from under a 460 ms hop and 36 px of blow draws as about
+ * ten. Nothing here advances on a clock -- `deferredWords` can only hold the
+ * target still, never move it, and the travel released when the blow is over is
+ * the travel the player typed.
+ * See docs/design/03-pacing.md#the-camera-must-not-eat-the-leap.
  */
 function cameraTarget(level: Level): number {
-  return travelledWords(
-    level.held,
-    wordProgress(level.breaks, level.typing.cursor, level.glyphs.length),
+  return deferredWords(
+    travelledWords(
+      level.held,
+      wordProgress(level.breaks, level.typing.cursor, level.glyphs.length),
+    ),
+    level.strikeHold,
   ) * WORLD_STRIDE;
 }
 
@@ -926,6 +973,12 @@ function frameFor(
     spaceThumb: level.spaceThumb,
     keySet: level.keySet,
     gilding: level.gilding,
+    // What he actually typed, where the right letter wanted to be. Both halves
+    // are handed over: the mode gates the drawing, and the marks themselves are
+    // kept in either mode because they are also what says a word was not typed
+    // clean. See docs/decisions/0010-mistakes-may-stand-and-be-deleted.md.
+    standing: level.standing,
+    faults: level.typing.faults,
     points,
     // The record's memory, not the part's. The card reads the hands over every
     // part the player has typed -- a hundred and fifty keystrokes spread over
@@ -1278,7 +1331,7 @@ async function boot(): Promise<void> {
     const resumeAt = firstOwedAt(
       glyphs, offsetOfUnit(verseAt, Math.max(chunk.first, at.unit)), progress.gilding,
     );
-    const base = createTypingState(glyphs, progress.gilding);
+    const base = createTypingState(glyphs, progress.gilding, progress.mistakesStand);
     const opened = resumeAt <= base.cursor ? base : { ...base, cursor: resumeAt };
     // A flashback return names the cursor outright. It is clamped rather than
     // trusted: the frame is the player's, but the ribbon is rebuilt, and a
@@ -1313,6 +1366,7 @@ async function boot(): Promise<void> {
       keySet: [...keySet],
       stage: progress.stage,
       gilding: progress.gilding,
+      standing: progress.mistakesStand,
       layout: progress.layout,
       spaceThumb: progress.spaceThumb,
       typing,
@@ -1345,6 +1399,7 @@ async function boot(): Promise<void> {
       ).filter((m) => m.word === null || m.word >= wordsDone(breaks, typing.cursor)),
       scribe: createEntity('scribe', 'scribe', layout.scribeX, layout.groundY - SPRITE_SIZE),
       strikes: [],
+      strikeHold: null,
       dropRng: seedFrom(`${where} drops`),
       // The camera opens where the cursor already is, so resuming mid-part does
       // not scroll the whole passage past the player before it settles.
@@ -1451,6 +1506,12 @@ async function boot(): Promise<void> {
         completed: lastChunk ? `${level.bookTitle} ${String(level.chapter)}` : null,
         stageKeys: stageKeysAt(level.stage),
         promoted: false,
+        // Which mode this stretch was typed in, so the curve can mark where the
+        // question changed. It is `level.gilding` and not `progress.gilding`:
+        // the part on screen was built in whatever mode was on when it opened,
+        // and a switch taken at the menu mid-part must not relabel the verses
+        // that were typed before it.
+        gilding: level.gilding,
       },
       tuning,
     );
@@ -2229,6 +2290,7 @@ async function boot(): Promise<void> {
       stage: progress.stage,
       stages: stages.map((s) => ({ stage: s.stage, description: s.description })),
       gilding: progress.gilding,
+      mistakesStand: progress.mistakesStand,
       where:
         `${chunkRef(level.bookTitle, level.chapter, level.chunk)} · ` +
         `${editionName(progress.translation)}`,
@@ -2438,6 +2500,31 @@ async function boot(): Promise<void> {
       // In particular the ribbon does not have to be moved -- its target is the
       // cursor's column in both presentations, which is the invariant.
     },
+    /**
+     * Wrong keys stand, or wrong keys block.
+     *
+     * Like the stage and the keyboard, it changes what the part in front of him
+     * *is*, so the part is rebuilt in place rather than switched under a cursor
+     * halfway through a word. He keeps the verse he was on -- `hereOptions`
+     * reopens the room he is standing in, if he is standing in one.
+     */
+    setMistakesStand: (on) => {
+      progress = setMistakesStand(progress, on);
+      saveProgress(progress);
+      // The typing state carries the mode, so the part is rebuilt for it to take
+      // effect -- and the menu stays open behind it, exactly as the gilding
+      // switch beside it does. Two controls that sit next to each other and
+      // behave differently would be the menu contradicting itself.
+      goTo(
+        { book: level.bookTitle, chapter: level.chapter, unit: verseUnder(level) },
+        (message) => {
+          overlay.showError(message);
+        },
+        false,
+        hereOptions(),
+      );
+      overlay.openMenu(menuView());
+    },
     setCloud: (enabled) => {
       progress = setCloudEnabled(progress, enabled);
       saveProgress(progress);
@@ -2600,6 +2687,20 @@ async function boot(): Promise<void> {
     }
     if (event.type === 'command') {
       if (event.value === 'escape') openMenu();
+      // Backspace. It reached this handler and was dropped on the floor here,
+      // which is what "swallowed as a non-curriculum key" meant: the browser
+      // never saw it and neither did the game. It is let through now, and
+      // `deleteBack` decides what it means -- nothing at all with the mode off,
+      // and the ordinary repair a text field would make with it on.
+      //
+      // Nothing else runs on it. It scores nothing, fells nothing, charges
+      // nothing and drives the cloud back not at all: it is not an attempt at a
+      // character, it is the player taking one back.
+      // docs/decisions/0010-mistakes-may-stand-and-be-deleted.md
+      if (event.value === 'backspace') {
+        level.typing = deleteBack(level.typing);
+        bookmark();
+      }
       // The doorway. Tab steps through one standing open, and steps back out of
       // a room already entered. Walking past it is typing on, which costs
       // nothing at all -- see `skipFlashback`.
@@ -2678,6 +2779,22 @@ async function boot(): Promise<void> {
     for (let word = from; word < to; word += 1) {
       const standing = monstersAt(level.monsters, word);
       if (standing.length === 0) continue;
+      // A monster is felled by a *clean* word. A word with a mistake still
+      // standing in it leaves it where it is and the scribe walks past.
+      //
+      // The crucial half is what does not happen here. There is no else branch:
+      // nothing blocks, nothing chases, nothing is charged and nothing is said.
+      // What he loses is a reward he did not earn, which is not a penalty, and
+      // that difference is the whole of ADR 0004. The monster still bobbing
+      // where he left it is the entire feedback.
+      //
+      // A mistake taken back with backspace is not a mistake standing in the
+      // word: `deleteBack` has already removed it, and the owner's ruling is
+      // that a word repaired that way still fells. The WPM lost while repairing
+      // is penalty enough.
+      // docs/design/03-pacing.md#a-monster-is-felled-by-a-clean-word-not-by-any-word
+      const [wordFrom, wordTo] = wordSpan(level.breaks, word, level.glyphs.length);
+      if (!cleanRange(level.typing.faults, wordFrom, wordTo)) continue;
       const drops = new Set<string>();
       for (const monster of standing) {
         // From the level's own seeded stream, never `Math.random`: the same
@@ -2713,6 +2830,20 @@ async function boot(): Promise<void> {
       // the throw were the same event when the whole point of the pair is that
       // they are not.
       for (const felled of struck.defeated) {
+        // The camera stands still for the length of the blow. Taken here and
+        // only here, from the word count this very keystroke produced, so the
+        // world is deferred by something the player typed rather than paused by
+        // a clock. The earliest blow of a burst owns the hold: a second strike
+        // beginning over the first must not restart it, or a fast typist would
+        // hold the camera indefinitely.
+        // docs/design/03-pacing.md#the-camera-must-not-eat-the-leap
+        // Where the world *actually stands* this frame, in words -- not where it
+        // was heading. Freezing the target alone would leave the camera still
+        // easing across the stride it was already carrying, which is most of a
+        // hop at the rate it closes, so the gap would go on shrinking under the
+        // blow. Frozen here, the target is the position, the easing has nothing
+        // left to close, and the leap crosses the gap it was given.
+        if (level.strikes.length === 0) level.strikeHold = level.cameraX / WORLD_STRIDE;
         const strike = beginStrike(felled);
         level.strikes.push(strike);
         cues.push(strike.verb);
@@ -2868,6 +2999,11 @@ async function boot(): Promise<void> {
       // verb's duration is spent. It can start one no more than it can end a
       // monster: only `resolveDefeats` does either.
       level.strikes = stepStrikes(level.strikes, dtMs, tuning);
+      // The blow is over, so the deferred travel is released and the camera
+      // eases across whatever was typed while it was landing. Nothing is
+      // invented here: the target it goes back to is the same word count it
+      // always was.
+      if (level.strikes.length === 0) level.strikeHold = null;
       stepThreat(dtMs);
       // Word-driven, and only word-driven: the target is a function of how many
       // words are behind the cursor, and this only eases toward it.

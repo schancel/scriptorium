@@ -98,51 +98,104 @@ alone.
     is a picture of. It is also the first row in the table that has ever *meant* the abbey
     rather than fallen back to it, so it is worth looking at once on the screen.
     → `docs/design/05-scenery-warps.md#john-20-a-tomb-that-becomes-a-garden`
-
+17. **Should letting mistakes stand be marked on the curve too?** Gilding is marked now,
+    because it changes what the page *asks for* and the step across it is nearly a
+    doubling. Letting mistakes stand changes how a stretch is *typed* -- a repair costs
+    the seconds it takes -- and the effect on WPM is much smaller. A second mark for a
+    much smaller effect would make the first one quieter, so it is not marked. Worth
+    revisiting the first time the curve shows a step across one.
+    → `docs/design/08-stats.md#the-mode-is-marked-on-the-curve-because-a-mode-change-is-not-progress`
+18. **The earned fade-out now removes the key and reads a lifetime.** It used to remove
+    only the *highlight*, and it was judged over the part in front of the player -- a
+    hundred and fifty keystrokes across nine fingers, which is under `mastery_min_samples`
+    on most of them, so in practice almost nothing ever retired and what did came back at
+    the top of the next stretch. Both halves changed together, because the lectern has
+    nothing to fill without them. It is the right reading of "the crutch removes itself
+    key by key, as it is earned", and it is also a bigger change to what a returning
+    player sees than either half sounds. Worth one look on the screen.
+    → `docs/design/06-curriculum.md#breaking-the-looking-down-habit`
+19. **The lectern has not been seen.** Every rule about it is asserted -- below the rail,
+    never gold, nothing said, nothing moving without a keystroke, the page filling as the
+    stretch is copied -- and none of that is a claim that it *looks* like a man at a desk.
+    It is drawn from rects at band scale rather than from the 16px sprite, which is the
+    only way to fill 130 px of band, and the composition is a guess made without a screen.
+    → `docs/design/02-rail.md#how-it-arrives-and-how-it-is-drawn`
 
 ## Agreed, specified, not yet built
 
 All of these came out of the owner playing it. Each has its reasoning written down in the
 place named, so none of this depends on remembering a conversation.
 
-1. **Mistakes may stand, and be deleted.** An opt-in mode, off by default, where a wrong
-   key leaves its letter in the expected letter's cell, the cursor advances, and
-   backspace removes it and steps back. Backspace is currently swallowed as a
-   non-curriculum key and must be let through.
-   → `docs/decisions/0010-mistakes-may-stand-and-be-deleted.md`
-   **Owner's ruling:** a word repaired with backspace *still fells the monster*. The WPM
-   lost while repairing is penalty enough; there is no need to invent another.
-2. **A monster is felled by a clean word, not by any word.** A word with a mistake in it
-   leaves the monster standing and the scribe walks past. Nothing blocks, chases or
-   costs — the monster still standing is the whole of the feedback. Every mode.
-   → `docs/design/03-pacing.md#a-monster-is-felled-by-a-clean-word-not-by-any-word`
-3. **The camera eats the leap at speed.** The world scrolls 24px per completed word while
-   a 460ms hop is still playing, so a fast typist sees the scribe travel about 10px of
-   his designed 36. This is the real cause of *"you just stand on top of them for a bit"*
-   and no value of `strike_hop_px` fixes it. The fix is for the camera to hold still
-   while a strike plays, which is a change to load-bearing behaviour — the camera being
-   purely word-driven — and so wants deciding rather than slipping in.
-   → measured in `docs/design/03-pacing.md`
-4. **Finishing a passage offers the thread it leads to.** Taking a thread requires
+1. **Finishing a passage offers the thread it leads to.** Taking a thread requires
    opening the map, so a player can finish Genesis 1, read onward, and never learn the
    map or the threads exist. The offer names the echo — *John 1 opens by quoting this* —
    and is declined by carrying on reading. It is an offer and not a fork: reading onward
    stays the default and nothing is lost by ignoring it. Decided, not built.
    → `docs/decisions/0012-the-route-must-not-skip-the-events.md`
-5. **Followers join at an authored verse, not on finishing a chapter.** The scenery went
+2. **Followers join at an authored verse, not on finishing a chapter.** The scenery went
    verse-precise; followers did not. Adam belongs at Genesis 2:7 where he is formed and
    Eve at 2:24 where she becomes a wife, rather than both arriving when a chapter ends.
    The roster is keyed by chapter today, so this is a column and a join condition, not a
    row edit. Eve is now in the right *chapter*, which is the half of it that was a data
    change. → `docs/decisions/0012-the-route-must-not-skip-the-events.md`
-6. **Mark the mode on the progress curve.** Gilded and non-gilded stretches share one history
-   line with nothing separating them. The owner went from 22 wpm to 75 by switching modes
-   in one sitting; on the curve that draws a cliff which reads as a breakthrough and is
-   not one. Needs a flag on the history entry and a note on the chart, like the
-   promotion mark that already exists.
-   → `docs/design/08-stats.md`
 
 ## Built since the last pass
+
+- **Mistakes may stand, and be deleted.** A second setting, off by default, under
+  *When you hit the wrong key*: the letter he actually typed stands in the cell the right
+  one wanted, marked wrong, the cursor moves on, and **backspace takes it back and steps
+  onto it again**. Backspace was reaching the input handler and being dropped on the
+  floor; it is let through now, and `deleteBack` does nothing at all with the mode off,
+  so the beginner's game and the first run's *"a wrong key doesn't move you along"* are
+  untouched. Accuracy counts every keypress either way -- `keystrokes`, `correct` and
+  `keyStats` never unwind -- and a new `deleted` keeps WPM a count of the *page* rather
+  than of the attempts made on it, so backspacing over four letters and retyping them
+  cannot credit eight. It is its own setting and not part of gilding; they sit next to
+  each other in the menu and the gilding offer names the other one.
+  → `docs/decisions/0010-mistakes-may-stand-and-be-deleted.md`
+- **A monster is felled by a clean word, not by any word.** A word with a mistake standing
+  in it leaves the monster where it is and the scribe walks past. There is no else branch:
+  nothing blocks, nothing chases, nothing is charged and nothing is said, because what he
+  loses is a reward he did not earn. Every mode. **And the owner's ruling is in the doc:**
+  a word repaired with backspace *still fells it*, because the WPM lost while repairing is
+  penalty enough. That makes one rule for both modes -- a monster falls when no mistake
+  stands anywhere in its word -- since blocking has no way to take a mistake back and the
+  standing mode does. The smoke harness types the same opening of the same chapter three
+  times, clean, fumbled and repaired, and counts the blows.
+  → `docs/design/03-pacing.md#a-monster-is-felled-by-a-clean-word-not-by-any-word`
+- **The camera no longer eats the leap.** Measured off the running game at about 190 WPM:
+  the blow crossed **29 px of its 36**, because the world takes a stride out from under a
+  460 ms hop and the monster's column is the camera's to decide. It crosses **42 px** now
+  -- the reach plus the few pixels the camera was behind its own target when the blow
+  landed, held rather than spent. `core/motion.ts` gained `deferredWords`, which returns
+  the *smaller* of the true travelled-word count and where the world stood when the strike
+  began: so it can hold the camera still and has no way to move it, the target is still a
+  pure function of completed words, and stopping mid-blow leaves the world exactly where
+  the blow left it. The smoke harness asserts the parallax does not shift on any frame
+  with a blow in the air. → `docs/design/03-pacing.md#the-camera-must-not-eat-the-leap`
+- **The mode is marked on the progress curve.** Every history entry carries the mode it
+  was typed in, and the chart draws a rule at the boundary between two stretches that
+  disagree -- a rule and not a colour, because gold already means *a stage opened here*
+  and the mode is a property of every bar on one side of the line, not an event. It is
+  said as well as drawn, in the promotion dip's own register and in the same three places.
+  The record is at version 8; every version 7 field is carried across and both new fields
+  default to false, which is what an unmarked stretch honestly means. The owner went 22 →
+  75 → 102 across those switches without typing any faster, and the curve said
+  breakthrough. → `docs/design/08-stats.md#the-mode-is-marked-on-the-curve-because-a-mode-change-is-not-progress`
+- **The scribe at his lectern.** The keyboard band is a scaffold, and a key that has
+  earned its fade-out is no longer *drawn* rather than merely no longer highlighted --
+  judged over the lifetime table, because a stretch of verses is fewer than
+  `mastery_min_samples` on most fingers and a key retired months ago used to come back at
+  the top of every stretch. What is behind the board is the scribe at his lectern, drawn
+  first so the picture is uncovered a key at a time rather than introduced at a threshold:
+  quill pivoting as he writes across the line, a line of the page inked per line of copy,
+  and the page sized to the stretch so its last character is the part's. It is below the
+  rail by construction, it is never gold, nothing announces it, and every shape in it is a
+  function of the cursor -- an hour of frames with nobody typing leaves the quill on the
+  pixel it was drawn on. He is built from rects rather than the 16px sprite because the
+  band is 130 tall, and he is the same scribe because he is the same art roles, resolved
+  through the world he is walking in.
+  → `docs/design/02-rail.md#the-scribe-at-his-lectern`
 
 - **The Bible's default is open country, not a stone cloister.** Measured: **1,159 of
   1,189 chapters -- 97.5% -- resolved to `abbey`**, and 57 of the 66 books had no

@@ -34,14 +34,15 @@ import { tuningValue } from './tuning.js';
 /**
  * Bumped to 2 when `position` and `recent` were added, to 3 for the gilding
  * mode and whether its offer has been made, to 4 for the first run, to 5 for
- * the secret rooms the player has found, and to 6 for whether the blot-cloud is
- * armed. A record at any older version is *migrated*, never discarded: months of
- * a beginner's curve is the one thing in this program that cannot be
- * regenerated.
+ * the secret rooms the player has found, to 6 for whether the blot-cloud is
+ * armed, to 7 for which presentation of the rail he asked for, and to 8 for the
+ * standing mode plus the mode flag every history entry now carries. A record at
+ * any older version is *migrated*, never discarded: months of a beginner's
+ * curve is the one thing in this program that cannot be regenerated.
  *
  * See the version table in docs/architecture/data-schemas.md#progress.
  */
-export const SCHEMA_VERSION = 7;   // tuning-exempt: a schema version, not a tunable
+export const SCHEMA_VERSION = 8;   // tuning-exempt: a schema version, not a tunable
 
 // --- the record -------------------------------------------------------------
 
@@ -73,6 +74,24 @@ export interface HistoryEntry {
    * docs/design/08-stats.md#history requires that be said, not inferred.
    */
   readonly promoted: boolean;
+  /**
+   * Whether this stretch was typed with gilding on.
+   *
+   * The gilded and the ungilded halves of a player's practice used to share one
+   * line with nothing separating them, and they are not comparable: gilding
+   * asks for every character of the page rather than the 46% a stage has
+   * taught, so switching it draws a step in the curve that reads as a
+   * breakthrough and is not one. The owner went from 22 wpm to 75 that way, and
+   * later to 102, by changing what he was being asked for rather than by
+   * getting faster.
+   *
+   * A flag rather than a second history: the two are still one record of one
+   * player's evenings, and splitting them would answer the wrong question --
+   * what the chart is for is *is any of this working*, and the answer runs
+   * across the switch. What the mark says is only that the question changed
+   * here. See docs/design/08-stats.md#history.
+   */
+  readonly gilding: boolean;
 }
 
 export interface Progress {
@@ -165,6 +184,24 @@ export interface Progress {
    */
   readonly cloudEnabled: boolean;
   /**
+   * Whether a wrong key leaves its letter standing and backspace removes it.
+   *
+   * Off by default: for the beginner this game is built for, a wrong key that
+   * does not move him along is a real service, and the first run says so. On,
+   * the mistake stands in the expected letter's cell, the cursor advances, and
+   * backspace steps back over it as it would in any text field -- which is what
+   * a fluent typist's hands already do without being asked.
+   *
+   * Its own setting, and deliberately not folded into `gilding`. They serve the
+   * same population and are different axes: typing every letter and correcting
+   * your own mistakes are different requests, and somebody may reasonably want
+   * the second without the first. Stored rather than held for the session for
+   * the reason `gilding` is -- it is a fact about the person at the keyboard.
+   * It touches nothing else: not the stage, not the window, not the gate.
+   * See docs/decisions/0010-mistakes-may-stand-and-be-deleted.md.
+   */
+  readonly mistakesStand: boolean;
+  /**
    * Which presentation of the rail the player has asked for.
    *
    * `auto` -- the default -- follows the operating system's
@@ -207,6 +244,7 @@ export const DEFAULT_PROGRESS: Progress = {
   firstRun: true,
   notesSeen: [],
   cloudEnabled: true,
+  mistakesStand: false,
   motion: 'auto',
 };
 
@@ -287,6 +325,14 @@ function migrateHistory(value: unknown): readonly HistoryEntry[] {
       wpm: numberOr(raw['wpm'], 0),
       accuracy: numberOr(raw['accuracy'], 0),
       promoted: raw['promoted'] === true,
+      // False unless the entry says otherwise, which is exactly what every
+      // entry written before version 8 meant to whoever reads it now: the mode
+      // existed, the record did not say, and the honest reading of an unmarked
+      // stretch is the default the game ships in. It also keeps the *mark*
+      // honest -- a boundary is only drawn where two entries disagree, so a
+      // whole history of unmarked stretches draws no boundary at all rather
+      // than inventing one at the moment the field appeared.
+      gilding: raw['gilding'] === true,
     });
   }
   return out;
@@ -344,6 +390,11 @@ export function migrate(parsed: unknown): Progress {
     // it off would silently remove the only pressure in the game from every
     // player who has ever played it.
     cloudEnabled: parsed['cloudEnabled'] !== false,
+    // Off unless the record says otherwise, which is what every record written
+    // before version 8 meant: the mode did not exist, so a wrong key blocked.
+    // Requiring an explicit `true` is what stops a migration handing the
+    // beginner's game to somebody who never asked for it.
+    mistakesStand: parsed['mistakesStand'] === true,
     // `auto` unless the record names one of the other two, which is what a
     // version 6 record was getting in effect: nothing consulted the system
     // setting at all, so the player had never been asked and had never chosen.
@@ -506,6 +557,8 @@ export interface SessionResult {
   /** The stage's new keys: the only ones the trailing window retains. */
   readonly stageKeys: readonly Key[];
   readonly promoted: boolean;
+  /** Whether this stretch was typed with gilding on; the history entry keeps it. */
+  readonly gilding: boolean;
 }
 
 /**
@@ -528,6 +581,7 @@ export function recordSession(
     wpm: result.wpm,
     accuracy: result.accuracy,
     promoted: result.promoted,
+    gilding: result.gilding,
   };
   const completed =
     result.completed === null || progress.completed.includes(result.completed)
@@ -576,6 +630,18 @@ export function withDiscovered(progress: Progress, ref: string): Progress {
  */
 export function setGilding(progress: Progress, gilding: boolean): Progress {
   return { ...progress, gilding };
+}
+
+/**
+ * Turn the standing mode on or off.
+ *
+ * A separate switch from `setGilding` and not a flag on it, because the two are
+ * separate axes over the same population -- see the field, and
+ * docs/decisions/0010-mistakes-may-stand-and-be-deleted.md. Like gilding it is
+ * never turned on by the game: offer, never impose.
+ */
+export function setMistakesStand(progress: Progress, mistakesStand: boolean): Progress {
+  return { ...progress, mistakesStand };
 }
 
 /**

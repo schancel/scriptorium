@@ -12,14 +12,17 @@
  *    unidirectional scroll, three parallax layers at differing rates, sustained
  *    for as long as anyone will practise -- and the owner reported the
  *    aftereffect that produces. See docs/decisions/0011-respect-reduced-motion.md.
+ *  - **A blow landing.** The *picture* has asked for it, for the length of one
+ *    strike: a camera still travelling while the scribe leaps takes the gap out
+ *    from under the leap. See `deferredWords`.
  *  - **Held scenes.** The *passage* has asked for the same thing, because
  *    nothing in it travels. The serpent and the woman are talking; sliding a
  *    landscape past that is the game insisting on movement the text does not
  *    have. See
  *    docs/design/05-scenery-warps.md#held-scenes-not-every-passage-is-a-journey.
  *
- * One is a preference and the other is authored in a table, and they end in the
- * same arithmetic, so they live together.
+ * One is a preference, one is authored in a table and one lasts as long as a
+ * blow, and all three end in the same arithmetic, so they live together.
  *
  * ## Nothing here decides anything on a clock
  *
@@ -148,6 +151,43 @@ export function travelledWords(held: readonly boolean[], progress: number): numb
 /** Whether the word at this index sits in a held scene. Out of range is not. */
 export function isHeldWord(held: readonly boolean[], word: number): boolean {
   return held[word] === true;
+}
+
+/**
+ * The camera's target while a blow is landing: travel, deferred.
+ *
+ * `travelled` is the true word-driven target, and `deferredFrom` is what that
+ * same function returned on the keystroke that felled a monster -- or null when
+ * no blow is playing. While a strike runs the camera stands where the blow
+ * started; when the strike list empties it is released and eases across
+ * whatever was typed in the meantime.
+ *
+ * ## Why the camera has to stop at all
+ *
+ * The scribe is drawn at a fixed screen column and the monster's column is
+ * derived from the camera, so a camera moving *toward* the monster during the
+ * hop shortens the gap the hop is crossing. At a beginner's pace the camera has
+ * long since settled and the leap crosses its designed `strike_reach`; at speed
+ * a word lands every ~430 ms against a ~460 ms hop, so the world takes a stride
+ * out from under the blow and the leap draws about ten pixels of its
+ * thirty-six. That is the real cause of the owner's first report on combat --
+ * "you just stand on top of them for a bit" -- and no value of `strike_hop_px`
+ * fixes it, because the number that is wrong is not the height of the leap.
+ *
+ * ## And why this is still not a clock
+ *
+ * The camera being purely word-driven is load-bearing: the world must never
+ * move without the player. Nothing here changes that. `travelled` is a function
+ * of the cursor, `deferredFrom` is a value that function already returned, and
+ * the result is the smaller of the two -- so this can only ever make the camera
+ * *stand still*, never advance. Elapsed time decides when the deferral is
+ * lifted and not one pixel of where the world then goes: the travel released is
+ * the travel the player typed.
+ * See docs/decisions/0004-idle-threat-not-speed-timer.md and
+ * docs/design/03-pacing.md#the-camera-must-not-eat-the-leap.
+ */
+export function deferredWords(travelled: number, deferredFrom: number | null): number {
+  return deferredFrom === null ? travelled : Math.min(travelled, deferredFrom);
 }
 
 /**

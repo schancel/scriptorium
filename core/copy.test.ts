@@ -102,8 +102,8 @@ function stat(over: Partial<KeyStat>): KeyStat {
   return { hits: 0, errors: 0, totalMs: 0, latencies: [], confusions: {}, ...over };
 }
 
-function part(wpm: number, promoted = false): TrendPoint {
-  return { wpm, accuracy: 0.9, promoted }; // tuning-exempt: test fixture
+function part(wpm: number, promoted = false, gilding = false): TrendPoint {
+  return { wpm, accuracy: 0.9, promoted, gilding }; // tuning-exempt: test fixture
 }
 
 /**

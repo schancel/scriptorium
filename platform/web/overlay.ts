@@ -75,6 +75,16 @@ export interface OverlayHandlers {
    */
   setGilding(on: boolean): void;
   /**
+   * The player asked for wrong keys to stand, or to block.
+   *
+   * A separate handler from `setGilding` and not a flag on it, because the two
+   * are separate axes over the same population: typing every letter and
+   * correcting your own mistakes are different requests. Nothing in the game
+   * calls this but the player's own choice -- offer, never impose, exactly as
+   * ADR 0008 established and ADR 0010 inherits.
+   */
+  setMistakesStand(on: boolean): void;
+  /**
    * The player asked to see the opening again.
    *
    * For someone who clicked past it, and for someone handing the game to a
@@ -150,6 +160,11 @@ export interface MenuView {
   readonly stages: readonly { readonly stage: number; readonly description: string }[];
   /** Whether gilding is on. See `OverlayHandlers.setGilding`. */
   readonly gilding: boolean;
+  /**
+   * Whether a wrong key leaves its letter standing and backspace removes it.
+   * See `OverlayHandlers.setMistakesStand`.
+   */
+  readonly mistakesStand: boolean;
   /**
    * Whether the player has reached the last stage the curriculum has.
    *
@@ -294,6 +309,15 @@ const PERCENT = 100;
 /** Most recent sessions shown in the menu. Enough to see a trend, few enough to scan. */
 const HISTORY_SHOWN = 14;
 const PROMOTED_MARK = '▲';
+/**
+ * The mark for a row where the mode changed.
+ *
+ * A rule rather than a second symbol, and deliberately not another triangle:
+ * the triangle means *a stage opened on this row* and is an event, while this
+ * means *the question changed here* and is a boundary between two runs of rows.
+ * See docs/design/08-stats.md#history.
+ */
+const SWITCHED_MARK = '│';
 
 function need<T extends Element>(id: string, kind: new () => T): T {
   const found = document.getElementById(id);
@@ -337,6 +361,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   const motionNote = need('menu-motion-note', HTMLParagraphElement);
   const stageSelect = need('menu-stage-select', HTMLSelectElement);
   const gildingSelect = need('menu-gilding', HTMLSelectElement);
+  const mistakesSelect = need('menu-mistakes', HTMLSelectElement);
   const editionNext = need('menu-edition-next', HTMLParagraphElement);
   const errorLine = need('menu-error', HTMLParagraphElement);
   const resumeButton = need('menu-resume', HTMLButtonElement);
@@ -449,15 +474,33 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
       historyNote.textContent = 'Nothing yet. Finish your first few verses and it lands here.';
       return;
     }
+    // Where what the page asks for changed. Computed over the whole record and
+    // not over the fourteen rows shown, so a boundary is never claimed at the
+    // top of the list merely because the list starts there.
+    const switched = new Set<number>();
+    history.forEach((entry, i) => {
+      const before = history[i - 1];
+      if (before !== undefined && before.gilding !== entry.gilding) switched.add(i);
+    });
+    const shown = history.length - Math.min(history.length, HISTORY_SHOWN);
+    const anySwitch = [...switched].some((i) => i >= shown);
+
     historyNote.textContent =
       `A row marked ${PROMOTED_MARK} opened a stage. Expect the WPM after one to be ` +
       'lower than the WPM before it: a new stage lights up more of the page, so there ' +
       'are more characters to type per verse. That dip is the curriculum moving, not ' +
-      'you going backwards, and it comes back within a few rows.';
+      'you going backwards, and it comes back within a few rows.' +
+      (anySwitch
+        ? ` A row marked ${SWITCHED_MARK} is where you changed what the page asks for. `
+          + 'The rows either side of it are two different jobs, so a step across one is '
+          + 'the question moving rather than your hands.'
+        : '');
 
-    for (const entry of [...history].slice(-HISTORY_SHOWN).reverse()) {
+    [...history].slice(-HISTORY_SHOWN).reverse().forEach((entry, back) => {
+      const index = history.length - 1 - back;
       const row = document.createElement('li');
       if (entry.promoted) row.classList.add('promoted');
+      if (switched.has(index)) row.classList.add('switched');
 
       const when = document.createElement('span');
       when.className = 'when';
@@ -465,9 +508,14 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
 
       const what = document.createElement('span');
       what.className = 'what';
-      what.textContent = entry.promoted
+      const marked = entry.promoted
         ? `${PROMOTED_MARK} ${entry.ref} - stage ${String(entry.stage + 1)} unlocked`
         : entry.ref;
+      what.textContent = switched.has(index)
+        ? `${SWITCHED_MARK} ${marked} - ${entry.gilding
+          ? 'every letter asked for from here'
+          : 'back to the letters your stage teaches'}`
+        : marked;
 
       const how = document.createElement('span');
       how.className = 'how';
@@ -475,7 +523,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
 
       row.append(when, what, how);
       historyList.append(row);
-    }
+    });
   }
 
   /**
@@ -515,6 +563,7 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
       ? 'Your system is asking for reduced movement.'
       : 'Your system is not asking for reduced movement.';
     gildingSelect.value = view.gilding ? 'on' : 'off';
+    mistakesSelect.value = view.mistakesStand ? 'stand' : 'block';
     renderStages(view);
     errorLine.textContent = '';
     renderHistory(view.history);
@@ -783,15 +832,29 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
     // A stretch typed at nought words a minute is not one; the floor keeps the
     // scale off a division by zero without inventing a number for the chart.
     const top = Math.max(1, trend.bestWpm);
-    for (const point of trend.points) {
+    const switchAt = new Set(trend.switches);
+    trend.points.forEach((point, i) => {
       const bar = document.createElement('i');
       if (point.promoted) bar.classList.add('promoted');
+      // The rule stands on the left edge of the first bar of the new run, which
+      // is what makes it read as a division between two stretches rather than
+      // as a mark on one of them.
+      if (switchAt.has(i)) bar.classList.add('switched');
       bar.style.height = `${String(Math.max(2, Math.round((point.wpm / top) * PERCENT)))}%`;
       bar.title = `${String(Math.round(point.wpm))} wpm`;
       handsCurve.append(bar);
-    }
-    handsCurveNote.textContent = trend.parts === 0
-      ? 'Nothing yet. Finish a few verses and it lands here.'
+    });
+    // The mode note goes first when there is one, for the reason the promotion
+    // note goes first on the card: the step across a mode boundary is far larger
+    // than the dip after a promotion, and it is the one a player is most likely
+    // to read as a breakthrough. The owner went from 22 wpm to 75 across one,
+    // and later to 102, without typing any faster.
+    const curveNote = trend.switches.length > 0
+      ? `Your last ${countStretches(trend.points.length)}, oldest first. The rule between `
+        + 'two bars is where you changed what the page asks for. Typing every character '
+        + 'of a verse and typing the characters your stage teaches are two different '
+        + 'jobs, so the step across that line is the question changing rather than your '
+        + 'hands.'
       : trend.promotions > 0
         ? `Your last ${countStretches(trend.points.length)}, oldest first. A gold bar is a `
           + 'stretch that opened a stage: more of the page is lit there, so the same '
@@ -800,6 +863,9 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
         : `Your last ${countStretches(trend.points.length)}, oldest first — `
           + `${String(Math.round(trend.avgWpm))} wpm on average over `
           + `${countStretches(trend.parts)} in all.`;
+    handsCurveNote.textContent = trend.parts === 0
+      ? 'Nothing yet. Finish a few verses and it lands here.'
+      : curveNote;
   }
 
   function showHands(view: HandsView): void {
@@ -988,6 +1054,9 @@ export function createOverlay(handlers: OverlayHandlers): Overlay {
   });
   gildingSelect.addEventListener('change', () => {
     handlers.setGilding(gildingSelect.value === 'on');
+  });
+  mistakesSelect.addEventListener('change', () => {
+    handlers.setMistakesStand(mistakesSelect.value === 'stand');
   });
   stageSelect.addEventListener('change', () => {
     const stage = Number.parseInt(stageSelect.value, 10);

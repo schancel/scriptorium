@@ -366,6 +366,7 @@ ok(!/\bpart\b/i.test(calls.fillText.map((c) => c.v).join(' ')),
 // with its body when it is there, so a figure is counted once either way.
 const TUNING_ROWS = JSON.parse(await readFile(resolve(ROOT, 'data/tuning.json'), 'utf8')).values;
 const SPACING = TUNING_ROWS.follower_spacing_px;
+const STRIKE_REACH = TUNING_ROWS.strike_reach;
 const CAP = TUNING_ROWS.follower_line_max;
 // The scribe stands over the focal point, half a sprite to the left of it.
 const SCRIBE_X = FOCAL - 8;
@@ -426,6 +427,25 @@ const textOf = (li) => li.children.map((c) => String(c.textContent)).join(' | ')
  * into a report card that has already gone and skipping a chunk it never typed.
  * Drive frames and watch the screen instead.
  */
+/**
+ * Let the game's own promises settle.
+ *
+ * Opening a part is asynchronous, and everything in this file that types does
+ * so *synchronously* -- `tick` steps the animation frame by hand and never
+ * yields. So a rebuild the harness has just asked for (a mode change, a stage
+ * change, a new keyboard) is still pending while a thousand keystrokes go into
+ * the level it was meant to replace, and the run measures the game it was
+ * trying to leave. `waitFor` yields between its tries and so does this; the
+ * difference is that this one has nothing to watch for, because "the level has
+ * been rebuilt in place" changes nothing on the screen.
+ */
+async function pump(n = 20) {
+  for (let i = 0; i < n; i++) {
+    tick(2);
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
+
 async function waitFor(pred, tries = 120) {
   for (let i = 0; i < tries; i++) {
     tick(2);
@@ -1501,6 +1521,418 @@ await waitFor(() => refText().startsWith('Genesis 1'));
 await waitFor(() => askedFor() !== null);
 tick(20);
 
+// --- the camera must not eat the leap ----------------------------------------
+//
+// The scribe leaps at a fixed screen column and the monster's column is
+// derived from the camera, so a camera still closing on the monster while the
+// hop plays takes the gap out from under it. At speed a word lands about every
+// 430 ms against a 460 ms hop, so the world takes a whole stride out of a blow
+// designed to cross `strike_reach`. That is the real cause of the owner's first
+// report on combat -- "you just stand on top of them for a bit" -- and no value
+// of `strike_hop_px` fixes it. docs/design/03-pacing.md#the-camera-must-not-eat-the-leap
+//
+// Only the running game can see this: `core/entities.ts` returns a *fraction*
+// along a path it cannot resolve, and what the fraction is worth in pixels is
+// decided by the camera in the platform's frame loop.
+
+/**
+ * Where the scribe's feet are on his own line, this frame.
+ *
+ * Read per frame rather than once, because the ground line is a property of the
+ * world and Genesis 1 is seven of them. During a stomp there is no sprite on
+ * that column at all -- he is in the air -- so the last reading stands, which is
+ * exactly right: the ground cannot move while the camera is held.
+ */
+let standY = null;
+const groundNow = () => {
+  const feet = calls.sprites.filter((s) => s.x === SCRIBE_X).map((s) => s.y);
+  if (feet.length > 0) standY = Math.max(...feet);
+  return standY;
+};
+
+/**
+ * Whatever a blow has in the air this frame, ahead of the scribe.
+ *
+ * Lifted off the ground line and inside two strides of him, which is the
+ * hopping scribe and the thrown nib and nothing else on the screen: a skeleton
+ * stands *on* the line and is excluded by the strict `<`, a bat hangs 34 px
+ * above it, and the company walks behind him. `travel` reaches 1 at contact, so
+ * the furthest one of these gets is the gap the blow actually crossed.
+ *
+ * It is also how the harness knows a monster was felled at all, which is what
+ * the section below needs: nothing is lifted over the gap unless something is
+ * being struck.
+ */
+const blowAhead = () => {
+  const y0 = groundNow();
+  if (y0 === null) return [];
+  return calls.sprites.filter(
+    (s) => s.x > SCRIBE_X && s.x <= SCRIBE_X + STRIKE_REACH * 2
+      && s.y < y0 && s.y > y0 - STRIKE_REACH,
+  );
+};
+
+let reached = 0;
+let blowFrames = 0;
+let blowRuns = 0;
+let movedDuringBlow = 0;
+let runPhase = null;
+const restPhases = new Set();
+for (let i = 0; i < 240; i++) {
+  const k = askedFor();
+  if (k === null) break;
+  press(k);
+  // Four frames a keystroke: fast enough that a hop and the next completed word
+  // overlap, which is the only speed at which the fault is visible at all.
+  for (let f = 0; f < 4; f++) {
+    tick(1);
+    const blow = blowAhead();
+    if (blow.length === 0) {
+      restPhases.add(layerPhase());
+      runPhase = null;
+      continue;
+    }
+    blowFrames += 1;
+    // The *nearest* of them to his standing column, because a felled monster
+    // sometimes leaves an ink pot floating where it stood and that pot is not
+    // the blow. The scribe is between him and it until contact, where the two
+    // coincide -- so the nearest is the leap, all the way across.
+    reached = Math.max(reached, Math.min(...blow.map((s) => s.x)) - SCRIBE_X);
+    // Per blow, not across the run: the camera is somewhere different for every
+    // monster, and what must not happen is that it moves *while one is being
+    // struck*.
+    const phase = layerPhase();
+    if (runPhase === null) { blowRuns += 1; runPhase = phase; continue; }
+    if (phase !== runPhase) movedDuringBlow += 1;
+  }
+}
+
+console.log(`  ..    the blow crossed ${reached}px of its ${STRIKE_REACH}px reach `
+  + `over ${blowRuns} blow(s), ${blowFrames} frames`);
+
+ok(blowRuns > 0, 'the harness felled something and watched the blow land',
+   `${blowFrames} frames with a blow in the air`);
+ok(restPhases.size > 1, 'and the world really does scroll the rest of the time, '
+   + 'so the next assertion is not vacuous', `${restPhases.size} parallax positions`);
+ok(movedDuringBlow === 0,
+   'THE CAMERA HOLDS STILL WHILE A BLOW IS LANDING, HOWEVER FAST HE TYPES',
+   `${movedDuringBlow} of ${blowFrames} frames moved the world under a blow`);
+ok(reached >= STRIKE_REACH - 2,
+   'SO THE BLOW CROSSES THE GAP IT WAS DESIGNED TO CROSS, EVEN AT SPEED',
+   `${reached}px of the ${STRIKE_REACH}px reach`);
+
+// And back to the top of the chapter, because the sections below expect a part
+// with verses left in it.
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-book').value = 'Genesis';
+stubEl('menu-chapter').value = '1';
+stubEl('menu-go').click();
+await waitFor(() => refText().startsWith('Genesis 1'));
+await waitFor(() => askedFor() !== null);
+tick(20);
+
+// --- a monster is felled by a clean word -------------------------------------
+//
+// "A word typed clean fells the monster. A word with a mistake in it does not --
+// the monster survives and the scribe walks past it." Nothing blocks, chases or
+// costs: what he loses is a reward he did not earn, which is not a penalty, and
+// that difference is the whole of ADR 0004.
+// docs/design/03-pacing.md#a-monster-is-felled-by-a-clean-word-not-by-any-word
+//
+// A blow in the air is the observable, and it is the only one there is: a
+// monster that is not felled is simply still standing, and a screen with a
+// monster on it looks exactly like a screen with a monster on it. So the
+// harness types the same opening of the same chapter three times -- the monsters
+// are seeded from the passage, so it is the same monsters each time -- and
+// counts the blows.
+
+/**
+ * Back to the top of Genesis 1, which is the same seed and the same monsters.
+ *
+ * It waits for the *overlay* to go away as well as for the reference to say
+ * Genesis 1, and both halves matter here in a way they do not elsewhere in this
+ * file: this is the only place that navigates to the chapter it is already
+ * standing in, so the citation is true before the panel has closed -- and the
+ * keyboard is handed back only when it does. A run driven into a menu that is
+ * still open types nothing and asserts nothing.
+ */
+async function openGenesis1() {
+  stubEl('menu-open').click();
+  tick(2);
+  stubEl('menu-book').value = 'Genesis';
+  stubEl('menu-chapter').value = '1';
+  stubEl('menu-go').click();
+  await waitFor(() => !panel('overlay') && refText().startsWith('Genesis 1:1'));
+  await waitFor(() => askedFor() !== null);
+  tick(20);
+}
+
+/** Whether the wrong-key setting is `stand` or `block`, applied and remembered. */
+async function setWrongKeys(value) {
+  stubEl('menu-open').click();
+  tick(2);
+  stubEl('menu-mistakes').value = value;
+  stubEl('menu-mistakes').dispatchEvent({ type: 'change' });
+  await waitFor(() => record().mistakesStand === (value === 'stand'));
+  // The switch rebuilds the part in place, and nothing on the screen says so.
+  await pump();
+  stubEl('menu-resume').click();
+  await waitFor(() => !panel('overlay') && askedFor() !== null);
+  tick(8);
+}
+
+/**
+ * Type this many characters, counting the blows that land.
+ *
+ * `fumble` is called with the character owed at the start of each word, and is
+ * where the mistake goes. Once per word rather than once per keystroke, so the
+ * smudge meter drains between them: a wrong key on every letter would empty his
+ * hearts before the harness reached the first monster, and what is being
+ * measured here is not the damage model.
+ */
+function countBlows(keys, fumble) {
+  let blows = 0;
+  let inBlow = false;
+  let wordStart = true;
+  let typed = 0;
+  for (let i = 0; i < keys; i++) {
+    const k = askedFor();
+    if (k === null) break;
+    if (wordStart && fumble) fumble(k);
+    wordStart = k === ' ';
+    press(k);
+    typed += 1;
+    for (let f = 0; f < 4; f++) {
+      tick(1);
+      if (blowAhead().length === 0) { inBlow = false; continue; }
+      if (!inBlow) { blows += 1; inBlow = true; }
+    }
+  }
+  return { blows, typed };
+}
+
+/** A key that is not the one being asked for. */
+const wrongFor = (k) => (k === 'f' ? 'j' : 'f');
+
+const KEYS = 240;
+await openGenesis1();
+const clean = countBlows(KEYS, null);
+ok(clean.blows > 0, 'typed clean, the opening of the chapter fells monsters',
+   `${clean.blows} blow(s) over ${clean.typed} keys`);
+
+await openGenesis1();
+const fumbled = countBlows(KEYS, (k) => { press(wrongFor(k)); tick(1); });
+ok(fumbled.typed === clean.typed, 'the fumbled run typed the same passage',
+   `${fumbled.typed} keys against ${clean.typed}`);
+ok(fumbled.blows === 0,
+   'A WORD WITH A MISTAKE IN IT FELLS NOTHING: THE MONSTER SURVIVES AND HE WALKS PAST',
+   `${fumbled.blows} blow(s) where a clean run landed ${clean.blows}`);
+
+// And nothing happened to him for it. No heart, no block, no second chance: the
+// monster still standing is the entire feedback, and this is the assertion that
+// says so out loud.
+ok(record().position !== undefined && refText().startsWith('Genesis 1'),
+   'and he is still walking through the same chapter, having lost nothing but a reward',
+   refText());
+
+// The owner's ruling: a word repaired with backspace still fells the monster.
+// The WPM lost while repairing is penalty enough.
+// docs/decisions/0010-mistakes-may-stand-and-be-deleted.md
+await setWrongKeys('stand');
+await openGenesis1();
+const repaired = countBlows(KEYS, (k) => {
+  press(wrongFor(k));
+  tick(1);
+  press('Backspace');
+  tick(1);
+});
+ok(repaired.blows > 0,
+   'BUT A WORD REPAIRED WITH BACKSPACE STILL FELLS IT, WHICH IS THE OWNER\u2019S RULING',
+   `${repaired.blows} blow(s) over ${repaired.typed} keys`);
+
+// --- mistakes may stand, and be deleted --------------------------------------
+//
+// "I found I was getting hung up trying to type the correct letter when I made a
+// mistake because I was trying to correct the letter I had typed automatically."
+// Everywhere else a keyboard is used a wrong letter appears and is removed with
+// backspace; blocking gives that reflex nothing to act on. An opt-in mode, off
+// by default. docs/decisions/0010-mistakes-may-stand-and-be-deleted.md
+//
+// Backspace was reaching the game and being dropped on the floor, so the only
+// way to know it is let through is to press it and watch the page.
+
+const ERROR_COLOUR = '#d6524a';
+const wrongOnRail = () => rail().filter((c) => c.color === ERROR_COLOUR).map((c) => c.v);
+
+await openGenesis1();
+tick(8);
+const owed = askedFor();
+ok(owed !== null, 'the game is asking for a key to get it wrong', refText());
+const beforeStanding = { caret: caretX(), wrong: wrongOnRail().length };
+
+press(wrongFor(owed));
+tick(8);
+ok(wrongOnRail().length === beforeStanding.wrong + 1,
+   'A WRONG KEY LEAVES ITS LETTER ON THE PAGE, MARKED WRONG',
+   `${wrongOnRail().join('')} on the rail`);
+ok(wrongOnRail().includes(wrongFor(owed)),
+   'and the letter on the page is the one he actually typed',
+   `${wrongOnRail().join('')} for a struck ${wrongFor(owed)}`);
+ok(askedFor() !== null && askedFor() !== owed || owed === wrongFor(owed),
+   'and the cursor moved on, so his hands keep the pace they set',
+   `${String(owed)} \u2192 ${String(askedFor())}`);
+ok(caretX() === beforeStanding.caret && caretX() === FOCAL,
+   'AND THE READING COLUMN DID NOT MOVE: A WRONG LETTER IS ONE CELL, LIKE THE RIGHT ONE',
+   `${String(caretX())} against ${String(beforeStanding.caret)}`);
+
+press('Backspace');
+tick(8);
+ok(wrongOnRail().length === beforeStanding.wrong,
+   'BACKSPACE REMOVES IT, AS IN ANY TEXT FIELD',
+   `${wrongOnRail().join('')} still standing`);
+ok(askedFor() === owed, 'and steps back onto the letter it took away',
+   `${String(askedFor())} against ${String(owed)}`);
+ok(caretX() === FOCAL, 'with the reading column where it always is', String(caretX()));
+
+// Accuracy counts every keypress, so nothing is hidden by letting the mistake
+// stand. The error is still in the record after the repair.
+const accAfter = calls.fillText.map((c) => c.v).find((v) => v.includes('ACC '));
+ok(accAfter !== undefined && !accAfter.includes('ACC 100%'),
+   'AND THE ERROR IS STILL IN HIS ACCURACY: A REPAIR CANNOT HIDE A KEYPRESS',
+   accAfter ?? '(no accuracy on the HUD)');
+
+// Off -- the default, and the beginner's game -- a wrong key does not move him
+// along, and backspace does nothing whatever. The first run says so in those
+// words, and it has to stay true.
+await setWrongKeys('block');
+await openGenesis1();
+tick(8);
+const blockOwed = askedFor();
+const blockRail = railAt();
+press(wrongFor(blockOwed));
+tick(8);
+ok(askedFor() === blockOwed,
+   'OFF BY DEFAULT, A WRONG KEY STILL DOES NOT MOVE YOU ALONG',
+   `${String(askedFor())} against ${String(blockOwed)}`);
+ok(wrongOnRail().length <= 1,
+   'and nothing is left standing on the page behind him',
+   wrongOnRail().join(''));
+press('Backspace');
+tick(8);
+ok(askedFor() === blockOwed && railAt() === blockRail,
+   'AND BACKSPACE DOES NOTHING AT ALL, WHICH IS WHAT THE FIRST RUN PROMISES',
+   `${String(askedFor())} against ${String(blockOwed)}`);
+
+await openGenesis1();
+
+// --- the mode is marked on the progress curve --------------------------------
+//
+// Gilded and ungilded stretches shared one line with nothing between them, and
+// they are not comparable: one asks for the characters a stage has taught and
+// the other asks for every character on the page. The owner went from 22 wpm to
+// 75 across that switch in one sitting, and later to 102 -- which on the curve
+// draws a cliff that reads as a breakthrough and is not one.
+// docs/design/08-stats.md#the-mode-is-marked-on-the-curve-because-a-mode-change-is-not-progress
+//
+// Only the running game can see this end to end: the flag is written by a
+// finished stretch, the boundary is found between two of them, and the mark and
+// its explanation are assembled in the platform.
+
+const SWITCH_MARK = '│';
+const historyOf = () => record().history ?? [];
+const historyBefore = historyOf().length;
+ok(historyBefore > 0, 'there are finished stretches to mark a boundary between',
+   `${historyBefore} in the record`);
+ok(historyOf().every((e) => e.gilding === false),
+   'and every one of them so far was typed with the dim letters left alone', '');
+
+// Ask for every character instead, and finish one stretch that way.
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-gilding').value = 'on';
+stubEl('menu-gilding').dispatchEvent({ type: 'change' });
+await waitFor(() => record().gilding === true);
+await pump();
+stubEl('menu-resume').click();
+await waitFor(() => !panel('overlay') && rail().length > 0);
+tick(20);
+ok(record().gilding === true, 'the mode really is on', String(record().gilding));
+
+/**
+ * The character sitting on the focal column.
+ *
+ * `askedFor` cannot be used here: with every character required the overlay
+ * lights nothing while the cursor rests on one the stage has not taught, which
+ * is deliberate -- pointing at it would show a beginner where an untaught key
+ * lives. So the harness reads the page instead of the hint. A column with no
+ * glyph on it is a space, which prints nothing by design.
+ */
+const underCaret = () => rail().find((c) => Math.round(c.x) === FOCAL)?.v ?? ' ';
+
+let gilded = 0;
+for (let i = 0; i < 4000; i++) {
+  if (historyOf().length > historyBefore) break;
+  const before = railAt();
+  press(underCaret());
+  gilded += 1;
+  // Long enough for the ribbon to settle on the next column, since the column
+  // is what is being read back.
+  tick(12);
+  if (railAt() === before) break;
+}
+ok(historyOf().length > historyBefore,
+   'a stretch was typed with every character of it asked for',
+   `${gilded} keys, ${historyOf().length - historyBefore} stretch(es) recorded`);
+
+const marked = historyOf();
+const lastEntry = marked[marked.length - 1];
+const beforeEntry = marked[marked.length - 2];
+ok(lastEntry !== undefined && lastEntry.gilding === true,
+   'AND THE RECORD KEEPS WHICH MODE THE STRETCH WAS TYPED IN',
+   JSON.stringify(lastEntry ?? null));
+ok(beforeEntry !== undefined && beforeEntry.gilding === false,
+   'while the stretch before it kept the other one, which is what makes a boundary',
+   JSON.stringify(beforeEntry ?? null));
+
+await takeCardForward();
+stubEl('menu-open').click();
+tick(4);
+const marks = rowsOf('menu-history').map(textOf);
+ok(marks.some((t) => t.includes(SWITCH_MARK)),
+   'THE HISTORY MARKS THE ROW WHERE WHAT THE PAGE ASKS FOR CHANGED',
+   marks.slice(0, 3).join(' / '));
+ok(marks.some((t) => t.includes(SWITCH_MARK) && t.includes('every letter asked for')),
+   'and says which way it changed',
+   marks.find((t) => t.includes(SWITCH_MARK)) ?? '');
+const noteText = String(stubEl('history-note').textContent);
+ok(noteText.includes(SWITCH_MARK) && /two different jobs/.test(noteText),
+   'AND SAYS THE TWO SIDES ARE NOT THE SAME TEST, IN THE PROMOTION DIP\u2019S OWN REGISTER',
+   noteText.slice(-160));
+
+stubEl('menu-hands').click();
+tick(4);
+const curveNote = String(stubEl('hands-curve-note').textContent);
+ok(/rule between/.test(curveNote) && /two different jobs/.test(curveNote),
+   'AND THE CURVE UNDER THE REPORT CARD EXPLAINS ITS OWN MARK',
+   curveNote.slice(0, 160));
+press('Escape');
+tick(4);
+
+// Back to the letters the stage teaches, because everything below expects the
+// game it had -- and because a mode nobody can leave is not a mode.
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-gilding').value = 'off';
+stubEl('menu-gilding').dispatchEvent({ type: 'change' });
+await waitFor(() => record().gilding === false);
+await pump();
+stubEl('menu-resume').click();
+await waitFor(() => !panel('overlay') && askedFor() !== null);
+ok(record().gilding === false, 'and it goes back the way it came', String(record().gilding));
+
+await openGenesis1();
+
 // --- the two presentations of the rail ---------------------------------------
 //
 // docs/decisions/0011-respect-reduced-motion.md. The owner reported a motion
@@ -1597,6 +2029,84 @@ for (let i = 0; i < 20; i++) {
 ok(record().motion === 'auto' && backPhases.size > 1,
    'and it goes back the way it came, with the world moving again',
    `${backPhases.size} parallax positions`);
+
+// --- the scribe at his lectern -----------------------------------------------
+//
+// The keyboard overlay is a scaffold, and the curriculum retires it a key at a
+// time as each one's accuracy passes the threshold. What fills the band it
+// vacates is the scribe at his lectern: quill moving as the player types, page
+// filling as he copies. It is the best reward the game has, because it is the
+// thing the game is about -- he stops needing the keys drawn for him and gets to
+// watch himself write. docs/design/02-rail.md#the-scribe-at-his-lectern
+//
+// Nothing here is reachable from a core test in the way that matters: what has
+// to be true is that the board really does empty for a player who has typed,
+// and the only way to know that is to have typed.
+
+const { overlayLayout } = await import(
+  pathToFileURL(resolve(ROOT, 'build/core/keyboard.js')).href
+);
+const BOARD_KEYS = overlayLayout('ansi', 'rt').length;
+const KB_TOP = 210;
+// A key face is one key unit tall less its padding: `M.kbUnit` minus twice
+// `M.keyPad`. Nothing the lectern draws is exactly that tall, which is what
+// lets the two be told apart in a flat list of rectangles.
+const KEY_H = 26 - 2 * 2;
+/** Key faces: every rect in the band exactly one key unit tall. */
+const keyFaces = () => calls.fills.filter((f) => f.y >= KB_TOP && f.h === KEY_H);
+/** Everything else drawn down there, which is the lectern and nothing but. */
+const lectern = () => calls.fills.filter((f) => f.y >= KB_TOP && f.h !== KEY_H);
+const lecternShape = () => lectern().map((f) => `${f.x},${f.y},${f.w},${f.h}`).join(' ');
+/** The written lines on the page: wide and two pixels tall. */
+const written = () => lectern().filter((f) => f.h === 2 && f.w > 10).length;
+
+tick(4);
+ok(keyFaces().length > 0 && keyFaces().length < BOARD_KEYS,
+   'THE BOARD RETIRES A KEY AT A TIME, AND THIS PLAYER HAS EARNED SOME OF IT',
+   `${keyFaces().length} of ${BOARD_KEYS} keys still drawn`);
+ok(lectern().length > 0,
+   'AND WHAT IS BEHIND IT IS THE SCRIBE AT HIS LECTERN',
+   `${lectern().length} shapes in the band`);
+ok(lectern().every((f) => f.y >= KB_TOP && f.y + f.h <= 360),
+   'HE IS BELOW THE RAIL AND NEVER ENTERS IT',
+   `lowest ${Math.max(...lectern().map((f) => f.y + f.h))}, highest ${Math.min(...lectern().map((f) => f.y))}`);
+
+// Nothing announced. The band gains a picture and not a sentence: no text is
+// drawn below the rail that was not there before, and in particular nothing
+// congratulates him. The tone sweep at the foot of this file reads everything
+// the game ever said, so this only has to check that the band stayed quiet.
+// A key face carries a label and the hint line names the next key; a *sentence*
+// is the thing that must not appear. So: nothing below the rail says more than
+// one word, except the line that was always there.
+const said = calls.fillText.filter(
+  (c) => c.y >= KB_TOP && c.v.includes(' ') && !/^next:/.test(c.v),
+);
+ok(said.length === 0, 'and nothing down there says anything about it',
+   said.map((c) => c.v).join(' | ').slice(0, 120));
+
+// It moves only when the player types. A quill scratching while somebody is
+// thinking is the same lie as a world that scrolls without them, which is
+// docs/decisions/0004-idle-threat-not-speed-timer.md applied to the one picture
+// in the game that is *about* typing.
+const restingQuill = lecternShape();
+tick(200);
+ok(lecternShape() === restingQuill,
+   'THE QUILL DOES NOT MOVE WHILE THE PLAYER IS THINKING',
+   lecternShape() === restingQuill ? '' : 'it moved with nobody typing');
+
+const writtenBefore = written();
+let quillMoved = false;
+for (let i = 0; i < 60; i++) {
+  const k = askedFor();
+  if (k === null) break;
+  press(k);
+  tick(2);
+  if (lecternShape() !== restingQuill) quillMoved = true;
+}
+ok(quillMoved, 'AND IT MOVES THE MOMENT HE DOES', '');
+ok(written() >= writtenBefore,
+   'and the page fills as he copies, rather than emptying',
+   `${writtenBefore} lines to ${written()}`);
 
 // --- the sound comes back after a backgrounded tab ---------------------------
 //
@@ -1772,6 +2282,20 @@ ok(wholeParty.length === MET,
 ok(/walk on ahead/.test(String(stubEl('map-party-note').textContent)),
    'and says why some of them are not on the screen',
    String(stubEl('map-party-note').textContent));
+
+// And the other end of the lectern: a player who has earned nothing is shown
+// none of it. The record booted above has an empty key table, so the board is
+// whole and there is nothing behind it -- the reward *is* the crutch leaving,
+// and it cannot arrive before the crutch has been earned away.
+// docs/design/02-rail.md#the-scribe-at-his-lectern
+press('Escape');
+tick(6);
+ok(keyFaces().length === BOARD_KEYS,
+   'A PLAYER WHO HAS EARNED NOTHING STILL HAS THE WHOLE BOARD',
+   `${keyFaces().length} of ${BOARD_KEYS} keys drawn`);
+ok(lectern().length === 0,
+   'AND NOTHING OF THE LECTERN IS BEHIND IT YET, BECAUSE NOTHING HAS BEEN GIVEN UP',
+   `${lectern().length} shapes in the band`);
 
 
 console.log('');

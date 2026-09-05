@@ -126,9 +126,10 @@ keeping — otherwise it gets rediscovered and "fixed" by the next person to not
 
 ## The scribe at his lectern
 
-The keyboard overlay is a scaffold, and [the curriculum](06-curriculum.md) retires it a
-key at a time: once a key's accuracy passes threshold it stops being highlighted. For a
-player who has arrived, the whole band eventually goes quiet.
+The keyboard overlay is a scaffold, and
+[the curriculum](06-curriculum.md#breaking-the-looking-down-habit) retires it a key at a
+time: once a key's accuracy passes threshold it stops being drawn. For a player who has
+arrived, the whole band eventually goes quiet.
 
 **What fills it is the scribe at his lectern**, hunched over the page, quill moving as
 the player types and the page filling as verses complete. Not an ornament in a corner --
@@ -146,6 +147,46 @@ its own while someone thinks is the same lie as a world that scrolls without the
 The figure is the same scribe who walks the scenery band above. He is a novice copying a
 manuscript, never anyone from the text -- see
 [scenery](05-scenery-warps.md#held-scenes-not-every-passage-is-a-journey).
+
+### How it arrives, and how it is drawn
+
+**It is uncovered, not introduced.** The lectern is drawn *behind* the board on every
+frame, at the alpha of the share of the stage's keys that have retired. At nothing earned
+it is not drawn at all; at one key in eleven it is a suggestion; with the board gone it is
+the band. There is no threshold, no moment of appearance and nothing to announce, which is
+the whole of what makes it a reward rather than an award.
+
+**A retired key stops being drawn**, rather than merely stopping being highlighted, and it
+is judged over the lifetime table --
+[the curriculum](06-curriculum.md#breaking-the-looking-down-habit) has the reasoning for
+both halves. Without the first the band never empties and there is nothing for the picture
+to fill; without the second every key comes back at the top of every stretch.
+
+**He is drawn from rects, not from the 16px sprite**, and the reason is scale rather than
+taste. The band is 130 virtual pixels tall and a sprite is sixteen by contract, so the
+sprite would be an ornament in the middle of an empty strip -- the one thing this section
+rules out. The set pieces already draw a serpent, a bough and a turning sword out of rects
+for the same reason. He is the same scribe because he is the same *roles*: `robe` over
+`robeShade` with `skin` inside the hood, resolved through the world he is walking in, so
+his habit is the colour it is in the band above.
+
+**The page holds the stretch.** It has nine lines and they are sized to the part, so the
+last character of the part is the last character of the page: a finished page means a
+finished stretch of verses rather than an arbitrary loop. A line already copied carries
+its ink across; the line under the quill is filled as far as he has got along it, and the
+nib sits at the end of that ink with the quill's shaft running back to his hand -- so the
+quill pivots as he writes across the line.
+
+**Nothing here reads a clock.** The written lines, the fill of the current one and the
+nib's position are all functions of the cursor and of nothing else; no elapsed time
+reaches the drawing at all. That is what makes "it moves only when the player types" a
+property of the code rather than a promise, and it is the same rule as
+[ADR 0004](../decisions/0004-idle-threat-not-speed-timer.md) applied to the one picture in
+the game that is *about* typing.
+
+Reading mode gets none of it. The mode asks for no keys, so the board is not drawn there
+either -- and a quill moving for somebody who is deliberately not typing would be exactly
+the lie above.
 
 ## Reading mode
 

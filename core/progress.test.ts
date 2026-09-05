@@ -104,6 +104,7 @@ function play(progress: Progress, one: KeyStat, date = '2026-09-03'): Progress {
       completed: null,
       stageKeys: stageAt(stages, progress.stage).keys,
       promoted: false,
+      gilding: false,
     },
     tuning,
   );
@@ -297,6 +298,7 @@ test('a player who finishes the curriculum is not offered an eleventh stage', ()
       completed: null,
       stageKeys: last.keys,
       promoted: false,
+      gilding: false,
     },
     tuning,
   );
@@ -462,6 +464,7 @@ test('the offer is made only after sustained pace, and only ever offered', () =>
   const fast = tuningValue(tuning, 'gild_offer_wpm');
   const entry = (wpm: number) => ({
     date: '2026-09-03', stage: 1, ref: 'Genesis 1:1-3', wpm, accuracy: 1, promoted: false,
+    gilding: false,
   });
 
   // Not enough evidence yet: one fast part is a short verse.
@@ -490,7 +493,8 @@ test('the offer is made once, whichever way it is answered', () => {
   const earned = {
     ...DEFAULT_PROGRESS,
     history: Array.from({ length: need }, () => ({
-      date: '2026-09-03', stage: 1, ref: 'Genesis 1:1-3', wpm: fast, accuracy: 1, promoted: false,
+      date: '2026-09-03', stage: 1, ref: 'Genesis 1:1-3', wpm: fast, accuracy: 1,
+      promoted: false, gilding: false,
     })),
   };
 

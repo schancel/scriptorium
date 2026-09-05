@@ -26,7 +26,7 @@ import {
 import { DEFAULT_SPACE_THUMB, reportFingers } from './keyboard.js';
 import { loadStages } from './curriculum.js';
 import { DEFAULT_PROGRESS, gateProgress, type Progress } from './progress.js';
-import { loadTuning } from './tuning.js';
+import { loadTuning, tuningValue } from './tuning.js';
 import type { Key, KeyStat, Tuning } from './types.js';
 
 function loadDataFile(name: string): unknown {
@@ -169,8 +169,8 @@ test('the share column adds up to the whole hand', () => {
 
 // --- the curve --------------------------------------------------------------
 
-function part(wpm: number, promoted = false): TrendPoint {
-  return { wpm, accuracy: 0.9, promoted }; // tuning-exempt: test fixture
+function part(wpm: number, promoted = false, gilding = false): TrendPoint {
+  return { wpm, accuracy: 0.9, promoted, gilding }; // tuning-exempt: test fixture
 }
 
 test('the curve averages over everything and draws over a window', () => {
@@ -313,4 +313,63 @@ test('keys are named the way a player reads them aloud', () => {
   assert.equal(nameKeys(['c', 'm', 'w']), 'c, m and w');
   assert.equal(nameKeys(['<space>']), 'space');
   assert.equal(nameKeys([]), '');
+});
+
+
+// --- the mode is marked on the curve -----------------------------------------
+//
+// docs/design/08-stats.md#the-mode-is-marked-on-the-curve-because-a-mode-change-is-not-progress
+// Gilded and ungilded stretches are not comparable: one asks for the characters
+// a stage has taught and the other asks for every character on the page. The
+// owner went from 22 wpm to 75 across that switch, and later to 102.
+
+test('A MODE BOUNDARY IS MARKED, AND ONLY WHERE TWO STRETCHES DISAGREE', () => {
+  const history = [
+    part(20, false, false), // tuning-exempt: a wpm in a fixture
+    part(22, false, false), // tuning-exempt: a wpm in a fixture
+    part(75, false, true),  // tuning-exempt: the owner's own step
+    part(78, false, true),  // tuning-exempt: a wpm in a fixture
+  ];
+  const trend = reportTrend(history, tuning);
+  assert.deepEqual(trend.switches, [history.length - 2],
+    'one rule, on the first bar of the new run');
+  assert.equal(trend.justSwitched, false, 'the last two agree, so nothing just changed');
+});
+
+test('the first bar in the window is never marked, because it has no neighbour', () => {
+  // A boundary is a disagreement, and the bar at the left edge has nothing to
+  // its left to disagree with. Marking it would claim a switch that may have
+  // happened weeks ago, or never.
+  const all = reportTrend([part(60, false, true), part(62, false, true)], tuning); // tuning-exempt: wpm in a fixture
+  assert.deepEqual(all.switches, []);
+
+  const window = Math.trunc(tuningValue(tuning, 'report_trend_parts'));
+  const long = [
+    ...Array.from({ length: window }, () => part(20)), // tuning-exempt: a wpm in a fixture
+    ...Array.from({ length: window }, () => part(75, false, true)), // tuning-exempt: a wpm
+  ];
+  const trend = reportTrend(long, tuning);
+  assert.equal(trend.points.length, window);
+  assert.deepEqual(trend.switches, [], 'the boundary has scrolled off the chart');
+});
+
+test('a switch on the stretch just finished is said out loud, like a promotion', () => {
+  const trend = reportTrend([part(22), part(75, false, true)], tuning); // tuning-exempt: wpm
+  assert.equal(trend.justSwitched, true);
+  const said = reportNote(reportCard({ keyStats: TWO_FINGER_STATS, layout: 'ansi' }, tuning), trend);
+  assert.match(said, /two different jobs/);
+  assert.ok(!said.includes('!'), 'the card never exclaims');
+});
+
+test('and a promotion still comes first, because the dip arrives sooner', () => {
+  const both = reportTrend(
+    [part(22), part(75, true, true)], // tuning-exempt: a wpm in a fixture
+    tuning,
+  );
+  assert.equal(both.justPromoted, true);
+  assert.equal(both.justSwitched, true);
+  assert.match(
+    reportNote(reportCard({ keyStats: TWO_FINGER_STATS, layout: 'ansi' }, tuning), both),
+    /gold mark/,
+  );
 });

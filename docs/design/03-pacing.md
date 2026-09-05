@@ -75,7 +75,17 @@ the tolerance tightens by stage so it stays meaningful as accuracy improves. See
 [ADR 0005](../decisions/0005-smudge-meter-over-per-typo-damage.md).
 
 Wrong keystrokes never advance the cursor. The player must correct the error before
-continuing — standard in typing tutors, and non-negotiable for habit formation.
+continuing — standard in typing tutors, and the right default for a beginner who does not
+yet know where the keys are: he cannot type a whole wrong word without noticing and lose
+his place in the text.
+
+It is a default rather than a law. There is a second mode, off unless the player asks for
+it, in which the wrong letter *stands* in the expected letter's cell and backspace takes
+it back — because for someone who already types, the repair is a reflex rather than a
+decision and blocking gives it nothing to act on. What does not change either way is the
+accounting: every keypress is counted, and a mistake still feeds the smudge meter and
+nothing else. See
+[ADR 0010](../decisions/0010-mistakes-may-stand-and-be-deleted.md).
 
 ## Items
 
@@ -197,6 +207,55 @@ The art is in `core/sprites.ts`: `scribe_hop` (rise, contact, bounce) for the st
 the wind-up and follow-through — the pose was always right; what was missing was something
 leaving his hand.
 
+### The camera must not eat the leap
+
+The blow is drawn as a *fraction along a path*: `core/entities.ts` says how far between
+the scribe and the monster the leap has got, and `core/draw.ts` turns that into pixels
+using the monster's screen column — which the camera decides. So the length of the path
+is whatever the gap happens to be on the frame it is drawn on.
+
+And that gap closes while the blow is in the air. The camera advances `WORLD_STRIDE` per
+completed word, a fluent typist finishes a word about every 430 ms, and a stomp runs
+`stomp_ms` — 460. So the world takes most of a stride out from under a leap that is
+crossing `strike_reach`, and the scribe travels a fraction of the distance he was drawn
+to travel. Measured off the running game at about 190 WPM: **29 px of his 36**, and the
+faster the typist the less of it survives.
+
+This is the real cause of the owner's very first report on combat — *"a little weak as
+you just stand on top of them for a bit"* — and it is the half of it that outlived the
+first repair. Monsters were moved `strike_reach` further on so the blow had a gap to
+cross, and the gap was then being spent by the camera. **No value of `strike_hop_px`
+fixes it**: the number that is wrong is not the size of the leap, it is how much of the
+leap is still there when it lands.
+
+**So the camera holds still while a strike plays.** `core/motion.ts` gains
+`deferredWords`, and it is one line — the target is the smaller of the true
+travelled-word count and what the world stood at when the blow began. When the last
+strike is spent the deferral lifts and the camera eases across whatever was typed in the
+meantime. Measured the same way afterwards: **42 px** — the 36 of reach plus the few
+pixels the camera was behind its own target at the moment the blow landed, held there
+rather than spent.
+
+**What must stay true, and does.** The camera being purely word-driven is load-bearing:
+the world never moves without the player, which is
+[ADR 0004](../decisions/0004-idle-threat-not-speed-timer.md) applied to the scenery. The
+deferral cannot break it, because `deferredWords` can only ever return something *no
+larger* than the word-driven target — it can hold the world still and it has no way to
+move it. Elapsed time decides when the hold lifts and not one pixel of where the world
+then goes; the travel released is travel the player typed. Stop typing mid-blow and the
+world is exactly where the blow left it, for as long as you like.
+
+It is also the same arithmetic as a
+[held scene](05-scenery-warps.md#held-scenes-not-every-passage-is-a-journey), which is why
+it lives in the same module: one is the passage asking the world to stand still and one
+is the picture asking for it, and both are answered by subtracting travel rather than by
+stopping a clock.
+
+Only the running game can see any of this — the fraction is core's and the pixels are the
+platform's — so it is asserted in `tools/smoke.mjs` on the real frames: that the parallax
+does not shift on any frame with a blow in the air, and that the blow still crosses its
+reach at a rate faster than anybody will ever type.
+
 ### A monster is felled by a clean word, not by any word
 
 Completing the word a monster stands on fells it, whatever happened along the way. So a
@@ -216,6 +275,22 @@ as one:
   standing there is the entire feedback.
 - Damage is unchanged: mistakes still feed the smudge meter and nothing else
   (ADR 0005). This adds no new way to lose hearts.
+
+**A word repaired with backspace still fells it.** That is the owner's ruling, and it
+overrides the paragraph above wherever the two disagree. In the mode where
+[mistakes may stand](../decisions/0010-mistakes-may-stand-and-be-deleted.md) a wrong
+letter is left on the page and backspace takes it back; a word he went back and made
+good is a word with no mistake standing in it, and it kills. The reasoning is his: the
+WPM lost while repairing is penalty enough, and there is no need to invent another. A
+second cost for a repair would also punish precisely the reflex that mode exists to
+allow.
+
+Which makes the rule one sentence in both modes: **a monster is felled when no mistake
+stands anywhere in its word at the moment the word is finished.** In the blocking default
+nothing can take a mistake back, so a fumble stands for good and the monster lives.
+`core/typing.ts` keeps the wrong character struck at each cell — in both modes, because
+in one it is what the page shows and in the other it is only ever this — and `cleanRange`
+is the whole of the question. What removes an entry is backspace, and nothing else.
 
 **In every mode, not only gilding.** A beginner erring on roughly one keystroke in ten
 fells about three words in five, which is often enough to feel good and rare enough to

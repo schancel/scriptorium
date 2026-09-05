@@ -20,6 +20,7 @@ import {
   MOTION_SETTINGS,
   animScale,
   cameraLerp,
+  deferredWords,
   isHeldWord,
   isMotionSetting,
   parallaxScale,
@@ -177,4 +178,48 @@ test('a word off the end of the map is not held, and cannot be', () => {
   assert.equal(isHeldWord(HELD, -1), false);
   assert.equal(isHeldWord(HELD, 2), true);
   assert.equal(travelledWords(HELD, HELD.length + 2), travelledTotal(HELD));
+});
+
+
+// --- a blow landing ----------------------------------------------------------
+//
+// docs/design/03-pacing.md#the-camera-must-not-eat-the-leap. The scribe leaps
+// from a fixed screen column toward a monster whose column the camera decides,
+// so a camera still closing on it takes the gap out from under the leap. The
+// answer is the same arithmetic held scenes use, which is why it is here.
+
+test('nothing deferred is the target it always was', () => {
+  for (const at of [0, 1, HELD.length]) {
+    assert.equal(deferredWords(travelledWords(HELD, at), null), travelledWords(HELD, at));
+  }
+});
+
+test('A DEFERRED CAMERA CAN HOLD STILL AND HAS NO WAY TO ADVANCE', () => {
+  // The load-bearing property, stated as an inequality: whatever the deferral
+  // is, the answer is never larger than the word-driven target. So the world
+  // cannot be moved by anything except the player typing -- ADR 0004 applied to
+  // the camera as well as to the monsters.
+  const walking = HELD.map(() => false);
+  for (let held = 0; held <= walking.length; held += 1) {
+    for (let at = 0; at <= walking.length; at += 1) {
+      const travelled = travelledWords(walking, at);
+      const deferred = deferredWords(travelled, held);
+      assert.ok(deferred <= travelled, `${String(deferred)} > ${String(travelled)}`);
+      assert.ok(deferred <= held, 'and never past where the blow began');
+    }
+  }
+});
+
+test('and typing on during a blow moves nothing, then moves exactly what was typed', () => {
+  const walking = HELD.map(() => false);
+  const began = travelledWords(walking, 2); // tuning-exempt: a word index in the fixture
+  // Three more words while the hop is in the air, and the camera does not stir.
+  for (const at of [2, 3, 4, 5]) { // tuning-exempt: word indices in the fixture
+    assert.equal(deferredWords(travelledWords(walking, at), began), began);
+  }
+  // The blow ends; the target is the travel he typed, and not a pixel more.
+  assert.equal(
+    deferredWords(travelledWords(walking, 5), null), // tuning-exempt: a word index
+    travelledWords(walking, 5), // tuning-exempt: a word index in the fixture
+  );
 });

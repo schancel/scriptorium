@@ -102,8 +102,17 @@ Escalating, so the support is withdrawn as it stops being needed:
    does not know is the shift, and lighting the near one would drill the wrist-rolling
    habit this stage exists to replace.
 2. **Earned fade-out.** Once a key's accuracy passes threshold, that key stops being
-   highlighted on the overlay. The crutch removes itself key by key, as it is earned,
-   without the player ever choosing to give it up.
+   drawn on the overlay at all. The crutch removes itself key by key, as it is earned,
+   without the player ever choosing to give it up — and what is behind it is
+   [the scribe at his lectern](02-rail.md#the-scribe-at-his-lectern), uncovered a key at
+   a time rather than introduced at a threshold.
+
+   **Measured over a lifetime, not over a stretch.** A key is earned across weeks, and
+   a stretch of verses is a hundred and fifty keystrokes spread over nine fingers — fewer
+   than `mastery_min_samples` on most of them. Judged from the part in front of him, a
+   key a player retired months ago comes back at the top of every stretch and the crutch
+   is never actually given up. The card reads the lifetime table for the same reason; see
+   [stats](08-stats.md#reachable-on-purpose).
 3. **The report card.** Per-finger accuracy and speed after every level. A two-finger
    typist's card is unmistakable — two columns of data and eight empty ones. Making that
    visible is half the battle. See [stats](08-stats.md).

@@ -322,6 +322,12 @@ const TREND_ALPHA = 0.7;     // tuning-exempt: art -- an ordinary part on the cu
  */
 const WORST_KEYS = 5;        // tuning-exempt: fixed by docs/design/08-stats.md
 
+/**
+ * How far left of a bar the mode rule stands, so it reads as a division between
+ * two stretches rather than as a mark on the later one.
+ */
+const SWITCH_GAP = 1;
+
 // --- the frame's input ------------------------------------------------------
 
 /**
@@ -373,6 +379,31 @@ export interface FrameState {
    * docs/design/01-illumination.md#gilding-a-mode-for-people-who-already-type.
    */
   readonly gilding?: boolean;
+  /**
+   * The standing mode, if the platform is running it.
+   *
+   * Absent means the blocking default, which is what every existing frame
+   * means, and absent produces byte-for-byte the display list it always did.
+   * Present and true it changes one thing: the wrong characters in `faults` are
+   * drawn in the cells they were struck at, so the page shows what he actually
+   * typed and backspace has something visible to remove.
+   *
+   * It gates the drawing rather than the recording, because `faults` is kept in
+   * both modes -- in the blocking one it says which words were not typed clean,
+   * and drawing it there would put a wrong letter over the right one the player
+   * went on to produce. See
+   * docs/decisions/0010-mistakes-may-stand-and-be-deleted.md.
+   */
+  readonly standing?: boolean;
+  /**
+   * Wrong characters left standing, by glyph index. Absent or empty draws
+   * nothing, and nothing is drawn from it at all unless `standing` is true.
+   *
+   * A wrong character occupies exactly one cell, like the character it
+   * replaced, which is what keeps the reading column where it is: the rail's
+   * geometry is `i * CELL_W` and this does not touch `i`.
+   */
+  readonly faults?: Readonly<Record<number, string>>;
   /**
    * Points earned in this level: gilding, plus what the items were worth.
    *
@@ -880,6 +911,16 @@ export interface TrendPoint {
   readonly accuracy: number;
   /** True when this stretch opened a stage. Drawn gold, and named on the card. */
   readonly promoted: boolean;
+  /**
+   * True when this stretch was typed with gilding on.
+   *
+   * Not a colour, unlike `promoted`: gold already means *a stage opened here*
+   * and a second meaning for it would make the one bar say two things. What
+   * this draws is a rule at the *boundary* between two stretches that disagree,
+   * because the mode is not an event -- it is a property of every bar on one
+   * side of the line. See docs/design/08-stats.md#history.
+   */
+  readonly gilding: boolean;
 }
 
 export interface Trend {
@@ -894,6 +935,17 @@ export interface Trend {
   readonly promotions: number;
   /** True when the most recently finished stretch opened a stage. */
   readonly justPromoted: boolean;
+  /**
+   * Indices in `points` that begin a stretch typed in the other mode: the bar
+   * immediately right of each mode boundary the chart can see.
+   *
+   * Never index 0. A boundary is a disagreement between two bars and the first
+   * bar in the window has nothing to its left to disagree with -- drawing a rule
+   * there would claim a switch that may have happened weeks earlier, or never.
+   */
+  readonly switches: readonly number[];
+  /** True when the most recently finished stretch was typed in the other mode. */
+  readonly justSwitched: boolean;
 }
 
 /**
@@ -917,11 +969,16 @@ export function reportTrend(history: readonly TrendPoint[], tuning: Tuning): Tre
   }
   let best = 0;
   let promotions = 0;
-  for (const point of points) {
+  const switches: number[] = [];
+  for (const [i, point] of points.entries()) {
     if (point.wpm > best) best = point.wpm;
     if (point.promoted) promotions += 1;
+    // A boundary is a disagreement between neighbours, so it needs a neighbour.
+    const before = points[i - 1];
+    if (before !== undefined && before.gilding !== point.gilding) switches.push(i);
   }
   const last = history[history.length - 1];
+  const previous = history[history.length - 2];
   return {
     points,
     parts: history.length,
@@ -930,6 +987,13 @@ export function reportTrend(history: readonly TrendPoint[], tuning: Tuning): Tre
     bestWpm: best,
     promotions,
     justPromoted: last !== undefined && last.promoted,
+    switches,
+    // Read over the whole record rather than the window, exactly as
+    // `justPromoted` is: what it answers is "did the question change on the
+    // stretch he has just finished", and that is true whether or not the chart
+    // happens to be showing the stretch before it.
+    justSwitched:
+      last !== undefined && previous !== undefined && last.gilding !== previous.gilding,
   };
 }
 
@@ -1012,6 +1076,15 @@ export function reportNote(card: ReportCard, trend: Trend): string {
   if (trend.justPromoted) {
     return 'A gold mark is a stage opening. More of the page is lit there, so the '
       + 'dip after one is the curriculum, not you.';
+  }
+  // Second, and for the same reason the promotion note is first: the number he
+  // is about to read against the ones before it was not measured over the same
+  // job, and he is looking at both on one line. The owner went from 22 wpm to 75
+  // this way, and later to 102, without typing any faster.
+  if (trend.justSwitched) {
+    return 'The rule on the curve is where you changed what the page asks for. The '
+      + 'stretches either side of it are two different jobs, so the step is the '
+      + 'question moving rather than your hands.';
   }
   const slow = card.slowest;
   const quick = card.quickest;
@@ -1914,7 +1987,14 @@ export function drawFrame(state: FrameState, rail: RailState, tuning: Tuning): D
   // Reading mode asks for nothing, so it points at nothing. A board lit for a
   // key the player is not being asked for would be the overlay lying.
   if (state.mode === 'lectio') pushReadingHint(cmds);
-  else pushKeyboard(cmds, state, tuning);
+  else {
+    // Behind the board, so the picture is *uncovered* as keys retire rather
+    // than introduced at some threshold. Reading mode gets neither: it asks for
+    // no keys, and a quill moving for somebody who is not typing would be the
+    // one thing the whole band is forbidden to do.
+    pushLectern(cmds, state, tuning);
+    pushKeyboard(cmds, state, tuning);
+  }
   if (state.mode === 'report') pushReport(cmds, state, tuning);
   // Last, so the report card cannot bury it. Running on fallback data must be
   // impossible to miss from any screen in the game.
@@ -2058,16 +2138,26 @@ function nextLiveGlyph(state: FrameState): Glyph | null {
  * A space already typed goes back to blank -- there is nothing left to ask for,
  * and a ribbon of bars behind the cursor would be noise.
  */
-function pushSpaceMark(cmds: DrawCmd[], i: number, state: FrameState, offset: number): void {
+function pushSpaceMark(
+  cmds: DrawCmd[],
+  i: number,
+  state: FrameState,
+  offset: number,
+  slot?: string,
+): void {
   const current = i === state.cursor;
-  const inset = current ? 0 : M.spaceMarkInset;
+  // A struck space is neither pending nor current: it is a mistake standing on
+  // the page, so it takes the full cell like the caret's own mark and the error
+  // colour with it. That is why the slot may be named by the caller.
+  const marked = slot !== undefined;
+  const inset = current || marked ? 0 : M.spaceMarkInset;
   cmds.push({
     op: 'rect',
     x: i * CELL_W + offset + inset,
     y: M.spaceMarkY,
     w: CELL_W - inset * 2,
     h: M.spaceMarkH,
-    color: pal(current ? (state.blocked ? 'error' : 'gold') : 'rule'),
+    color: pal(slot ?? (current ? (state.blocked ? 'error' : 'gold') : 'rule')),
   });
 }
 
@@ -2076,9 +2166,25 @@ function pushRail(cmds: DrawCmd[], state: FrameState, rail: RailState, tuning: T
 
   const x0 = focalX(M.vw, tuning);
   const { first, last } = visibleRange(state.glyphs.length, rail.offset, M.vw);
+  const faults = state.standing === true ? state.faults : undefined;
   for (let i = first; i < last; i++) {
     const g = state.glyphs[i];
     if (g === undefined || g.ch === '\n') continue;
+    const struck = faults?.[i];
+    if (struck !== undefined) {
+      // What he actually typed, in the cell the right letter wanted, marked
+      // wrong. A struck space prints nothing, so it takes the affordance's own
+      // mark in the error colour rather than leaving the cell looking empty --
+      // an empty cell would read as a character already deleted.
+      if (struck === ' ') pushSpaceMark(cmds, i, state, rail.offset, 'error');
+      else {
+        cmds.push({
+          op: 'text', value: struck, x: i * CELL_W + rail.offset, y: M.railBaseY,
+          style: 'rail-error', color: pal('error'),
+        });
+      }
+      continue;
+    }
     if (g.ch === ' ') {
       // Owed, not yet paid: current or still ahead, and actually asked for.
       if (g.live && i >= state.cursor) pushSpaceMark(cmds, i, state, rail.offset);
@@ -2165,12 +2271,21 @@ function styleColour(style: string): string {
 }
 
 /**
- * Earned fade-out: a key stops being highlighted once its accuracy clears the
- * mastery threshold. The crutch withdraws itself key by key, without the player
- * ever having to decide to give it up.
+ * Earned fade-out: a key stops being drawn once its accuracy clears the mastery
+ * threshold. The crutch withdraws itself key by key, without the player ever
+ * having to decide to give it up.
+ *
+ * Read over the **lifetime** table when the frame carries one, and over the
+ * session's only when it does not. A key is earned over weeks, and `keyStats`
+ * on the frame is what this part has seen -- a hundred and fifty keystrokes
+ * spread over nine fingers, which is fewer than `mastery_min_samples` on most
+ * of them. Judged from that, a key that a player retired months ago comes back
+ * at the top of every stretch and the crutch is never actually given up. Same
+ * reasoning as the report card's, which reads the lifetime table for the same
+ * reason. See docs/design/06-curriculum.md#breaking-the-looking-down-habit.
  */
 function isMastered(key: Key, state: FrameState, tuning: Tuning): boolean {
-  const stat = state.keyStats[key];
+  const stat = (state.report?.keyStats ?? state.keyStats)[key];
   if (stat === undefined) return false;
   const attempts = stat.hits + stat.errors;
   if (stat.hits < tuningValue(tuning, 'mastery_min_samples')) return false;
@@ -2235,6 +2350,199 @@ function describeStrokes(next: Glyph): string {
     .join(' + ');
 }
 
+/**
+ * The scribe at his lectern: the composition of the band the keyboard vacates.
+ *
+ * Every number is `tuning-exempt` on the same grounds as `M`, `SCENE` and
+ * `PIECE`: it composes a picture inside a band, and nothing a player can win or
+ * lose by is decided in it. The board runs from `M.kbTop` to `M.kbTop + 130`,
+ * and the whole vignette is drawn inside that -- it is below the rail by
+ * construction and there is no arithmetic here that could reach up into it.
+ *
+ * He is drawn from rects rather than from `scribe_idle`, and the reason is
+ * scale rather than taste: a sprite is 16 px by contract, the band is 130, and
+ * a sixteen-pixel figure in it would be an ornament in the middle of an empty
+ * strip -- which is the one thing docs/design/02-rail.md#the-scribe-at-his-lectern
+ * says this must not be. The set pieces already draw serpents, trees and a
+ * turning sword out of rects for the same reason. He is the same scribe because
+ * he is the same *roles*: `robe` over `robeShade` with `skin` inside the hood,
+ * resolved through the world he is walking in, so his habit is the colour it is
+ * in the band above.
+ */
+const LECTERN = {
+  floorY: M.kbTop + 118,  // tuning-exempt: band composition
+  headTop: 244,           // tuning-exempt: band composition
+  hoodX: 182,             // tuning-exempt: band composition
+  hoodW: 28,              // tuning-exempt: band composition
+  hoodH: 24,              // tuning-exempt: band composition
+  browH: 8,               // tuning-exempt: band composition
+  faceInset: 6,           // tuning-exempt: band composition
+  faceTop: 8,             // tuning-exempt: band composition
+  faceH: 14,              // tuning-exempt: band composition
+  bodyTop: 268,           // tuning-exempt: band composition
+  bodySteps: 3,           // tuning-exempt: band composition -- a robe, in three widths
+  bodyStepH: 20,          // tuning-exempt: band composition
+  bodyStepW: 8,           // tuning-exempt: band composition -- how much each step flares
+  shoulderW: 36,          // tuning-exempt: band composition
+  armTop: 274,            // tuning-exempt: band composition
+  armSteps: 4,            // tuning-exempt: band composition
+  armW: 10,               // tuning-exempt: band composition
+  armH: 5,                // tuning-exempt: band composition
+  armStepX: 9,            // tuning-exempt: band composition
+  armStepY: 4,            // tuning-exempt: band composition
+  handW: 7,               // tuning-exempt: band composition
+  pageX: 246,             // tuning-exempt: band composition
+  pageY: 262,             // tuning-exempt: band composition
+  pageW: 132,             // tuning-exempt: band composition
+  slats: 9,               // tuning-exempt: band composition -- lines a page holds
+  slatH: 5,               // tuning-exempt: band composition
+  slatSkew: 2,            // tuning-exempt: band composition -- the tilt of the desk
+  boardPad: 5,            // tuning-exempt: band composition -- the board under the page
+  inkPad: 5,              // tuning-exempt: band composition
+  inkH: 2,                // tuning-exempt: band composition
+  stemW: 16,              // tuning-exempt: band composition
+  footW: 62,              // tuning-exempt: band composition
+  footH: 6,               // tuning-exempt: band composition
+  quillSteps: 8,          // tuning-exempt: band composition -- the shaft, in dabs
+  quillDab: 2,            // tuning-exempt: band composition
+  quillRise: 22,          // tuning-exempt: band composition -- how far the hand is above the nib
+  quillLean: 10,          // tuning-exempt: band composition -- and how far behind it
+} as const;
+
+/**
+ * How much of the stage's board the player has earned his way out of, 0..1.
+ *
+ * The share of the keys the curriculum has taught him that have passed the
+ * mastery threshold. It is what the lectern's presence is drawn from, so the
+ * picture arrives at exactly the rate the crutch leaves: nothing is announced
+ * and there is no moment at which it appears.
+ */
+function retiredShare(state: FrameState, tuning: Tuning): number {
+  const keys = state.keySet;
+  if (keys.length === 0) return 0;
+  let retired = 0;
+  for (const key of keys) if (isMastered(key, state, tuning)) retired += 1;
+  return retired / keys.length;
+}
+
+/**
+ * The scribe at his lectern, in the band the keyboard is giving back.
+ *
+ * The best reward the game has, because it is the thing the game is about: he
+ * stops needing the keys drawn for him and gets to watch himself write. So
+ * nothing announces it. It is drawn behind the board at the alpha the board has
+ * retired to, which means it arrives one key at a time and there is no frame on
+ * which it appears -- the crutch simply becomes the work.
+ * See docs/design/02-rail.md#the-scribe-at-his-lectern.
+ *
+ * Three rules it inherits, and all three are structural here rather than
+ * remembered:
+ *
+ *  - **It is below the rail and never enters it.** Every y below is inside the
+ *    keyboard's own band, which begins 34 px under the reading band's floor.
+ *  - **It never competes with the text.** No gold, nothing that blinks, and its
+ *    alpha is the share of the board that has gone, so it is faintest exactly
+ *    when the player still needs to look at the keys.
+ *  - **It moves only when the player types.** The quill's position and the
+ *    written lines are functions of `cursor` and of nothing else. No `animMs`
+ *    reaches this function, and none may: a quill scratching while somebody is
+ *    thinking is the same lie as a world that scrolls without him.
+ *
+ * The page holds the stretch he is copying -- `slats` lines, sized to the part,
+ * so the last character of the part is the last character of the page. That is
+ * what makes a finished page mean something rather than being a loop.
+ */
+function pushLectern(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
+  const scene = state.scene;
+  // No world, no scribe: the tutor draws frames before there is a scenery band,
+  // and those frames stay byte-for-byte what they always were.
+  if (scene === undefined) return;
+  const share = retiredShare(state, tuning);
+  if (share <= 0) return;
+  const theme = worldFor(scene.theme).id;
+
+  const put = (x: number, y: number, w: number, h: number, role: string): void => {
+    cmds.push({
+      op: 'rect',
+      x: px(x), y: px(y),
+      w: Math.max(1, Math.round(w)), h: Math.max(1, Math.round(h)),
+      color: roleIndex(role), alpha: share, theme,
+    });
+  };
+
+  const L = LECTERN;
+  const slatY = (i: number): number => L.pageY + i * L.slatH;
+  const slatX = (i: number): number => L.pageX + i * L.slatSkew;
+  const lastSlat = L.slats - 1;
+
+  // The desk, from the floor up: a foot, a stem, and a board under the page.
+  const stemX = slatX(lastSlat) + L.pageW / 2 - L.stemW / 2;
+  put(stemX - L.footW / 2 + L.stemW / 2, L.floorY, L.footW, L.footH, 'shade');
+  put(stemX, slatY(lastSlat) + L.slatH, L.stemW, L.floorY - slatY(lastSlat) - L.slatH, 'shade');
+  for (let i = 0; i < L.slats; i++) {
+    put(slatX(i) - L.boardPad, slatY(i) + L.slatH, L.pageW + L.boardPad * 2, L.slatH, 'mid');
+  }
+
+  // The page: one slat per line of copy, stepped right as it comes down, which
+  // is the tilt of a lectern without a single diagonal to draw.
+  for (let i = 0; i < L.slats; i++) put(slatX(i), slatY(i), L.pageW, L.slatH, 'light');
+
+  // What he has written. A line per line, and the one under the quill is filled
+  // as far as he has got along it -- both read off the cursor, so the page is a
+  // picture of the passage rather than of the clock.
+  const perLine = Math.max(1, Math.ceil(state.glyphs.length / L.slats));
+  const at = Math.max(0, Math.min(state.cursor, state.glyphs.length));
+  const line = Math.min(lastSlat, Math.floor(at / perLine));
+  const runW = L.pageW - L.inkPad * 2;
+  for (let i = 0; i < line; i++) {
+    put(slatX(i) + L.inkPad, slatY(i) + L.inkH / 2, runW, L.inkH, 'outline');
+  }
+  const along = Math.max(0, Math.min(1, (at - line * perLine) / perLine));
+  const nibX = slatX(line) + L.inkPad + runW * along;
+  const nibY = slatY(line) + L.inkH / 2;
+  if (along > 0) {
+    put(slatX(line) + L.inkPad, nibY, runW * along, L.inkH, 'outline');
+  }
+
+  // The scribe. A hood over a robe that flares to the hem, and one arm out over
+  // the page -- the same three roles the sprite in the band above is painted in.
+  const hoodMid = L.hoodX + L.hoodW / 2;
+  put(L.hoodX, L.headTop, L.hoodW, L.hoodH, 'robe');
+  put(L.hoodX, L.headTop, L.hoodW, L.browH, 'robeShade');
+  put(
+    L.hoodX + L.faceInset, L.headTop + L.faceTop,
+    L.hoodW - L.faceInset * 2, L.faceH, 'skin',
+  );
+  for (let i = 0; i < L.bodySteps; i++) {
+    const w = L.shoulderW + i * L.bodyStepW;
+    put(hoodMid - w / 2, L.bodyTop + i * L.bodyStepH, w, L.bodyStepH, i === 0 ? 'robe' : 'robeShade');
+  }
+  const armX = hoodMid + L.shoulderW / 2 - L.armW;
+  for (let i = 0; i < L.armSteps; i++) {
+    put(armX + i * L.armStepX, L.armTop + i * L.armStepY, L.armW, L.armH, 'robe');
+  }
+  const handX = armX + L.armSteps * L.armStepX;
+  const handY = L.armTop + L.armSteps * L.armStepY;
+
+  // The quill, as a line of dabs from the hand to the nib, so it pivots as he
+  // writes across the line. Dabs rather than a `line` command because a line
+  // carries neither an alpha nor a theme, and this has to fade in with the rest
+  // of the picture and be the colour of the world it is in.
+  const fromX = nibX - L.quillLean;
+  const fromY = nibY - L.quillRise;
+  for (let i = 0; i < L.quillSteps; i++) {
+    const t = i / L.quillSteps;
+    put(
+      fromX + (nibX - fromX) * t, fromY + (nibY - fromY) * t,
+      L.quillDab, L.quillDab, i === L.quillSteps - 1 ? 'outline' : 'accent',
+    );
+  }
+  put(nibX, nibY, L.quillDab, L.quillDab, 'outline');
+  // And his hand rides the quill's shaft, so the arm reads as holding it rather
+  // than as pointing near it.
+  put(handX, handY, L.handW, L.handW, 'skin');
+}
+
 function pushKeyboard(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void {
   const spaceThumb = state.spaceThumb ?? DEFAULT_SPACE_THUMB;
   const keys = overlayLayout(state.layout, spaceThumb);
@@ -2252,7 +2560,15 @@ function pushKeyboard(cmds: DrawCmd[], state: FrameState, tuning: Tuning): void 
     const isNext = lit.has(k.key);
     // Both shift keys are the one `<shift>` the curriculum teaches, so the
     // right-hand one stops being dim exactly when the left-hand one does.
-    const known = taught.has(curriculumKeyFor(k.key));
+    const curriculum = curriculumKeyFor(k.key);
+    const known = taught.has(curriculum);
+    // A key he has earned his way out of is not drawn at all. That is what
+    // "the curriculum retires the overlay a key at a time" has always meant,
+    // and it is what empties the band for a player who has arrived -- what is
+    // behind it is `pushLectern`, drawn first so it is uncovered rather than
+    // introduced. An untaught key is *not* retired: it is still dim, because it
+    // is still something he has not been given.
+    if (known && isMastered(curriculum, state, tuning)) continue;
     cmds.push({
       op: 'rect', x, y, w, h,
       color: pal(isNext ? 'gold' : k.finger),
@@ -2324,6 +2640,18 @@ function pushTrend(cmds: DrawCmd[], trend: Trend): void {
       h,
       color: pal(point.promoted ? 'gold' : 'hud'),
       alpha: point.promoted ? 1 : TREND_ALPHA,
+    });
+  }
+  // Where what the game was asking for changed. A rule *between* two bars and
+  // not a colour on one of them: gold already means a stage opened, and the mode
+  // is not an event -- it is a property of every bar on one side of the line. It
+  // is drawn after the bars and in the guide's own quiet colour, because it is
+  // the chart's own furniture rather than one of his evenings.
+  for (const at of trend.switches) {
+    const x = R.rightX + at * slot - SWITCH_GAP;
+    cmds.push({
+      op: 'line', x1: x, y1: R.trendY, x2: x, y2: base,
+      color: pal('rule'), width: 1,
     });
   }
 }
