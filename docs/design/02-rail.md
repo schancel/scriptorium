@@ -203,6 +203,52 @@ the lie above.
 
 ## Reading mode
 
+**One word at a time, held still.** Not a page gliding past.
+
+The first version scrolled the ribbon at a rising pace, which is a teleprompter, and a
+teleprompter is the thing speed reading exists to get away from: text that moves must be
+tracked, and tracking is the saccade cost the whole technique is trying to remove. The
+owner caught it:
+
+> "Read without typing should snap words into place rather than moving them. Speed reading
+> software only displays one word at a time as I recall. With the second letter of each
+> word anchored to the same place or something like that."
+
+That is RSVP -- rapid serial visual presentation -- and it is what Spritz and the rest do.
+
+### How it works
+
+- **One word is shown at a time.** Words replace each other in place. Nothing slides, ever.
+- **An anchor letter sits on the focal column** and never moves, so the eye has no reason
+  to. The rail already draws a focal guide at that column; in reading mode it marks the
+  anchor, which is the same job it always had.
+- **The anchor is not the middle.** Recognition happens slightly left of centre, so the
+  anchor drifts later as words lengthen -- first letter for a one-letter word, second for
+  short words, third for medium, fourth for long. The word is laid out around it.
+- **Pace is words per minute, literally.** Elsewhere WPM is characters over five, which is
+  the right definition for typing and the wrong one here: this mode shows words, so it
+  should count them.
+- **Punctuation earns a beat.** A comma, a full stop or a verse boundary holds fractionally
+  longer, because a sentence that ends should feel like it ended.
+
+### Why this also settles the comfort question
+
+RSVP has **no motion at all**. There is nothing to freeze under
+[reduced motion](12-motion-and-comfort.md), nothing to step, and no stutter to trade
+against smoothness -- the objection that reduced-motion reading was fifteen jumps a second
+disappears with the scroll it was jumping.
+
+So reading mode goes from the strongest motion stimulus in the game to the weakest, and
+becomes the mode to reach for when the eyes have had enough rather than the one to avoid.
+
+### Coming back down
+
+The pace ramps up while it is sustained. It must also be possible to ease off without
+leaving the mode: the first version required quitting and re-entering, which restarts the
+ramp, on the theory that slowing down should be a decision. In practice that is a decision
+the player cannot express, which is not the same thing.
+
+
 The rail makes a reading mode nearly free: same ribbon, same focal guide, no typing.
 Text flows through at a pace that ramps upward the longer the player sustains it.
 
