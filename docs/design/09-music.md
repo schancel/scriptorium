@@ -120,6 +120,58 @@ All melodies below are public domain. Where a date is given it is first publicat
 | `nun-danket` | Nun danket alle Gott | Johann Crüger, 1647 | `temple` |
 | `passion-chorale` | Passion Chorale ("O Sacred Head") | Hans Leo Hassler, 1601 | `tomb` |
 | `helmsley` | Helmsley ("Lo, He Comes with Clouds Descending") | Thomas Olivers, 1763 | `daybreak` |
+| `kingsfold` | Kingsfold | English traditional; English County Songs, 1893 | `hills` |
+| `conditor-alme` | Conditor alme siderum | Gregorian plainsong, mode IV, 7th c. | `void` |
+| `addisons` | Addison's ("The spacious firmament on high") | John Sheeles, c. 1720 | `firmament` |
+
+Twelve themes and twelve tunes. For a while there were ten, and three themes borrowed:
+`hills` took `cwm-rhondda` from `desert`, `void` took `veni-creator` from `abbey`, and
+`firmament` took `nicaea` from `mountain`. Borrowing is a reasonable thing to do while a
+theme is one of twelve. It stopped being reasonable when `hills` became the Bible's
+default and started resolving for 1,158 of its 1,189 chapters, because the music the
+player hears for nearly the whole book was then on loan from the wilderness.
+
+### Choosing a tune that has to survive its fortieth repeat
+
+`kingsfold` is not chosen the way the other eleven were. The rest each paint one place a
+player passes through; this one plays under Ruth, Kings, the Psalms and Acts, for hours,
+and the thing to optimise is not how good it sounds once but how little it wears.
+
+Four decisions follow from that, and they are the arrangement rather than the melody:
+
+- **A modal tune, not a major one.** Kingsfold is Aeolian on E, and the two cadences that
+  are not the last fall on the flat seventh. A phrase that ends on the flat seventh reads
+  as *continuing*; a major-key tune insists it has finished, four times a minute, for an
+  hour.
+- **Sixteen bars in rounded bar form.** Four four-bar groups, AABA, forty seconds at the
+  authored tempo. The B section is the only place the melody goes above the stave, so
+  there is one arrival per pass rather than one per phrase.
+- **The percussion has a shape.** Silent through the first group, a soft backbeat through
+  the second, kick and hat through the B section, one hat a bar in the fourth. The loop
+  point therefore lands where the texture is emptiest, which is both how the seam is
+  hidden and why forty passes do not feel like forty of the same thing.
+- **Nothing is at full velocity.** Melody at 96, arpeggio at 56, hats at 34. The tune the
+  player hears most should be the quietest thing in the songbook.
+- **The harmonic rhythm is slow.** One chord a bar for most of it and never more than
+  two. A chord change is an event, and a tune with an event every beat for an hour is
+  exhausting whatever the notes are.
+
+### `firmament` is Sheeles, not Haydn
+
+Joseph Addison's *The spacious firmament on high* -- a paraphrase of Psalm 19, and the
+nearest thing in English hymnody to a text about exactly what this theme paints -- carries
+two tunes, and they are easily conflated because both are public domain and both are
+named for the hymn rather than the composer:
+
+| tune | composer | where it is sung |
+|---|---|---|
+| ADDISON'S, or LONDON (Sheeles) | John Sheeles, c. 1720 | English hymnals |
+| CREATION | arranged from Haydn's *The Creation*, 1798 | American hymnals |
+
+This game uses **ADDISON'S**, the Sheeles tune. It was asked for by that name, and it is
+the tune the name belongs to. CREATION has the better provenance argument -- Haydn wrote
+it for a setting of Genesis 1, which is the chapter this theme is painting -- and if the
+owner would rather have it, that is a one-file change and a row in this table.
 
 ## Tempo, and the cues
 

@@ -10,7 +10,7 @@
       "id": "hills",
       "palette": "dry grass and olive, wide pale sky",
       "mood": "open country: fields, flocks, the road between towns",
-      "tune": "cwm-rhondda"
+      "tune": "kingsfold"
     },
     {
       "id": "garden",
@@ -70,13 +70,13 @@
       "id": "void",
       "palette": "black on black, one shade of deep",
       "mood": "before the first day: no ground, no horizon",
-      "tune": "veni-creator"
+      "tune": "conditor-alme"
     },
     {
       "id": "firmament",
       "palette": "night blue, star white",
       "mood": "the expanse, lights set in it",
-      "tune": "nicaea"
+      "tune": "addisons"
     }
   ],
   "_generated_from": "docs/design/05-scenery-warps.md"

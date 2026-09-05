@@ -22,7 +22,7 @@ A **theme** is the reusable bundle: palette, tileset, parallax layers, and tune.
 | id | palette | mood | tune |
 |---|---|---|---|
 | `abbey` | stone greys, candle amber | cloister and library; indoors, when the text says so | `veni-creator` |
-| `hills` | dry grass and olive, wide pale sky | open country: fields, flocks, the road between towns | `cwm-rhondda` |
+| `hills` | dry grass and olive, wide pale sky | open country: fields, flocks, the road between towns | `kingsfold` |
 | `garden` | deep greens, gold light | Eden, before the fall | `wondrous-love` |
 | `desert` | ochre, bleached sky | wilderness and wandering | `cwm-rhondda` |
 | `sea` | blues, foam white | flood, parted waters, deep | `melita` |
@@ -32,8 +32,8 @@ A **theme** is the reusable bundle: palette, tileset, parallax layers, and tune.
 | `temple` | gold, deep red, incense | sanctuary and altar | `nun-danket` |
 | `tomb` | near-black, cold blue | the grave, catacombs | `passion-chorale` |
 | `daybreak` | white-gold, void black | light gathering out of the dark | `helmsley` |
-| `void` | black on black, one shade of deep | before the first day: no ground, no horizon | `veni-creator` |
-| `firmament` | night blue, star white | the expanse, lights set in it | `nicaea` |
+| `void` | black on black, one shade of deep | before the first day: no ground, no horizon | `conditor-alme` |
+| `firmament` | night blue, star white | the expanse, lights set in it | `addisons` |
 
 ### `daybreak` was called `apocalypse`, and that named the wrong thing
 
@@ -95,10 +95,17 @@ of it, a threshing floor, a hillside with sheep on it, a road with towns at both
 That is a different palette (dry grass and olive against a wide pale sky, not ochre
 against bleached white) and a different middle distance (scattered scrub, not more dunes).
 
-The two share a tune, and that is deliberate. `cwm-rhondda` is *"pilgrim through this
-barren land"*, this route is a pilgrimage, and country and wilderness are the same road
-under different weather — so walking out of Judah into the wilderness does not restart the
-music, which is the same argument the [tune-per-chapter rule](#verse-ranges) makes.
+The two shared a tune, and that stopped being deliberate the moment `hills` became the
+Bible's default. Borrowing `cwm-rhondda` from the wilderness was a fair argument while
+`hills` was one theme among twelve — country and wilderness are the same road under
+different weather, so walking out of Judah did not restart the music. But `hills` now
+resolves for 1,158 of the Bible's 1,189 chapters, so the borrowed tune had become *the*
+tune, and the wilderness was lending its music to almost the whole book. `hills` has its
+own now, `kingsfold`, and `desert` keeps `cwm-rhondda`; walking from one into the other
+changes the music because it is the one theme change in this game the player will make
+over and over, and it should be audible. What the borrowing argument was actually
+protecting — that the music not restart every few verses — is the
+[tune-per-chapter rule](#verse-ranges), and that still holds on its own.
 
 Two new tiles, and the ground reused. `tile_ridge` is the far band: two crests of
 *unequal* height with a saddle between them, because this file already says of the wave

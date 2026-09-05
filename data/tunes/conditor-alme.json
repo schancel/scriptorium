@@ -1,0 +1,322 @@
+{
+  "id": "conditor-alme",
+  "name": "Conditor alme siderum",
+  "source": "Latin office hymn to the maker of the stars, 7th c.; Gregorian plainsong, mode IV. Melody transcribed from the GABC of GregoBase chant 4146 (Antiphonale Romanum II, 2009, p. 7) and checked against the Hymnary incipit for CONDITOR ALME SIDERUM, 31355 64556 45432, which is the Sarum form and differs from the Roman by one note in the first line. Public domain.",
+  "bpm": 72,
+  "ppq": 24,
+  "loop": 960,
+  "tracks": [
+    {
+      "ch": "pulse1",
+      "duty": 0.125,
+      "notes": [
+        {
+          "t": 0,
+          "dur": 24,
+          "midi": 64,
+          "vel": 92
+        },
+        {
+          "t": 24,
+          "dur": 24,
+          "midi": 60,
+          "vel": 92
+        },
+        {
+          "t": 48,
+          "dur": 24,
+          "midi": 64,
+          "vel": 92
+        },
+        {
+          "t": 72,
+          "dur": 24,
+          "midi": 67,
+          "vel": 92
+        },
+        {
+          "t": 96,
+          "dur": 24,
+          "midi": 69,
+          "vel": 92
+        },
+        {
+          "t": 120,
+          "dur": 24,
+          "midi": 69,
+          "vel": 92
+        },
+        {
+          "t": 144,
+          "dur": 24,
+          "midi": 65,
+          "vel": 92
+        },
+        {
+          "t": 168,
+          "dur": 48,
+          "midi": 67,
+          "vel": 92
+        },
+        {
+          "t": 240,
+          "dur": 24,
+          "midi": 67,
+          "vel": 92
+        },
+        {
+          "t": 264,
+          "dur": 24,
+          "midi": 69,
+          "vel": 92
+        },
+        {
+          "t": 288,
+          "dur": 24,
+          "midi": 65,
+          "vel": 92
+        },
+        {
+          "t": 312,
+          "dur": 24,
+          "midi": 67,
+          "vel": 92
+        },
+        {
+          "t": 336,
+          "dur": 24,
+          "midi": 65,
+          "vel": 92
+        },
+        {
+          "t": 360,
+          "dur": 24,
+          "midi": 64,
+          "vel": 92
+        },
+        {
+          "t": 384,
+          "dur": 24,
+          "midi": 62,
+          "vel": 92
+        },
+        {
+          "t": 408,
+          "dur": 48,
+          "midi": 64,
+          "vel": 92
+        },
+        {
+          "t": 480,
+          "dur": 24,
+          "midi": 67,
+          "vel": 92
+        },
+        {
+          "t": 504,
+          "dur": 24,
+          "midi": 65,
+          "vel": 92
+        },
+        {
+          "t": 528,
+          "dur": 24,
+          "midi": 62,
+          "vel": 92
+        },
+        {
+          "t": 552,
+          "dur": 24,
+          "midi": 64,
+          "vel": 92
+        },
+        {
+          "t": 576,
+          "dur": 24,
+          "midi": 65,
+          "vel": 92
+        },
+        {
+          "t": 600,
+          "dur": 24,
+          "midi": 64,
+          "vel": 92
+        },
+        {
+          "t": 624,
+          "dur": 24,
+          "midi": 62,
+          "vel": 92
+        },
+        {
+          "t": 648,
+          "dur": 48,
+          "midi": 60,
+          "vel": 92
+        },
+        {
+          "t": 720,
+          "dur": 24,
+          "midi": 60,
+          "vel": 92
+        },
+        {
+          "t": 744,
+          "dur": 24,
+          "midi": 64,
+          "vel": 92
+        },
+        {
+          "t": 768,
+          "dur": 24,
+          "midi": 65,
+          "vel": 92
+        },
+        {
+          "t": 792,
+          "dur": 24,
+          "midi": 67,
+          "vel": 92
+        },
+        {
+          "t": 816,
+          "dur": 24,
+          "midi": 65,
+          "vel": 92
+        },
+        {
+          "t": 840,
+          "dur": 24,
+          "midi": 64,
+          "vel": 92
+        },
+        {
+          "t": 864,
+          "dur": 24,
+          "midi": 62,
+          "vel": 92
+        },
+        {
+          "t": 888,
+          "dur": 48,
+          "midi": 64,
+          "vel": 92
+        }
+      ]
+    },
+    {
+      "ch": "pulse2",
+      "duty": 0.5,
+      "notes": [
+        {
+          "t": 0,
+          "dur": 120,
+          "midi": 52,
+          "vel": 44,
+          "arp": [
+            0,
+            7
+          ],
+          "arpHz": 60
+        },
+        {
+          "t": 120,
+          "dur": 120,
+          "midi": 52,
+          "vel": 44,
+          "arp": [
+            0,
+            7
+          ],
+          "arpHz": 60
+        },
+        {
+          "t": 240,
+          "dur": 120,
+          "midi": 45,
+          "vel": 44,
+          "arp": [
+            0,
+            7
+          ],
+          "arpHz": 60
+        },
+        {
+          "t": 360,
+          "dur": 120,
+          "midi": 45,
+          "vel": 44,
+          "arp": [
+            0,
+            7
+          ],
+          "arpHz": 60
+        },
+        {
+          "t": 480,
+          "dur": 120,
+          "midi": 48,
+          "vel": 44,
+          "arp": [
+            0,
+            7
+          ],
+          "arpHz": 60
+        },
+        {
+          "t": 600,
+          "dur": 120,
+          "midi": 48,
+          "vel": 44,
+          "arp": [
+            0,
+            7
+          ],
+          "arpHz": 60
+        },
+        {
+          "t": 720,
+          "dur": 120,
+          "midi": 52,
+          "vel": 44,
+          "arp": [
+            0,
+            7
+          ],
+          "arpHz": 60
+        },
+        {
+          "t": 840,
+          "dur": 120,
+          "midi": 52,
+          "vel": 44,
+          "arp": [
+            0,
+            7
+          ],
+          "arpHz": 60
+        }
+      ]
+    },
+    {
+      "ch": "triangle",
+      "notes": [
+        {
+          "t": 0,
+          "dur": 480,
+          "midi": 40
+        },
+        {
+          "t": 480,
+          "dur": 240,
+          "midi": 36
+        },
+        {
+          "t": 720,
+          "dur": 240,
+          "midi": 40
+        }
+      ]
+    }
+  ]
+}
