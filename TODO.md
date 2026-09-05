@@ -95,12 +95,14 @@ alone.
     bigger claim than the staging licence covers, and because the flourish already says it.
     One cell in a table if you want the other reading.
     → `docs/design/05-scenery-warps.md#genesis-3-authored-as-the-chapter-it-is`
-14. **`hills` and `desert` share a hymn.** `cwm-rhondda` is *"pilgrim through this barren
-    land"*, this route is a pilgrimage, and country and wilderness are the same road under
-    different weather — so walking out of Judah into the wilderness does not restart the
-    music. It also means the tune the player hears most has no tune of its own. The fix is
-    a new hand-authored tune file, not a table edit.
-    → `docs/design/05-scenery-warps.md#why-hills-and-not-a-fourth-kind-of-desert`
+14. **Thirteen tunes, none borrowed — but nobody has heard them together.** `hills` has
+   Kingsfold now, `void` has the Advent plainsong and `firmament` has Addison's, and the
+   crossfade means all three actually sound. What is unverified is the whole: the tunes
+   were each transcribed against real notation, but no one has sat through a long session
+   and heard them against the cues, against each other at a boundary, and on the fortieth
+   repeat. That is mixing, and it wants ears rather than argument.
+
+
 15. **Eve keeps the fruit, one chapter early.** She joins at Genesis 2:24 now and the fruit is
     Genesis 3's image. It stays because a mark names the *person* rather than the verse
     they arrived on, because it is the one round shape in a set of uprights, and because
