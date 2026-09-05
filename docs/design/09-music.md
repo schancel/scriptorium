@@ -134,6 +134,38 @@ Two reasons, both firm:
 in any editor or DAW into the format above, mapping tracks onto the four channels. Author
 however you like; the repository stores text.
 
+## The music follows the scenery
+
+A theme owns a tune, and for a long time a tune followed the **chapter** row while the
+picture followed the verse rows. The reason was sound: Genesis 1 changes world six times
+as it is typed, and restarting the hymn six times in one chapter would cut it off
+mid-phrase every time.
+
+The cost of that compromise became concrete. `void` and `firmament` exist only as verse
+ranges inside Genesis 1, whose chapter row is `daybreak` — so two tunes were composed,
+verified against notation, and **could never be heard by anyone**.
+
+So the music follows the scenery, and the objection is answered rather than accepted:
+**a tune change crossfades; it does not restart.** Two sequencers run across the boundary,
+one falling and one rising, over the same window the palette uses. Nothing is cut off
+mid-phrase, because nothing is cut off at all.
+
+That is the same argument the picture already won. Interpolating a palette carries a
+transformation the eye reads as one continuous place; crossfading a tune carries it for
+the ear. Genesis 1 becomes plainsong over the deep, opening into light, then water, then
+a garden — which is what the chapter is.
+
+Rules that keep it honest:
+
+- **The crossfade is driven by position in the passage, not by a clock.** Same rule as
+  everything else: the world does not change while the player is thinking.
+- **A chapter row still keys the tune where there are no verse rows**, which is almost
+  everywhere, so nothing about the other 1,158 chapters changes.
+- **Two tunes, not more.** A boundary crossfades one tune into one other; overlapping
+  windows resolve to the nearest boundary rather than stacking a third voice.
+- **Sound cues are unaffected.** A defeat, a candle and a stomp are not music and do not
+  fade.
+
 ## Tunes
 
 All melodies below are public domain. Where a date is given it is first publication.
