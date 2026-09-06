@@ -242,13 +242,51 @@ All melodies below are public domain. Where a date is given it is first publicat
 | `kingsfold` | Kingsfold | English traditional; English County Songs, 1893 | `hills` |
 | `conditor-alme` | Conditor alme siderum | Gregorian plainsong, mode IV, 7th c. | `void` |
 | `addisons` | Addison's ("The spacious firmament on high") | John Sheeles, c. 1720 | `firmament` |
+| `tallis-canon` | Tallis' Canon (the Eighth Tune) | Thomas Tallis, in Archbishop Parker's Psalter, c. 1567 | `household` |
+| `veni-emmanuel` | Veni Emmanuel ("O come, O come, Emmanuel") | French processional, 15th c.; Helmore, *The Hymnal Noted*, 1854 | `cell` |
 
-Twelve themes and twelve tunes. For a while there were ten, and three themes borrowed:
+Fifteen themes and fifteen tunes, and none of them borrowed. For a while there were ten,
+and three themes borrowed:
 `hills` took `cwm-rhondda` from `desert`, `void` took `veni-creator` from `abbey`, and
 `firmament` took `nicaea` from `mountain`. Borrowing is a reasonable thing to do while a
 theme is one of twelve. It stopped being reasonable when `hills` became the Bible's
 default and started resolving for 1,158 of its 1,189 chapters, because the music the
 player hears for nearly the whole book was then on loan from the wilderness.
+
+### The two rooms the letters are written in
+
+[The epistles stand indoors now](05-scenery-warps.md#the-letters-were-written-in-rooms),
+in two rooms, and two themes wanting music was the first real chance since `hills` to
+borrow one instead of writing it. It was declined, for a reason narrower than the one that
+retired the last borrowing: an epistle is not read for hours the way the default theme is,
+so *"the wilderness is lending its music to almost the whole book"* is not the argument
+here. What is, is that these two themes are next to each other. A player reading straight
+down the canon leaves Romans and arrives in Ephesians, and if both rooms played one hymn
+then the one change the epistles make would be inaudible -- which is precisely the case
+`kingsfold` was written for, one book smaller.
+
+**`household` is Tallis' Canon, because a canon is a picture of copying.** It is the eighth
+of the nine tunes Thomas Tallis wrote for Archbishop Parker's Psalter around 1567, and it
+is a canon at the octave: one voice sings a line and a second voice sings the same line
+after it, for the whole length of the tune. That is what a scriptorium is, and it is what
+this game is -- a letter dictated to a scribe, copied by a scribe, typed out by a third
+person now. The arrangement spends its two melodic voices on the canon itself rather than
+on harmony, which is the one place in this songbook where
+[the channel budget](#the-channel-budget) is not a constraint but the point.
+
+**`cell` is Veni Emmanuel, because it is a captive's hymn.** The fifteenth-century French
+processional melody Thomas Helmore set to *O come, O come, Emmanuel* in 1854, and the
+second line of that text is *"ransom captive Israel, that mourns in lonely exile here"*.
+It is Aeolian, it moves almost entirely by step, and it has the plainsong flexibility the
+two Gregorian tunes in this songbook already have -- so a room with one barred window gets
+the sparsest arrangement in the library: melody, a pedal fifth, and a bass that moves once
+a phrase. There is no percussion track at all, which no other tune but the two chants can
+say.
+
+Both were transcribed the way the other thirteen were, and both matched their Hymnary
+incipit note for note on the first pass -- `11711 22314 43322` for Tallis and
+`13555 46543 45313` for Veni Emmanuel, which is fifteen notes of independent agreement
+before a single bar was arranged.
 
 ### Choosing a tune that has to survive its fortieth repeat
 

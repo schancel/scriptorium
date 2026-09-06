@@ -69,7 +69,9 @@ export type SetpieceId =
   | 'lamps_kindled'
   | 'up_to_the_temple'
   | 'gate_of_the_fold'
-  | 'tree_of_life';
+  | 'tree_of_life'
+  | 'by_my_own_hand'
+  | 'before_winter';
 
 export const SETPIECE_IDS: readonly SetpieceId[] = [
   'light_from_dark',
@@ -97,6 +99,8 @@ export const SETPIECE_IDS: readonly SetpieceId[] = [
   'up_to_the_temple',
   'gate_of_the_fold',
   'tree_of_life',
+  'by_my_own_hand',
+  'before_winter',
 ];
 
 const IMPLEMENTED: ReadonlySet<string> = new Set<string>(SETPIECE_IDS);
@@ -427,6 +431,52 @@ const SCRIPTS: Readonly<Record<SetpieceId, Script>> = {
     bloom: progress,
     leaves: progress,
     sway: wave(input.elapsedMs, DRIFT_MS),
+  }),
+
+  /*
+   * The six verses in which a letter names the hand writing it -- Romans 16:22,
+   * 1 Corinthians 16:21, Galatians 6:11, Colossians 4:18, 2 Thessalonians 3:17
+   * and Philemon 19.
+   *
+   * `written` is the ink crossing the sheet, and it is plain progress rather
+   * than `gathering` for a reason worth stating: this is the one flourish in the
+   * table that is a picture of the thing the player is doing, so its rate has to
+   * be his rate. The scribe at his lectern fills his page as a linear function
+   * of the cursor, and a sheet up in the scenery band that accelerated away from
+   * it would break the only joke this passage has -- that there are two people
+   * writing the same line at the same speed on one screen.
+   *
+   * `lamp` is the only clock in it, and it is the only thing in the room that
+   * moves while he is thinking. There is deliberately no third parameter: a set
+   * piece's scalars are what the renderer is allowed to draw, and there is
+   * nothing else in this picture.
+   * docs/design/05-scenery-warps.md#the-letters-that-name-their-own-hand
+   */
+  by_my_own_hand: (input, progress) => ({
+    written: progress,
+    lamp: wave(input.elapsedMs, FLAME_MS),
+  }),
+
+  /*
+   * 2 Timothy 4:9-22: bring the cloak from Troas, and come before winter.
+   *
+   * `cold` climbs and `lit` falls, which is one fact told twice because the
+   * renderer needs both: the room takes a veil of its own outline as the cold
+   * comes in, and the lamp beside the page goes out as it does. It is
+   * `gathering` rather than plain progress because the passage does not start
+   * cold -- it starts with a list of people who have left, and arrives at
+   * winter.
+   *
+   * This is the whole of what the third interior would have been. The text puts
+   * the cold in two verses at the end of the last chapter of the letter, so it
+   * is authored there rather than over three chapters that say nothing about
+   * the weather.
+   * docs/design/05-scenery-warps.md#2-timothy-is-colder-and-says-so-in-two-verses
+   */
+  before_winter: (input, progress) => ({
+    cold: gathering(progress),
+    lit: 1 - progress,
+    flame: wave(input.elapsedMs, FLAME_MS),
   }),
 };
 

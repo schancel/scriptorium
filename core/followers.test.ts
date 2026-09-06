@@ -42,10 +42,13 @@ import { VIRTUAL_W, drawFrame, sceneLayout, type FrameState, type SceneState } f
 import { createRail, layoutRail } from './rail.js';
 import { createCloud, createEntity } from './entities.js';
 import { createDamage } from './damage.js';
-import { SPRITE_SIZE, spriteFor } from './sprites.js';
+import { SPRITE_SIZE, followerMarkId, spriteFor } from './sprites.js';
 import { DEFAULT_THEME } from './worlds.js';
 import { classify } from './illumination.js';
-import { arriveAt, completePassage, createMap, discoverSecret, loadRoute, nodeRefs } from './route.js';
+import {
+  arriveAt, completePassage, createMap, discoverSecret, loadRoute, nodeCovers, nodeRefs,
+  routeNodes, type Route,
+} from './route.js';
 import { loadTuning } from './tuning.js';
 import type { DrawCmd, Glyph, Key, Score, Tuning } from './types.js';
 
@@ -62,6 +65,28 @@ function readRepoFile(rel: string): string {
 
 const TUNING: Tuning = loadTuning(JSON.parse(readRepoFile('data/tuning.json')) as unknown);
 const ROUTE = loadRoute(JSON.parse(readRepoFile('data/routes/pilgrimage.json')) as unknown);
+
+/**
+ * Every route this build ships, because a figure joins on the routes that go
+ * past him.
+ *
+ * `party` walks whatever route the player has chosen, so "is this row reachable"
+ * was never a question about the Pilgrimage graph alone -- it only looked like
+ * one for as long as the roster named nothing outside it. Tertius is the case
+ * that made the difference visible: Romans is not on Pilgrimage, which is
+ * nineteen passages joined by phrases they share and Romans shares none of them,
+ * and Canonical names `Romans 1-16`.
+ * docs/design/11-followers.md#who-joins-after-what
+ */
+const ROUTES: readonly Route[] = ['pilgrimage', 'canonical', 'narrative', 'wisdom'].map(
+  (id) => loadRoute(JSON.parse(readRepoFile(`data/routes/${id}.json`)) as unknown),
+);
+
+/** True when some shipped route names a passage covering this citation. */
+function someRouteReaches(ref: string): boolean {
+  return ROUTES.some((route) =>
+    [...routeNodes(route).values()].some((node) => nodeCovers(node, ref)));
+}
 const ROSTER = loadFollowers(JSON.parse(readRepoFile('data/followers.json')) as unknown);
 
 const LAYOUT = sceneLayout(DEFAULT_THEME, TUNING);
@@ -162,16 +187,35 @@ test('AT MOST ONE FIGURE PER ARRIVAL, AND NEVER A FIGURE OFF THE ROUTE', () => {
   // passage the route does not have is a figure nobody can ever meet, and two
   // rows arriving at the same instant are two sentences for one strip.
   for (const row of ROSTER.rows) {
-    assert.ok(NODES.includes(row.ref), `${row.who} joins after ${row.ref}, which is not on the route`);
+    assert.ok(
+      someRouteReaches(row.ref),
+      `${row.who} joins after ${row.ref}, which no shipped route reaches`,
+    );
   }
+  // "Some route" is not "any citation at all": a row naming a chapter no route
+  // has is still a figure nobody can meet, and is still an error.
+  assert.equal(someRouteReaches('Romans 16'), true);
+  assert.equal(someRouteReaches('Romans 17'), false);
+  assert.equal(someRouteReaches('Hezekiah 1'), false);
   const arrivals = new Set(ROSTER.rows.map((row) => `${row.ref}:${String(row.verse ?? 0)}`));
   assert.equal(arrivals.size, ROSTER.rows.length, 'two figures arrive at the same place');
-  // And the empty nodes are the authored ones, not rows somebody dropped.
+  // And the empty *Pilgrimage* nodes are the authored ones, not rows somebody
+  // dropped. Only Pilgrimage is checked this way: it is the route whose nodes
+  // are individually authored, where Canonical is all 1,189 chapters and a rule
+  // demanding a figure for each of them is a rule demanding 1,167 mascots.
   const held = new Set(ROSTER.rows.map((row) => row.ref));
   assert.deepEqual(
     NODES.filter((ref) => !held.has(ref)),
     ['Genesis 1', 'Genesis 3'],
     'a node lost its figure',
+  );
+  // Tertius is the one row that is not a Pilgrimage node, and he is deliberate:
+  // a scribe joining a scribe, at the verse where he names himself.
+  // docs/design/05-scenery-warps.md#tertius-and-the-lectern
+  assert.deepEqual(
+    ROSTER.rows.filter((row) => !NODES.includes(row.ref))
+      .map((row) => [row.who, row.ref, row.verse, row.mark]),
+    [['Tertius', 'Romans 16', 22, 'quill']], // tuning-exempt: Romans 16:22
   );
   // Genesis 2 is the one passage that hands over two, and it names the verse of
   // each: the man formed, then the woman made a wife.
@@ -344,11 +388,37 @@ test('the party is derived from the record and nothing else is stored', () => {
 });
 
 test('the whole route gathers the whole company, less the nodes that hand over nobody', () => {
-  assert.equal(fullParty().length, ROSTER.rows.length);
+  // Every row *this route reaches*, which is the whole roster but Tertius: he
+  // is on Romans 16, and Pilgrimage does not go through Romans.
+  const reachable = ROSTER.rows.filter((row) => NODES.includes(row.ref));
+  assert.equal(fullParty().length, reachable.length);
+  assert.equal(fullParty().length, ROSTER.rows.length - 1);
   // Two nodes hand over nobody -- Genesis 1 and Genesis 3 -- and one hands over
   // two, so the count is not the node count and is not meant to be.
   const empty = NODES.filter((ref) => !ROSTER.rows.some((row) => row.ref === ref));
   assert.equal(fullParty().length, NODES.length - empty.length + 1);
+});
+
+test('TERTIUS JOINS AT ROMANS 16:22, ON A ROUTE THAT GOES THROUGH ROMANS', () => {
+  // The verse where the man taking the dictation names himself, and the only
+  // row in the table that is not on Pilgrimage. On Canonical, `Romans 1-16`
+  // covers it -- so standing in Romans 16 at or past verse 22 is enough, with
+  // nothing stored and the chapter unfinished.
+  // docs/design/05-scenery-warps.md#tertius-and-the-lectern
+  const canonical = ROUTES[1];
+  assert.ok(canonical !== undefined);
+  const standing = arriveAt(createMap(canonical), 'Romans 16');
+  const before = party(ROSTER, canonical, standing, 21); // tuning-exempt: the verse before
+  const at = party(ROSTER, canonical, standing, 22);     // tuning-exempt: Romans 16:22
+  assert.ok(!before.some((f) => f.who === 'Tertius'), 'he arrives a verse early');
+  const tertius = at.find((f) => f.who === 'Tertius');
+  assert.ok(tertius !== undefined, 'he never arrives');
+  assert.equal(followerCitation(tertius), 'Romans 16:22');
+  assert.equal(tertius.markId, followerMarkId('quill'));
+  assert.equal(arrivalLine(tertius.who), 'Tertius walks with you.');
+  // And he is unreachable on Pilgrimage, which is the honest half of the rule
+  // rather than a bug: a figure joins on the routes that go past him.
+  assert.ok(!fullParty().some((f) => f.who === 'Tertius'));
 });
 
 // --- the cap -----------------------------------------------------------------

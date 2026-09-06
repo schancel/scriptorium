@@ -318,6 +318,21 @@ const PIECE = {
   wallRun: 0.4,      // tuning-exempt: art -- how far up the band a city wall stands
   templeW: 96,       // tuning-exempt: art -- the temple front, in virtual px
   templeRise: 0.6,   // tuning-exempt: art -- how far up the band the temple stands, arrived
+  // The letters. A table with a sheet on it, standing in the scenery band --
+  // which is the same picture `pushLectern` draws in the band the keyboard
+  // vacates, one band up and a good deal smaller. The two are deliberately not
+  // shared code: the lectern is a *figure at a desk* sized to a 130px strip and
+  // this is a *desk* sized to the scenery band, and one function trying to be
+  // both would be composing two pictures at once.
+  deskW: 96,         // tuning-exempt: art -- the table, in virtual px
+  deskRise: 0.34,    // tuning-exempt: art -- how far up the band the table stands
+  deskTop: 5,        // tuning-exempt: art -- the thickness of the table top
+  legW: 5,           // tuning-exempt: art -- a table leg, in virtual px
+  sheetInset: 12,    // tuning-exempt: art -- how far in from the table's edge the sheet lies
+  sheetH: 26,        // tuning-exempt: art -- and how tall the sheet stands
+  lineTop: 3,        // tuning-exempt: art -- the sheet's top margin
+  lineStep: 3,       // tuning-exempt: art -- how far apart the lines of copy run
+  inkH: 2,           // tuning-exempt: art -- how thick a line of ink is
 } as const;
 
 /** The art role the sky behind the parallax takes; every theme supplies one. */
@@ -1771,6 +1786,56 @@ function setpieceArt(
       bandRect(back, theme, 'light', 0, SCENE.top, M.vw, h, p('leaves'));
       bandRect(back, theme, 'accent', (M.vw - PIECE.fireW) / 2 + PIECE.swellLift * p('sway'),
         ground - PIECE.fireH, PIECE.fireW, PIECE.fireH, p('bloom'));
+      break;
+    }
+    case 'by_my_own_hand': {
+      // The letter being written, drawn one band above the page being copied.
+      // `pushLectern` fills its nine lines off the cursor and this fills its
+      // seven off `written`, which is plain progress -- so on these six verses
+      // there are two sheets on one screen taking ink at the same rate, and
+      // neither of them moves while the player is thinking. That doubling is the
+      // whole reason the flourish exists; see
+      // docs/design/05-scenery-warps.md#tertius-and-the-lectern.
+      //
+      // Nobody is drawn at the table. The verse says who is holding the pen and
+      // the scenery does not repeat it, for the reason `walking_in_the_garden`
+      // draws no figure either: a person put into the band is a claim the
+      // picture has no way to take back.
+      const x = (M.vw - PIECE.deskW) / 2;
+      const top = ground - rise * PIECE.deskRise;
+      for (const legX of [x + PIECE.legW, x + PIECE.deskW - PIECE.legW * 2]) {
+        bandRect(back, theme, 'outline', legX, top, PIECE.legW, ground - top, 1);
+      }
+      bandRect(back, theme, 'mid', x, top, PIECE.deskW, PIECE.deskTop, 1);
+      const sheetY = top - PIECE.sheetH;
+      const sheetW = PIECE.deskW - PIECE.sheetInset * 2;
+      bandRect(back, theme, 'highlight', x + PIECE.sheetInset, sheetY, sheetW, PIECE.sheetH, 1);
+      const runW = sheetW - PIECE.markW;
+      for (let i = 0; i < PIECE.motes; i += 1) {
+        bandRect(back, theme, 'outline',
+          x + PIECE.sheetInset + PIECE.markW / 2,
+          sheetY + PIECE.lineTop + PIECE.lineStep * i,
+          runW * inTurn(p('written'), i), PIECE.inkH, 1);
+      }
+      // The lamp on the table: the one thing here that moves on a clock, and the
+      // only clock in the flourish.
+      bandRect(back, theme, 'flame', x + PIECE.deskW + PIECE.markW,
+        top - PIECE.fireH, PIECE.markW, PIECE.fireH,
+        PIECE.emberFloor + (1 - PIECE.emberFloor) * p('lamp'));
+      break;
+    }
+    case 'before_winter': {
+      // The cold coming in and the lamp going out. `lit` falls, so the flame is
+      // shorter and fainter as the passage runs and is gone by the end of it --
+      // this is the only flourish in the table whose fire dies, and it is
+      // allowed to because 4:21 says winter is coming. The veil is `outline`
+      // rather than `shade`, so what closes over the room is its own dark and
+      // not more daylight.
+      const lit = p('lit');
+      bandRect(back, theme, 'flame', M.vw / 2, ground - PIECE.fireH * lit,
+        PIECE.markW, PIECE.fireH * lit,
+        lit * (PIECE.emberFloor + (1 - PIECE.emberFloor) * p('flame')));
+      veil(front, theme, 'outline', p('cold'));
       break;
     }
     default: {

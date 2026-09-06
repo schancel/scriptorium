@@ -34,6 +34,8 @@ A **theme** is the reusable bundle: palette, tileset, parallax layers, and tune.
 | `daybreak` | white-gold, void black | light gathering out of the dark | `helmsley` |
 | `void` | black on black, one shade of deep | before the first day: no ground, no horizon | `conditor-alme` |
 | `firmament` | night blue, star white | the expanse, lights set in it | `addisons` |
+| `household` | plaster, lamp amber, dark rafters | a room in a house: where a letter is written, and where one is read out | `tallis-canon` |
+| `cell` | cold grey, iron, one slot of daylight | a room a man is kept in: one barred opening, high up, and no lamp | `veni-emmanuel` |
 
 ### `daybreak` was called `apocalypse`, and that named the wrong thing
 
@@ -217,50 +219,180 @@ that a letter is not a place.
 The owner's answer: *"paul was typing in a house in corinth when romans was written"* —
 and then, of the prison letters, *"he was under house arrest apparently."*
 
-Both are true of different letters — but they are not equally well founded, and the
-owner questioned the second one. Sorting text from tradition:
+He is right that a letter is not placeless. But the two halves of that answer are not
+equally well founded, and telling them apart is the whole of what this section is careful
+about.
 
-- **Romans is written from Corinth, to Rome.** Rome is the address — *"to all who are in
-  Rome"* (1:7) — and Corinth is where the pen was: Phoebe of Cenchreae, Corinth's port
-  (16:1); Gaius his host (16:23), plausibly the Gaius baptised at Corinth (1 Cor 1:14);
-  and Erastus the city treasurer, whose name is cut into a pavement there. And 16:22 —
-  *"I, Tertius, who write the letter, greet you"*.
+### The room is textual; the city is not
 
-  **The scene is where the writing happens, not where it is read.** That is the rule for
-  every letter, and it matters because a letter is named for its destination: the player
-  is the one holding the pen, so he sits in the room the ink is in. A patron's house in
-  Corinth, a guest, and a scribe taking dictation.
-- **The prison letters are written in chains — and the city is not stated.** Ephesians,
-  Philippians, Colossians and Philemon say the chains themselves: *"remember my chains"*
-  (Col 4:18), *"my bonds are manifest in the whole praetorian guard"* (Phil 1:13). What
-  none of them says is *which* imprisonment. Attributing them to the Roman house arrest
-  of Acts 28 is the traditional reading and a reasonable one, but Ephesus and Caesarea
-  have real support: Paul speaks of *"far more imprisonments"* (2 Cor 11:23), and
-  πραιτώριον is used of Herod's praetorium in Caesarea (Acts 23:35) as readily as of
-  Rome's.
+**Romans names its room.** 16:22 — *"I, Tertius, who write the letter, greet you in the
+Lord"*; 16:23 — *"Gaius, my host, and host of the whole assembly"*, and Erastus the
+treasurer of the city. A patron's house, a guest staying in it, an assembly that meets in
+it, and a scribe writing to dictation. Not one word of that is inferred.
 
-  **So the room is authored and the city is not.** Chains, a guard, a door that does not
-  open — that is what the letters supply and what the player sees. Rome is not named for
-  these four. Acts 28 is a separate case, where the house arrest in Rome simply *is* the
-  text and can be authored as what it says.
-- **2 Timothy is colder than either**, and says so: 4:13 asks for the cloak left at Troas,
-  and 4:21 asks him to come before winter.
+**Four letters name their chains, and no city.** Ephesians 3:1 and 6:20, Philippians 1:7
+and 1:13, Colossians 4:18 — *"Remember my chains"* — Philemon 1, 9, 10 and 13. That they
+were written by a man under guard is what those letters say about themselves.
 
-So an epistle is not placeless. It is an interior, and the interiors differ: a patron's
-house is not a guarded room, and neither is a cold one.
+**That the chains are the Roman ones of Acts 28 is tradition, not text.** No prison letter
+names its city. Ephesus and Caesarea both have real support: Paul speaks of *"far more
+imprisonments"* than his opponents (2 Corinthians 11:23), and πραιτώριον is used of
+Herod's praetorium at Caesarea (Acts 23:35) as readily as of Rome's. Philippians 4:22's
+*"those who are of Caesar's household"* leans toward Rome and does not settle it.
 
-This is the same line the game held over Mary Magdalene, where a conflation tradition has
-made since the sixth century was declined because the text does not make it. Worth saying
-plainly that the line was crossed here by me and caught by the owner: I asserted the
-traditional attribution as though it were what the text said.
+So **the room is authored and the city is not**, and nothing the player is shown or told
+places any of the four letters anywhere. This is the same decision as
+[Mary Magdalene's empty hands](11-followers.md#a-figure-may-carry-nothing) one level up: a
+jar of spices is what tradition puts in her hand and what John's twentieth chapter does
+not, and Rome is what tradition puts around those four letters and what none of them
+does. A guarded room is what the letters themselves support, and a guarded room is what is
+drawn.
 
-**And the scribe is already the game's own figure.** A letter dictated to Tertius, copied
-by a novice at a lectern, is the one kind of passage where the scene and the player are
-the same thing. The lectern that fills the keyboard's band is not a decoration here; it is
-what the passage is about.
+**Acts 28 is a different case and is authored plainly**, because there the city *is* the
+text: 28:16 has the centurion, the captain of the guard and the soldier; 28:30 has him two
+whole years in his own rented house in Rome, *"and received all who were coming to him"*.
+That is a household with a guard on it and it is stated outright, so it is rendered as
+what it says.
 
-Tertius is the natural follower for Romans — a scribe joining a scribe, and one of the
-very few people in Scripture who identifies himself as the person holding the pen.
+### Two rooms, and the argument against a third
+
+An epistle is an interior, and not every interior is the same interior. A patron's house
+with an assembly in it is not a room a man is kept in, and the letters read differently in
+each. So there are two:
+
+- **`household`** — a room in a house: rafters over painted plaster, a lamp, a swept
+  floor. It is the well-founded room at Romans and it is also the **plain** one, which is
+  why the letters that name no room at all take it. That a letter was written and read
+  indoors is the least a scene map can say while not standing in a field, and it is the
+  one claim every letter in the canon supports: they were dictated onto papyrus, sent, and
+  read out to a gathering that was meeting in somebody's house.
+- **`cell`** — a room a man is kept in: bare wall, one barred opening high up out of
+  reach, and no lamp lit in it. Ephesians, Philippians, Colossians, Philemon and
+  2 Timothy, which are the letters that say they were written in chains.
+
+**And the abbey is not one of them, which was the first thing to settle.** It is the
+obvious candidate — it is already the game's indoor theme, it already has a tune, and
+using it would have cost nothing at all. It is also a *medieval cloister*: an arcade of
+round-headed arches in cut stone, drawn for a scriptorium a thousand years after Tertius
+put down the pen. Putting Romans in it would be the scenery asserting the wrong millennium
+as confidently as the old default asserted the wrong continent, and it would take back
+what [John 20:19-31](#john-20-a-tomb-that-becomes-a-garden) just earned: the abbey is
+finally a room the text puts the scribe in rather than the world by accident, and it
+should not go straight back to being a general-purpose indoors. It stays what it is — the
+cloister, and the neutral for an imported novel.
+
+There was a third drafted, and it was cut. **2 Timothy is colder than the other four and
+says so** — 4:13 asks for the cloak left at Troas, 4:21 asks him to come before winter —
+and the first draft made that a room of its own. But cold is a *degree* and not a
+different room, and a third theme would have differed from `cell` by its palette and by
+one tile: which is exactly the failure the followers doc names when it says that
+[a shared set is not one body with a switch on it](11-followers.md#a-shared-set-is-not-one-body-with-a-switch-on-it).
+Worse, it would have put the cold in the whole book, when the text puts it in two verses
+at the end of the last chapter. So the cold is authored where the text actually says it —
+see [before winter](#2-timothy-is-colder-and-says-so-in-two-verses) — and there are two
+rooms rather than three.
+
+### The letters that name their own hand
+
+Six letters stop, near the end, and say who is holding the pen:
+
+| verse | what it says |
+|---|---|
+| Romans 16:22 | *"I, Tertius, who write the letter, greet you in the Lord."* |
+| 1 Corinthians 16:21 | *"This greeting is by me, Paul, with my own hand."* |
+| Galatians 6:11 | *"See with what large letters I write to you with my own hand."* |
+| Colossians 4:18 | *"I, Paul, write this greeting with my own hand. Remember my chains."* |
+| 2 Thessalonians 3:17 | *"I, Paul, write this greeting with my own hand, which is the sign in every letter."* |
+| Philemon 1:19 | *"I, Paul, write this with my own hand: I will repay it."* |
+
+Every one of those is a single verse, and every one of them is the passage talking about
+the act the player is performing. They are the six rows in the table that are
+[held](#held-scenes-not-every-passage-is-a-journey), and they carry the one set piece this
+section adds, `by_my_own_hand`: a table standing in the scenery band with a sheet on it, a
+lamp beside it, and a line of ink crossing the sheet as the verse is typed.
+
+**Romans 16:22 is the scribe's hand and the other five are the author's**, and that
+difference is the reason Tertius is worth having at all — see
+[Tertius](#tertius-and-the-lectern) below. The flourish is the same picture either way,
+because what it draws is the sheet rather than the person: nothing in this game's scenery
+draws a figure, which is the rule
+[Genesis 3:8 already settled](#genesis-3-authored-as-the-chapter-it-is).
+
+### 2 Timothy is colder, and says so in two verses
+
+*"Bring the cloak that I left at Troas with Carpus when you come — and the books,
+especially the parchments"* (4:13). *"Be diligent to come before winter"* (4:21). Between
+them stands *"only Luke is with me"*, and *"at my first defence no one came to my
+support"*.
+
+`2 Timothy 4:9-22` is therefore one verse row of `cell`, [held](#held-scenes-not-every-passage-is-a-journey),
+carrying a set piece called `before_winter`: the light drains out of the room, the one
+warm thing in the palette goes out, and the barred slot is the only thing left with any
+light in it. Everything before verse 9 is the ordinary room, because everything before
+verse 9 says nothing about the weather. This is the same rule as
+[the boundary at Genesis 4:11](#genesis-4-which-is-where-the-default-earns-itself) — the
+world turns on the verse where the text turns it, and not at the top of the book.
+
+It is also why the third theme was not needed. A palette cooling over fourteen verses is
+a picture of a room getting cold; a whole theme is a picture of a different room.
+
+### A whole book that never scrolls would be a bigger claim than it looks
+
+The natural thought is that a letter should be [held](#held-scenes-not-every-passage-is-a-journey)
+throughout — nothing in an argument travels, and Romans is not a journey. It is the wrong
+call, three times over, and only seven ranges in the epistles are held.
+
+**A held range has no monsters in it.** That is a documented consequence and a good one
+for a conversation of five verses; over sixteen chapters it is not rest, it is the
+platformer switched off for an evening. The blot-cloud, the combo and the felling of
+things are what carry a long read, and a book that quietly removed them would read as the
+game having broken rather than as the world standing still.
+
+**A held range wants a tableau, and an argument is not one.** Every held row in this file
+puts something in the band that the completed words move: the serpent leans, the fig
+leaves close, the lamps kindle. Held with nothing to move is a still photograph, and
+Genesis 4:11-15 gets away with it for five verses because five verses is a beat.
+
+**And the scribe is not Paul.** The world scrolls because *the copyist* is getting on with
+the page — [the scribe never becomes anyone](#genesis-3-authored-as-the-chapter-it-is) in
+the text, in any book, which is the rule the whole route rests on. A letter that never
+scrolled would be the game quietly asserting that the figure on screen is the man sitting
+still in the room, and he is not; he is a novice at a lectern somewhere else entirely,
+copying what that man dictated.
+
+So what is held is what the text itself stops for: the six verses where the letter names
+the hand writing it, and the fourteen at the end of 2 Timothy where nobody is going
+anywhere and winter is coming. Seven ranges out of a hundred and twenty-one chapters, and
+every one of them a passage that says it is standing still.
+
+### Tertius, and the lectern
+
+**In a letter the scene and the player are the same thing.** A text dictated to a scribe,
+copied by a scribe, drawn for somebody typing it out a third time — this is the one place
+in the game where the fiction closes on itself, and it would be a waste to render it as
+merely another room.
+
+Two cheap things make it land, and neither is a new mechanism.
+
+**The set piece is the lectern, one band up.** `by_my_own_hand` draws a table with a sheet
+on it and fills the sheet a line at a time, and
+[the scribe at his lectern](02-rail.md#the-scribe-at-his-lectern) fills his page a line at
+a time in the band the keyboard has vacated. Both are functions of the cursor and of
+nothing else, so on those six verses there are two pages being written at the same rate on
+one screen, one by the letter and one by the player. Neither moves while he is thinking.
+
+**And the scene is held while it happens**, so on those verses the two nibs are the only
+things moving on the screen at all. That is what the hold buys here that a palette could
+not.
+
+**Tertius joins at Romans 16:22.** A scribe joining a scribe, and one of very few people
+in Scripture who names himself as the one holding the pen — which is why he is the only
+figure in the roster whose mark is the game's own instrument. See
+[the roster](11-followers.md#who-joins-after-what).
+
+Romans is not on the Pilgrimage route, so he is reachable on the routes that name it —
+Canonical names `Romans 1-16` — and that is the ordinary shape of the rule rather than an
+exception to it: a figure joins on the routes that go past him.
 
 ## Held scenes: not every passage is a journey
 
@@ -560,6 +692,38 @@ scene, so most passages need only a theme and the memorable ones can be special.
 | John 20:1-15 | `tomb` | `light_from_dark` | — |
 | John 20:16-18 | `garden` | — | — |
 | John 20:19-31 | `abbey` | — | — |
+| Acts 28 | `household` | — | — |
+| Acts 28:1-10 | `sea` | — | — |
+| Acts 28:11-15 | `hills` | — | — |
+| Acts 28:16-31 | `household` | — | — |
+| Romans 1-16 | `household` | — | — |
+| Romans 16:22 | `household` | `by_my_own_hand` | yes |
+| 1 Corinthians 1-16 | `household` | — | — |
+| 1 Corinthians 16:21 | `household` | `by_my_own_hand` | yes |
+| 2 Corinthians 1-13 | `household` | — | — |
+| Galatians 1-6 | `household` | — | — |
+| Galatians 6:11 | `household` | `by_my_own_hand` | yes |
+| Ephesians 1-6 | `cell` | — | — |
+| Philippians 1-4 | `cell` | — | — |
+| Colossians 1-4 | `cell` | — | — |
+| Colossians 4:18 | `cell` | `by_my_own_hand` | yes |
+| 1 Thessalonians 1-5 | `household` | — | — |
+| 2 Thessalonians 1-3 | `household` | — | — |
+| 2 Thessalonians 3:17 | `household` | `by_my_own_hand` | yes |
+| 1 Timothy 1-6 | `household` | — | — |
+| 2 Timothy 1-4 | `cell` | — | — |
+| 2 Timothy 4:9-22 | `cell` | `before_winter` | yes |
+| Titus 1-3 | `household` | — | — |
+| Philemon 1 | `cell` | — | — |
+| Philemon 1:19 | `cell` | `by_my_own_hand` | yes |
+| Hebrews 1-13 | `household` | — | — |
+| James 1-5 | `household` | — | — |
+| 1 Peter 1-5 | `household` | — | — |
+| 2 Peter 1-3 | `household` | — | — |
+| 1 John 1-5 | `household` | — | — |
+| 2 John 1 | `household` | — | — |
+| 3 John 1 | `household` | — | — |
+| Jude 1 | `household` | — | — |
 | Revelation 22 | `garden` | `tree_of_life` | — |
 
 `held` marks a range in which the camera does not translate and the tableau carries the
@@ -618,6 +782,15 @@ Between them they are the gate, the wall and the temple the owner asked for, and
 two rather than one because *going up to* a city and *being taken out of* it are not the
 same picture -- in one the wall grows and something arrives to stay, in the other
 everything gets smaller behind you.
+
+The two flourishes [the letters](#the-letters-were-written-in-rooms) add are the only ones
+in the table drawn on a table rather than on a landscape, and one of them is the picture
+the game is already drawing under the keyboard:
+
+| passage | setpiece | what the world does |
+|---|---|---|
+| the six verses that name their own hand | `by_my_own_hand` | a table with a sheet on it stands in the band, a lamp beside it, and the ink crosses the sheet a line at a time -- the same page, at the same rate, as the one [the scribe at his lectern](02-rail.md#the-scribe-at-his-lectern) is filling in the band below |
+| 2 Timothy 4:9-22 | `before_winter` | the light drains out of the room and the lamp goes out, until the barred slot is the only thing left with any light in it |
 
 `rising_water` physically raises the level as the flood does. `parted_walls` stands the
 sea up on either side of the rail. `darkness_at_noon` drains the palette to greyscale

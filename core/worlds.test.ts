@@ -167,6 +167,64 @@ test('parallax layers are ordered back to front and never overtake the ground', 
   }
 });
 
+/** Rec. 601 luma, which is close enough to say which of two colours is paler. */
+function luma(world: string, role: string): number {
+  const c = colourFor(worldFor(world), roleIndex(role));
+  const r = (c >> 16) & 0xff;  // tuning-exempt: bit position of the red channel
+  const g = (c >> 8) & 0xff;   // tuning-exempt: bit position of the green channel
+  return 0.299 * r + 0.587 * g + 0.114 * (c & 0xff); // tuning-exempt: Rec. 601 luma weights
+}
+
+test('AN INTERIOR IS A ROOM: ITS SKY IS NOT A SKY', () => {
+  // `shade` is drawn as a full-band rect behind the parallax, so on every
+  // outdoor theme it is the sky and is one of the palest colours the theme has.
+  // The two rooms use the same role for what is *behind* their walls, which is
+  // not a sky at all: in `household` it is the dark of the roof void showing
+  // between the rafters, and in `cell` it is the daylight in one barred slot.
+  // Those are the two ends of the range, and each has to sit on the right side
+  // of its own wall or the picture inverts.
+  // docs/design/05-scenery-warps.md#the-letters-were-written-in-rooms
+
+  // The house is lamplit and closed: what shows through the ceiling is darker
+  // than the ceiling, so the gaps read as depth rather than as holes to the sky.
+  assert.ok(luma('household', 'shade') < luma('household', 'mid'),
+    'the household roof void is brighter than the roof');
+
+  // The cell is the other way round and has to be: the slot is the only light
+  // the room has, so it is paler than the wall it is cut into.
+  assert.ok(luma('cell', 'shade') > luma('cell', 'mid'),
+    'the cell wall is brighter than the light coming through it');
+
+  // And neither of them is as bright as open country. `hills` is the Bible's
+  // default and this file says of it that it gives the sky the palest `shade`
+  // in the table; a room lit brighter than the outdoors would take that away.
+  for (const room of ['household', 'cell', 'abbey']) {
+    assert.ok(luma(room, 'shade') < luma('hills', 'shade'),
+      `${room} has a wider sky than open country`);
+  }
+});
+
+test('the cell is the one theme with no warm light in it', () => {
+  // Every other theme keeps an amber in `accent` or `flame` -- a lamp, a fire, a
+  // sunrise. This room has no lamp lit in it, so its warmest colour is the
+  // daylight in the bars, and `accent` is a cold blue. That is the whole of what
+  // the palette is asserting and it is what the letters support: a man in
+  // chains, and nothing about a city.
+  const warm = (theme: string, role: string): boolean => {
+    const c = colourFor(worldFor(theme), roleIndex(role));
+    return ((c >> 16) & 0xff) > (c & 0xff); // tuning-exempt: bit position of the red channel
+  };
+  assert.ok(!warm('cell', 'accent'), 'the cell has a lamp in it');
+  assert.ok(!warm('cell', 'flame'), 'the cell has a fire in it');
+  assert.ok(warm('household', 'accent'), 'the house has no lamp in it');
+  // And it is the only *room* with none, which is what makes it read as cold
+  // rather than as a theme somebody forgot to finish. `tomb` and `void` are
+  // unlit too and are meant to be: nobody has lit a lamp in a grave either.
+  const rooms = ['abbey', 'household', 'cell'];
+  const unlit = rooms.filter((id) => !warm(id, 'accent') && !warm(id, 'flame'));
+  assert.deepEqual(unlit, ['cell']);
+});
+
 test('an unknown theme resolves to the abbey rather than to nothing', () => {
   // The documented fallback: a user-loaded Gutenberg book gets a neutral library
   // throughout, which is the correct outcome.

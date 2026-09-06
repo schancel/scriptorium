@@ -59,14 +59,28 @@ alone.
    exactly one job left: answering *what is this chapter* on the map and to a warp
    arriving on it. Four rows are in that position — Genesis 1, Genesis 3, John 20 and
    now John 19 and Matthew 27.
-9. **The epistles are open country too.** The Bible's default is `hills`, which is right
-   for the narrative books, the histories, the psalms and Acts and was judged against all
-   of them. Romans and Hebrews are not places at all — they are letters, read indoors —
-   and they now stand in a field like everything else. One default cannot be right for
-   both, and the alternative is a second row keyed to a span of books, which is a
-   mechanism this table does not have. Left as it is deliberately; say if the letters
-   want the cloister back.
-   → `docs/design/05-scenery-warps.md#the-default-is-a-property-of-the-text-and-the-bibles-is-open-country`
+9. ~~**The epistles are open country too.**~~ *Fixed, and the premise I raised it on was
+   wrong.* I had said a letter is not a place; you said *"paul was typing in a house in
+   corinth when romans was written"*, and then *"he was under house arrest apparently"*.
+   Both are in the text. There are **two interiors** now and every one of the
+   twenty-one letters is in one of them — `household`, a room in a house, and `cell`, a
+   room a man is kept in. **Three things are worth your judgement:**
+   - **Two rooms and not three.** 2 Timothy is colder than the other four and says so
+     (4:13, the cloak from Troas; 4:21, come before winter). A third theme would have
+     differed from `cell` by a palette and one tile, and would have put the cold in the
+     whole book when the text puts it in two verses. So the cold is a *set piece* on
+     `2 Timothy 4:9-22` instead — the light drains and the lamp goes out. Say if you
+     would rather have the third room.
+   - **The city is not authored anywhere, and the room is.** The four letters written in
+     chains say they were written in chains and name no city; that the chains are the
+     Roman ones of Acts 28 is tradition. Nothing on screen places them anywhere, and the
+     smoke test asserts it. Acts 28 itself *does* name Rome and its rented house, so it
+     is authored plainly.
+   - **A letter still scrolls.** The obvious move was to hold a whole book; the reasons
+     not to are in the doc, and the shortest is that the scribe is not Paul. Seven ranges
+     are held: the six verses where a letter names the hand writing it, and the close of
+     2 Timothy.
+   → `docs/design/05-scenery-warps.md#the-letters-were-written-in-rooms`
 10. **How still "frozen" should be.** `reduced_parallax` is 0, so in reduced motion the
     scenery layers do not move at all and only the monsters, candles and the scribe's own
     walk say the world is going anywhere. The ADR allows "frozen or near-frozen" and the
@@ -95,7 +109,7 @@ alone.
     bigger claim than the staging licence covers, and because the flourish already says it.
     One cell in a table if you want the other reading.
     → `docs/design/05-scenery-warps.md#genesis-3-authored-as-the-chapter-it-is`
-14. **Thirteen tunes, none borrowed — but nobody has heard them together.** `hills` has
+14. **Fifteen tunes, none borrowed — but nobody has heard them together.** `hills` has
    Kingsfold now, `void` has the Advent plainsong and `firmament` has Addison's, and the
    crossfade means all three actually sound. What is unverified is the whole: the tunes
    were each transcribed against real notation, but no one has sat through a long session
@@ -169,6 +183,52 @@ Nothing. Both items that stood here came out of the owner playing it, and both a
 the section below. The heading stays because it is where the next one goes.
 
 ## Built since the last pass
+
+- **The letters were written in rooms.** The epistles stood in open country, and the
+  objection I raised — that a letter is not a place — was wrong on the owner's own
+  evidence: Romans 16:22 names Tertius holding the pen, 16:23 names Gaius the host, and
+  four more letters say outright that they were written in chains. Two new themes,
+  `household` and `cell`, and every chapter of all twenty-one letters is now in one of
+  them. Three new tiles carry the difference — `tile_beams` is a ceiling, which is the
+  only tile in the sheet that is solid at the top and open at the bottom, and that
+  inversion is the whole of how a room reads at sixteen pixels; `tile_plaster` is a
+  painted wall with no bond in it; `tile_bars` is one slot of daylight too narrow to get
+  an arm through. **The city is deliberately not authored**: no prison letter names one,
+  and Ephesus and Caesarea have as much claim as Rome, so the room is drawn and the city
+  is left alone — the same decision as Mary Magdalene's empty hands. Acts 28 names Rome
+  and its rented house outright and is authored as what it says: the sea, the road, and
+  then the household, from verse 16.
+  → `docs/design/05-scenery-warps.md#the-letters-were-written-in-rooms`
+- **The lectern, doubled.** Six letters stop near the end and name the hand writing them
+  — Romans 16:22, 1 Corinthians 16:21, Galatians 6:11, Colossians 4:18,
+  2 Thessalonians 3:17, Philemon 19. Each is one held verse carrying `by_my_own_hand`: a
+  table with a sheet on it in the scenery band, filling a line at a time at exactly the
+  rate the scribe at his lectern fills his page in the band the keyboard vacates. Two
+  pages, one screen, one rate, and neither moves while the player is thinking. It cost
+  one set piece and one flag.
+  → `docs/design/05-scenery-warps.md#tertius-and-the-lectern`
+- **Tertius, at Romans 16:22.** A scribe joining a scribe, and the twenty-first figure in
+  the line. He carries a `quill` — the only mark in the set that is also part of the
+  player's own sprite, drawn as a diagonal because at four columns wide every upright in
+  the set is the same stick. He is also the first row that is not a Pilgrimage node:
+  Romans is on Canonical, and `make check` now asks whether **some** shipped route
+  reaches a figure rather than whether the Pilgrimage graph does, which is the rule the
+  game always played by.
+  → `docs/design/11-followers.md#tertius-carries-the-quill-and-he-is-the-only-one-who-could`
+- **Two tunes, and still nothing borrowed.** `household` takes **Tallis' Canon** (Thomas
+  Tallis, Parker's Psalter, c. 1567), which is a canon at the octave one bar apart — one
+  voice copying another, which is what a scriptorium is; the second voice here is the
+  first delayed and wrapped at the loop, so the round is perpetual. `cell` takes **Veni
+  Emmanuel** (French processional, 15th c.), a captive's hymn, with no percussion track
+  at all — the third tune in the songbook that can say that. Both matched their Hymnary
+  incipit note for note against an independent ABC transcription before a bar was
+  arranged: `11711 22314 43322` and `13555 46543 45313`.
+  → `docs/design/09-music.md#the-two-rooms-the-letters-are-written-in`
+- **A letter standing in a field is now an invariant, not a memory.** `make check` walks
+  every chapter of all twenty-one letters and fails if one of them resolves to anything
+  but a room, which is the check that was missing when the epistles were the default's
+  problem rather than the table's. It says *an* interior and not *which*: which room a
+  letter is in is an authored judgement and belongs in the doc.
 
 - **The music follows the scenery, by crossfade.** A tune followed the *chapter* row
   while the picture followed the verse rows, on the argument that restarting a hymn six
@@ -484,14 +544,14 @@ the section below. The heading stays because it is where the next one goes.
 
 ## Not done
 
-- Sound polish. Thirteen themes, thirteen tunes, none of them borrowed any more, and
+- Sound polish. Fifteen themes, fifteen tunes, none of them borrowed any more, and
   all of them now reachable: the music follows the scenery and crossfades between
   scenes, so `void` and `firmament` are heard inside Genesis 1 rather than sitting
   behind a chapter row nobody could get past. What is left is mixing rather than
   authoring — the tunes were transcribed against real notation and nobody has yet sat
   and listened to a long session of them against the cues.
-- More sprite art. Seventeen tiles cover thirteen themes; monsters are still two kinds.
-  The twenty followers are deliberately *not* twenty sprites — four body
+- More sprite art. Twenty tiles cover fifteen themes; monsters are still two kinds.
+  The twenty-one followers are deliberately *not* twenty-one sprites — four body
   silhouettes, three cloths and one small mark apiece, and one of them carries no mark
   at all — and that is the shape any further background art should take rather than an
   omission to fix.

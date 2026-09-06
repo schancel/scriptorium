@@ -3,7 +3,7 @@
  *
  * @doc docs/design/05-scenery-warps.md#themes
  *
- * `docs/design/05-scenery-warps.md` names thirteen themes and describes each in a
+ * `docs/design/05-scenery-warps.md` names fifteen themes and describes each in a
  * sentence -- "stone greys, candle amber", "ochre, bleached sky". `data/themes.json`
  * is compiled from that table and carries the prose and the tune. This module is
  * the picture: for each of those ids, the sixteen colours the art roles in
@@ -17,8 +17,8 @@
  * `PALETTE_ROLES` order. So the *same sixteen pixels* of `tile_stone` read as
  * cloister grey in the abbey and as ochre in the wilderness, and the scribe's
  * habit takes the light of wherever he is standing, with no second tileset and
- * no per-theme art. Thirteen themes cost thirteen rows of colour here rather than
- * thirteen copies of every sprite.
+ * no per-theme art. Fifteen themes cost fifteen rows of colour here rather than
+ * fifteen copies of every sprite.
  *
  * Colours are 24-bit RGB integers rather than CSS strings, for the reason the
  * display list gives: a Flutter painter reads the same integer a Canvas renderer
@@ -144,7 +144,7 @@ function makeWorld(id: string, ink: ThemeInk, far: string, mid: string, ground: 
 }
 
 /**
- * The thirteen themes, in the order docs/design/05-scenery-warps.md lists them.
+ * The fifteen themes, in the order docs/design/05-scenery-warps.md lists them.
  *
  * Each row chooses eleven colours and three tiles: what stands in the far
  * distance, what stands in the middle, and what the scribe walks on.
@@ -159,8 +159,8 @@ function makeWorld(id: string, ink: ThemeInk, far: string, mid: string, ground: 
  * and the sea rolls, and no palette turns an arch into a wave.
  *
  * So no two themes stack the same three tiles, and `worlds.test.ts` asserts it.
- * That assertion is the reason the tiles exist: thirteen palettes over one
- * silhouette is thirteen lightings of the same room.
+ * That assertion is the reason the tiles exist: fifteen palettes over one
+ * silhouette is fifteen lightings of the same room.
  *
  * `void` is the hardest case the table has: a world whose whole point is that
  * there is nothing to see in it still has to differ between the horizon and the
@@ -280,6 +280,38 @@ export const WORLDS: ReadonlyMap<string, World> = new Map(
       // parallax does the work by itself, because near stars moving against far
       // ones is exactly what a night sky looks like from a moving thing.
     }, 'tile_stars', 'tile_stars', 'tile_grass'),
+
+    makeWorld('household', {
+      outline: 0x241a12, shade: 0x3a2a1e, mid: 0x8a6a4a, light: 0xc9a578, highlight: 0xf6e4c4,
+      robe: 0x6b4c33, robeShade: 0x3f2b1c, accent: 0xe0a63c, flame: 0xffe6a2,
+      groundTop: 0x9c7a56, groundBody: 0x6a5038,
+      // A room in a house, which is where a letter is written and where one is
+      // read out. Rafters over painted plaster, a swept floor, and lamp amber in
+      // the accent -- the only light in the picture is one somebody lit.
+      //
+      // This is the first theme in the table whose *sky* is not a sky. `shade`
+      // fills the whole band behind the parallax, and here it is the dark of the
+      // roof void showing between the rafters, so it is the darkest colour the
+      // theme has rather than the palest. That is what makes an interior an
+      // interior: a landscape opens at the top and a room is closed there.
+    }, 'tile_beams', 'tile_plaster', 'tile_stone'),
+
+    makeWorld('cell', {
+      outline: 0x0d1014, shade: 0x76848f, mid: 0x3c444d, light: 0x616c77, highlight: 0xdfe7ee,
+      robe: 0x39404a, robeShade: 0x21262c, accent: 0x6f8496, flame: 0xc8dae6,
+      groundTop: 0x4a535d, groundBody: 0x2e343b,
+      // A room a man is kept in: bare wall, one barred opening high up, a floor
+      // of cut stone. The letters that say they were written in chains, and
+      // nothing anywhere claims a city for them --
+      // docs/design/05-scenery-warps.md#the-room-is-textual-the-city-is-not.
+      //
+      // The one lever this theme pulls that no other does is the *accent*, which
+      // is a cold blue rather than a warm one. Every other interior, and every
+      // outdoor theme with a fire in it, keeps an amber there; this room has no
+      // lamp lit in it, so the warmest colour it owns is the daylight coming
+      // through the bars, and the wall is deliberately painted darker than that
+      // light so the slot reads as the only way out.
+    }, 'tile_bars', 'tile_brick', 'tile_stone'),
   ].map((w) => [w.id, w]),
 );
 

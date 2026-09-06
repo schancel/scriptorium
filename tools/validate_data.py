@@ -279,6 +279,51 @@ def main() -> int:
             verse_rows.append((book, a, v, vb, s["range"]))
         ranges.append((book, a, b))
 
+    # Every chapter of every letter is an interior.
+    #
+    # The epistles stood in open country because `hills` is the Bible's default
+    # and nobody had authored them -- the same shape of bug the default itself
+    # was written to fix, one book along. A missing row here does not throw and
+    # does not look wrong in the table; it looks like a field. So the claim is
+    # asserted over every chapter of all twenty-one letters rather than over the
+    # handful any test happens to walk.
+    #
+    # It says *an* interior and not *which*: which room a letter is in is an
+    # authored judgement and belongs in the doc, and a check that pinned each
+    # book to a theme would be the table written twice.
+    # See docs/design/05-scenery-warps.md#the-letters-were-written-in-rooms
+    INTERIORS = {"household", "cell", "abbey"}
+    LETTERS = [
+        "Romans", "1 Corinthians", "2 Corinthians", "Galatians", "Ephesians",
+        "Philippians", "Colossians", "1 Thessalonians", "2 Thessalonians",
+        "1 Timothy", "2 Timothy", "Titus", "Philemon", "Hebrews", "James",
+        "1 Peter", "2 Peter", "1 John", "2 John", "3 John", "Jude",
+    ]
+
+    def theme_of(book: str, chapter: int) -> str | None:
+        for s2 in scenes["scenes"]:
+            ob, oa, obb, ov, _ = parse_range(s2["range"])
+            if ov is None and ob == book and oa <= chapter <= obb:
+                return s2["theme"]
+        return None
+
+    for book in LETTERS:
+        chapters = None
+        for edition in editions_present:
+            chapters = chapters_on_disk(edition, book)
+            if chapters:
+                break
+        for chapter in chapters or [1]:
+            theme = theme_of(book, chapter)
+            if theme is None:
+                errors.append(
+                    f"scenes: {book} {chapter} has no row, so a letter stands in a field"
+                )
+            elif theme not in INTERIORS:
+                errors.append(
+                    f"scenes: {book} {chapter} is {theme!r}, which is not a room"
+                )
+
     # every routed passage resolves to a theme (abbey is the documented fallback)
     routed = {p for e in route["edges"] for p in (e["from"], e["to"])}
     for ref in sorted(routed):
@@ -291,8 +336,8 @@ def main() -> int:
 
     # --- followers
     #
-    # *At most* one figure per passage the route names, drawn from art that
-    # exists. It was `exactly` one, and that was right until Genesis 3 stopped
+    # *At most* one figure per passage *some shipped route* names, drawn from art
+    # that exists. It was `exactly` one, and that was right until Genesis 3 stopped
     # having anybody: it is the chapter where everyone is driven out, and there
     # is no one in it who joins you. A rule demanding a row for every node is a
     # rule demanding an invented companion wherever the text supplies no real
@@ -313,6 +358,35 @@ def main() -> int:
     # See docs/design/11-followers.md#they-join-at-a-verse-not-at-the-end-of-a-chapter
     followers = load("followers.json")["followers"]
     art = (ROOT / "core" / "sprites.ts").read_text(encoding="utf-8")
+
+    # Every span every shipped route names, so "can a player ever meet this
+    # figure" is asked of the game rather than of one route. `party` walks
+    # whatever route the player has chosen, and the check read the Pilgrimage
+    # *edges* alone -- which was indistinguishable from the real rule only for
+    # as long as the roster named nothing outside that graph. Tertius is on
+    # Romans 16, Pilgrimage does not pass through Romans, and Canonical names
+    # `Romans 1-16`.
+    # See docs/design/11-followers.md#who-joins-after-what
+    reachable: list[tuple[str, int, int]] = []
+    for doc in named.values():
+        for stop in doc.get("stops", []):
+            try:
+                reachable.append(parse_ref(stop["passage"]))
+            except ValueError:
+                continue
+        for edge in doc.get("edges", []):
+            for side in ("from", "to"):
+                try:
+                    reachable.append(parse_ref(edge[side]))
+                except ValueError:
+                    continue
+
+    def some_route_reaches(ref: str) -> bool:
+        try:
+            book, first, _ = parse_ref(ref)
+        except ValueError:
+            return False
+        return any(b == book and a <= first <= z for b, a, z in reachable)
 
     def art_keys(const: str) -> set[str]:
         block = art.split(f"const {const}", 1)[-1].split("\n]);", 1)[0]
@@ -335,8 +409,8 @@ def main() -> int:
         if ref in (at_a_verse if verse is None else whole_passage):
             errors.append(f"followers: two figures claim {ref}, one of them at a verse")
         (whole_passage if verse is None else at_a_verse).add(ref)
-        if ref not in routed:
-            errors.append(f"followers: {ref} is not a passage the route names")
+        if not some_route_reaches(ref):
+            errors.append(f"followers: {ref} is not a passage any shipped route names")
         if verse is not None:
             if not isinstance(verse, int) or verse < 1:
                 errors.append(f"followers: {cite} is not a verse number")

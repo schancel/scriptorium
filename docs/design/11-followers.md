@@ -97,7 +97,7 @@ or not -- and it costs no mechanic, because it is a sentence and nothing else.
 Priority in the strip, highest first: **a first-run note**, then
 **[the thread a finished passage offers](04-route.md#finishing-a-passage-offers-the-thread-it-leads-to)**,
 then **an arrival**, then **a doorway**. A note is spent three times in a player's life,
-an offer five times, an arrival twenty times, and a doorway stands open for the rest of
+an offer five times, an arrival twenty-one times, and a doorway stands open for the rest of
 its verse; the rarer thing wins.
 
 And the two that are spent by typing are spent **while they are on screen** and not
@@ -112,11 +112,11 @@ does. A passage is finished once.
 Deadpan, and formed from the roster: *"Moses walks with you."* The person is the row's
 `who` with its first letter raised, so *"The shepherd walks with you."* and *"The woman he
 did not condemn walks with you."* fall out of the same rule and no second column is needed
-for nineteen of the twenty.
+for twenty of the twenty-one.
 
 **Eve's is a joke.** *"Wife acquired!"* -- the owner asked for it twice and finds it funny,
-and it is his game. It is also the right joke: it lands *because* the other nineteen are
-flat, and one gag among twenty deadpan lines is funnier than a gag every time. It is the
+and it is his game. It is also the right joke: it lands *because* the other twenty are
+flat, and one gag among twenty-one deadpan lines is funnier than a gag every time. It is the
 game's one moment of a video game acknowledging itself, and one is the correct number.
 
 That is the exception that made the exclamation ban narrow. A follower arriving is the
@@ -176,7 +176,7 @@ Shape survives the theme.
 
 **It is a fourth body in a shared set, not the first of twenty bespoke sprites.** Any
 woman in the line takes it — Eve, the woman of John 8, and now Mary Magdalene. Four bodies
-in three cloths is twelve sprites for twenty figures, which is the same economy as before.
+in three cloths is twelve sprites for twenty-one figures, which is the same economy as before.
 
 `core/sprites.test.ts` commits the picture, as it does for every other sprite, and asserts
 that `gowned` differs from each of the other bodies by a counted number of pixels rather
@@ -232,12 +232,23 @@ chapter rather than to her would simply have left the game.
 | John 10 | — | the doorkeeper | hooded | mid | key |
 | John 19 | — | Joseph of Arimathaea | hooded | robe | linen |
 | John 20 | — | Mary Magdalene | gowned | light | — |
+| Romans 16 | 22 | Tertius | bare | mid | quill |
 | Revelation 22 | — | the one who came to the water | bare | light | cup |
 
-`make check` asserts every row here names a passage the route names, that no two
-rows arrive at the same place, that any `verse` is a verse the chapter actually
-has, and that every `body`, `cloth` and any `mark` names art that exists in
-`core/sprites.ts`.
+`make check` asserts every row here names a passage **some shipped route**
+names, that no two rows arrive at the same place, that any `verse` is a verse the
+chapter actually has, and that every `body`, `cloth` and any `mark` names art that
+exists in `core/sprites.ts`.
+
+**"Some route" and not "the route", and Tertius is why.** The check read the
+Pilgrimage graph alone for as long as the roster only named passages that graph
+has, and that was never the rule the game plays by: `party` walks whatever route
+the player has chosen, so a figure joins on the routes that go past him and does
+not exist on the ones that do not. Romans is not on Pilgrimage -- nineteen
+passages joined by phrases they share, and Romans shares none of them -- and it
+is on Canonical, which names `Romans 1-16` and therefore covers 16:22. A row
+naming a passage *no* route reaches is still a figure nobody can meet, and is
+still an error.
 
 **At most one figure per node became at most one per arrival.** The rule was
 *exactly one per node*, and it was right until Genesis 3 stopped having anybody. A
@@ -285,6 +296,29 @@ She is `gowned` and `light` — the fourth silhouette, which
 [exists for exactly this](#a-shared-set-is-not-one-body-with-a-switch-on-it), and the pale
 cloth, because she is the one figure in the line who was first to a resurrection at dawn
 and the palette she is drawn from is the tomb's.
+
+### Tertius carries the quill, and he is the only one who could
+
+Nineteen rows name a thing out of the passage: the staff at the bush, the crook of the
+psalm, the linen Joseph of Arimathaea brought. Tertius names the thing the *player* is
+holding. Romans 16:22 -- *"I, Tertius, who write the letter, greet you in the Lord"* -- is
+one of very few places in Scripture where the person taking the dictation stops and says
+so, and it is the only place in this game where somebody in the text is doing what the
+figure on screen is doing. See
+[the lectern](05-scenery-warps.md#tertius-and-the-lectern).
+
+So the twentieth mark is a `quill`, and it is the only object in the set that is also part
+of the scribe's own sprite. It is drawn as a **diagonal** -- a plume falling from the top
+right to a dark nib below it -- which is what keeps it out of the trap the hoe fell into:
+at four columns wide the staff, the crook, the harp's shaft and the reed are all one
+upright stick, and a quill drawn upright would have been a fifth of them. The nib is
+`outline` and the shaft `highlight`, which is the scribe's own quill exactly, one sprite
+over.
+
+He is `bare` rather than `hooded`, and that is a claim the roster can support: a hood is
+for outdoors, and Romans 16 is
+[indoors by the chapter's own account](05-scenery-warps.md#the-room-is-textual-the-city-is-not)
+-- a house, a host, and an assembly meeting in it.
 
 **The marks live in the four columns beside the figure** — the same corner of the
 cell the scribe's quill occupies — so a mark never covers the body it identifies.

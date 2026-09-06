@@ -1386,6 +1386,95 @@ const TILE_STARS: readonly string[] = [
   '......W.........',
 ];
 
+/**
+ * A ceiling: roof boards, the beam under them, and the rafter ends hanging.
+ *
+ * The far band of `household`, and the whole of what makes an interior read as
+ * one at this size. A landscape's far band is a horizon -- something the eye
+ * takes as *open* -- and no palette turns a horizon into a room. What closes a
+ * room is a lid on it, so this is the one distance tile in the file whose ink is
+ * at the top of the cell and whose sky is at the bottom: the gap between the
+ * rafters is the dark of a roof void, and it repeats down the band as a ceiling
+ * going away from you.
+ */
+const TILE_BEAMS: readonly string[] = [
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'LLLLLLLLLLLLLLLL',
+  'KKKKKKKKKKKKKKKK',
+  'KK...KK...KK...K',
+  'KK...KK...KK...K',
+  '................',
+  '................',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'LLLLLLLLLLLLLLLL',
+  'KKKKKKKKKKKKKKKK',
+  'KK...KK...KK...K',
+  'KK...KK...KK...K',
+  '................',
+  '................',
+];
+
+/**
+ * A plastered wall in painted panels: a border, a field, and a dado under it.
+ *
+ * A solid tile -- an interior wall has no sky in it -- and the mid band of
+ * `household`. What tells it from `tile_brick` is that it has no *bond*: brick
+ * is a repeating unit offset course by course, and plaster is one flat surface
+ * with a line ruled across it. That is the whole difference between a wall built
+ * of things and a wall painted to look like something, and at sixteen pixels it
+ * is the only difference that survives.
+ */
+const TILE_PLASTER: readonly string[] = [
+  'KKKKKKKKKKKKKKKK',
+  'LLLLLLLLLLLLLLLL',
+  'LMMMMMMMMMMMMMML',
+  'LMLLLLLLLLLLLLML',
+  'LMLLLLLLLLLLLLML',
+  'LMLLLLLLLLLLLLML',
+  'LMLLLLLLLLLLLLML',
+  'LMLLLLLLLLLLLLML',
+  'LMLLLLLLLLLLLLML',
+  'LMLLLLLLLLLLLLML',
+  'LMMMMMMMMMMMMMML',
+  'LLLLLLLLLLLLLLLL',
+  'KKKKKKKKKKKKKKKK',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+];
+
+/**
+ * A barred opening set high in a wall.
+ *
+ * The far band of `cell`, and the inverse of `tile_arch`: the arcade is an
+ * opening you could walk through and this is an opening you could not get an arm
+ * through. The bars are `outline` against the sky the opening shows, so what the
+ * eye reads is four slots of daylight rather than four sticks -- which is the
+ * right way round, because the light is the thing a room like this has one of.
+ * The wall runs solid all the way to the bottom of the cell: there is no way out
+ * under it, and that is the picture.
+ */
+const TILE_BARS: readonly string[] = [
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMMKKKKKKKKKKMMM',
+  'MMMK..K..K..KMMM',
+  'MMMK..K..K..KMMM',
+  'MMMK..K..K..KMMM',
+  'MMMK..K..K..KMMM',
+  'MMMKKKKKKKKKKMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+  'MMMMMMMMMMMMMMMM',
+];
+
 // --- the followers ----------------------------------------------------------
 
 /**
@@ -1567,7 +1656,7 @@ const CHILD_IDLE_1: readonly string[] = [
  * inked out of the void's palette -- so a body told apart by colour would be
  * told apart in the garden and lost in the dark. Shape survives the theme.
  *
- * It is a fourth body in a shared set and not the start of twenty bespoke
+ * It is a fourth body in a shared set and not the start of twenty-one bespoke
  * sprites: any woman in the line takes it, and the woman of John 8 does.
  * docs/design/11-followers.md#art-without-ten-bespoke-sprites
  */
@@ -2094,6 +2183,39 @@ const MARK_ROWS: ReadonlyMap<string, readonly string[]> = new Map([
     '................',
     '................',
   ]],
+  /*
+   * Tertius, Romans 16:22: the quill, and he is the only figure who could carry
+   * it. Nineteen marks are things out of a passage; this one is the thing the
+   * *player* is holding, because 16:22 is the verse where the man taking the
+   * dictation stops and names himself.
+   *
+   * It is drawn as a diagonal on purpose, and the reason is the reason Eve's hoe
+   * became a fruit: at four columns wide every upright in this set -- the staff,
+   * the crook, the reed, the harp's shaft -- is one picture, and a quill stood on
+   * end would have been a fifth of them. Falling from the top right to a dark nib
+   * is a shape nothing else here has. The shaft is `highlight` and the nib is
+   * `outline`, which is exactly how the quill in the scribe's own hand is inked
+   * one sprite up this file.
+   * docs/design/11-followers.md#tertius-carries-the-quill-and-he-is-the-only-one-who-could
+   */
+  ['quill', [
+    '................',
+    '...............W',
+    '..............WW',
+    '..............W.',
+    '.............WW.',
+    '.............W..',
+    '............WW..',
+    '............K...',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ]],
 ]);
 
 /** Every mark the roster may name. */
@@ -2149,6 +2271,9 @@ export const SPRITES: ReadonlyMap<string, PixelSprite> = new Map(
     sprite('tile_cloud', [TILE_CLOUD]),
     sprite('tile_swell', [TILE_SWELL]),
     sprite('tile_stars', [TILE_STARS]),
+    sprite('tile_beams', [TILE_BEAMS]),
+    sprite('tile_plaster', [TILE_PLASTER]),
+    sprite('tile_bars', [TILE_BARS]),
     // The line behind the scribe: three silhouettes in three cloths, and one
     // mark per passage the route names. No bespoke follower art -- see the
     // header above `unarmed`.

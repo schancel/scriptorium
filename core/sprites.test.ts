@@ -49,6 +49,10 @@ import {
 const SOLID_TILES: readonly string[] = [
   'tile_stone', 'tile_grass', 'tile_sand',
   'tile_water', 'tile_brick', 'tile_bone', 'tile_rubble', 'tile_deep',
+  // An interior wall is solid for the same reason a floor is: there is no sky
+  // behind it, and a transparent pixel would let the band's own ground colour
+  // through a plastered wall.
+  'tile_plaster',
 ];
 
 /**
@@ -59,6 +63,10 @@ const DISTANCE_TILES: readonly string[] = [
   'tile_dune', 'tile_ridge', 'tile_scrub', 'tile_wave', 'tile_peak', 'tile_roofs',
   'tile_pillars', 'tile_arch', 'tile_foliage', 'tile_cloud',
   'tile_swell', 'tile_stars',
+  // The two interiors. What shows through them is not sky -- it is the dark of a
+  // roof void and the daylight in a barred slot -- but it is the same `shade`
+  // rect behind the parallax, and it obeys the same rules.
+  'tile_beams', 'tile_bars',
 ];
 
 /** Everything the game names. A missing id is a sprite that cannot be drawn. */
@@ -308,6 +316,169 @@ test('no two tiles are the same picture', () => {
     assert.equal(first, undefined, `${id} is ${String(first)} redrawn`);
     seen.set(drawn, id);
   }
+});
+
+test('THE CEILING IS INK AT THE TOP OF THE CELL, WHICH IS WHAT SHUTS A ROOM', () => {
+  // The one thing that makes an interior read as one at sixteen pixels. Every
+  // other distance tile in this file is a *horizon*: ink along the bottom, sky
+  // above it, and the eye takes the top of the band as open. A room is the
+  // opposite, so this is the only tile in the sheet whose first row is solid and
+  // whose last row is empty.
+  assert.equal(toAscii(art('tile_beams'), 0), [
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+    'LLLLLLLLLLLLLLLL',
+    'KKKKKKKKKKKKKKKK',
+    'KK...KK...KK...K',
+    'KK...KK...KK...K',
+    '................',
+    '................',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+    'LLLLLLLLLLLLLLLL',
+    'KKKKKKKKKKKKKKKK',
+    'KK...KK...KK...K',
+    'KK...KK...KK...K',
+    '................',
+    '................',
+  ].join('\n'));
+
+  assert.equal(widthAt('tile_beams', 0), SPRITE_SIZE, 'the roof has a hole in it');
+  assert.equal(widthAt('tile_beams', SPRITE_SIZE - 1), 0, 'the ceiling has a floor under it');
+  // And it is the *only* tile in the sheet that is solid at the top and open at
+  // the bottom, which is the assertion that makes the two lines above mean
+  // something. A ridge, a dune, a wave and a peak are all the other way up: ink
+  // along the bottom and sky above it, which is what a horizon is. Turning that
+  // over is the whole of how a room is drawn here.
+  const lidded = [...SOLID_TILES, ...DISTANCE_TILES].filter(
+    (id) => widthAt(id, 0) === SPRITE_SIZE && widthAt(id, SPRITE_SIZE - 1) === 0,
+  );
+  assert.deepEqual(lidded, ['tile_beams']);
+});
+
+test('THE BARRED OPENING IS FOUR SLOTS OF LIGHT, NOT FOUR STICKS', () => {
+  // The inverse of the arcade: `tile_arch` is an opening you could walk through
+  // and this is one you could not get an arm through. What the eye has to read
+  // is the light, so the bars are `outline` against the sky the opening shows,
+  // and the wall runs solid to the bottom of the cell -- there is no way out
+  // under it, and that is the picture.
+  assert.equal(toAscii(art('tile_bars'), 0), [
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+    'MMMKKKKKKKKKKMMM',
+    'MMMK..K..K..KMMM',
+    'MMMK..K..K..KMMM',
+    'MMMK..K..K..KMMM',
+    'MMMK..K..K..KMMM',
+    'MMMKKKKKKKKKKMMM',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+  ].join('\n'));
+
+  // The opening is a small part of the wall, where the arcade is most of it.
+  // That is the whole difference between a cloister and a room with one window,
+  // and it is the one measurement that survives at this size.
+  const openAt = (id: string, y: number): number => SPRITE_SIZE - widthAt(id, y);
+  const slot = openAt('tile_bars', 6);          // tuning-exempt: a row through the opening
+  const arcade = openAt('tile_arch', 8);        // tuning-exempt: a row through the arches
+  assert.ok(slot > 0, 'the opening is walled up');
+  assert.ok(slot < arcade, 'the cell lets in as much light as a cloister');
+  // And the wall is still more than half of the row, where the arcade is less
+  // than a third: at this size that ratio is the difference between a place you
+  // walk through and a place you are kept in.
+  assert.ok(widthAt('tile_bars', 6) > SPRITE_SIZE / 2, 'too much of the wall is missing');   // tuning-exempt: a row through the opening
+  assert.ok(widthAt('tile_arch', 8) < SPRITE_SIZE / 2, 'the arcade has stopped being one');  // tuning-exempt: a row through the arches
+  assert.equal(widthAt('tile_bars', SPRITE_SIZE - 1), SPRITE_SIZE, 'there is a way out under it');
+});
+
+test('plaster has no bond, which is the whole of what tells it from brick', () => {
+  // Brick is a repeating unit offset course by course; plaster is one flat
+  // surface with a line ruled across it. At sixteen pixels that is the only
+  // difference between a wall built of things and a wall painted to look like
+  // something, and both walls are in the game now.
+  assert.equal(toAscii(art('tile_plaster'), 0), [
+    'KKKKKKKKKKKKKKKK',
+    'LLLLLLLLLLLLLLLL',
+    'LMMMMMMMMMMMMMML',
+    'LMLLLLLLLLLLLLML',
+    'LMLLLLLLLLLLLLML',
+    'LMLLLLLLLLLLLLML',
+    'LMLLLLLLLLLLLLML',
+    'LMLLLLLLLLLLLLML',
+    'LMLLLLLLLLLLLLML',
+    'LMLLLLLLLLLLLLML',
+    'LMMMMMMMMMMMMMML',
+    'LLLLLLLLLLLLLLLL',
+    'KKKKKKKKKKKKKKKK',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+    'MMMMMMMMMMMMMMMM',
+  ].join('\n'));
+
+  // A panel is a closed border with a field inside it: every row of the panel
+  // starts and ends on the same ink, which no course of brick does.
+  const rows = toAscii(art('tile_plaster'), 0).split('\n');
+  for (const y of [3, 6, 9]) {  // tuning-exempt: three rows inside the panel
+    const row = rows[y] ?? '';
+    assert.equal(row.charAt(0), row.charAt(SPRITE_SIZE - 1), 'the panel has one edge only');
+    assert.equal(row.charAt(1), ink('mid'), 'the panel has no border');
+  }
+  assert.notEqual(toAscii(art('tile_plaster'), 0), toAscii(art('tile_brick'), 0));
+});
+
+test('THE QUILL IS A DIAGONAL, WHICH IS THE ONE SHAPE NO OTHER MARK HAS', () => {
+  // Tertius, Romans 16:22. Eve's hoe was cut because at four columns wide the
+  // staff, the crook, the reed and the harp's shaft are one upright stick, and a
+  // quill drawn on end would have been a fifth of them. Falling from the top
+  // right to a dark nib is a shape nothing else here has -- so this asserts the
+  // slope rather than the picture alone.
+  // docs/design/11-followers.md#tertius-carries-the-quill-and-he-is-the-only-one-who-could
+  const quill = followerMarkId('quill');
+  assert.equal(toAscii(art(quill), 0), [
+    '................',
+    '...............W',
+    '..............WW',
+    '..............W.',
+    '.............WW.',
+    '.............W..',
+    '............WW..',
+    '............K...',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ].join('\n'));
+
+  // The leftmost inked column, top to bottom: a diagonal moves and an upright
+  // does not. Every other mark in the set that is taller than it is wide keeps
+  // one column; this one crosses four.
+  const leftAt = (id: string, y: number): number => {
+    const sprite = art(id);
+    for (let x = 0; x < sprite.w; x++) if (pixelAt(sprite, 0, x, y) !== NONE) return x;
+    return -1;
+  };
+  const lefts = [1, 2, 3, 4, 5, 6, 7].map((y) => leftAt(quill, y)); // tuning-exempt: the inked rows
+  assert.deepEqual(lefts, [15, 14, 14, 13, 13, 12, 12]); // tuning-exempt: the slope, column by column
+  for (const upright of ['staff', 'crook', 'reed', 'harp']) {
+    const id = followerMarkId(upright);
+    const columns = new Set(
+      Array.from({ length: SPRITE_SIZE }, (_, y) => leftAt(id, y)).filter((x) => x >= 0),
+    );
+    assert.ok(columns.size < lefts.length, `${upright} is as diagonal as the quill`);
+  }
+  // The nib is inked the way the scribe's own nib is: dark point, pale shaft.
+  assert.ok(toAscii(art(quill), 0).includes(ink('outline')), 'the quill has no nib');
+  assert.ok(toAscii(art(quill), 0).includes(ink('highlight')), 'the quill has no plume');
 });
 
 test('the skeleton keeps its skull still and rattles the rest', () => {

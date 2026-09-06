@@ -1122,6 +1122,58 @@ test('and it moves the moment he does, filling the page as he copies', () => {
   assert.ok(inked(GLYPHS.length) > 0, 'a finished stretch leaves a written page');
 });
 
+test('TWO PAGES, ONE SCREEN: THE LETTER AND THE COPY FILL AT ONE RATE', () => {
+  // The one place in this game where the fiction closes on itself. On the six
+  // verses where a letter names the hand writing it, `by_my_own_hand` puts a
+  // sheet in the scenery band and fills it a line at a time, while the scribe at
+  // his lectern fills his page a line at a time in the band the keyboard has
+  // given back. Both are functions of the cursor and of nothing else, so the two
+  // nibs cross their two pages together.
+  // docs/design/05-scenery-warps.md#tertius-and-the-lectern
+  const at = (share: number): readonly DrawCmd[] => {
+    const cursor = Math.round(GLYPHS.length * share);
+    return drawFrame(
+      withEarned({
+        cursor,
+        scene: scene({
+          theme: 'household',
+          setpiece: setpieceState('by_my_own_hand', { elapsedMs: 0, progress: share }),
+        }),
+      }),
+      createRail(0),
+      TUNING,
+    );
+  };
+  // The sheet's ink: the themed `outline` rects in the band, whose count and
+  // width grow with the passage. Counted rather than measured, because what is
+  // asserted is that it moves *with the cursor* and not that it is any width.
+  const sheetInk = (cmds: readonly DrawCmd[]): number => cmds.filter(
+    (c) => c.op === 'rect' && 'theme' in c && c.theme !== undefined
+      && c.color === roleIndex('outline') && c.y < RAIL_TOP && c.h <= 2, // tuning-exempt: the ink line's own height
+  ).length;
+  const start = at(0);
+  const middle = at(0.5);   // tuning-exempt: halfway through the verse
+  const end = at(1);
+  assert.ok(sheetInk(end) > sheetInk(start), 'the letter is never written');
+  assert.ok(sheetInk(middle) >= sheetInk(start), 'the ink came off the page');
+  assert.ok(sheetInk(end) >= sheetInk(middle));
+  // And the page under the keyboard moved over the same three frames, which is
+  // the doubling: one screen, two pages, one rate.
+  assert.notEqual(shapeOf(middle), shapeOf(start), 'the copy did not move with it');
+  assert.notEqual(shapeOf(end), shapeOf(middle));
+  // The two never meet. The letter is above the rail, the copy is below the
+  // keyboard's own top edge, and the rail between them is what both of them are
+  // serving -- which is why this is a doubling and not a duplication.
+  // (That no set piece ever reaches the rail is asserted exhaustively above; what
+  // matters here is that these two pictures are in two different bands.)
+  const sheetRects = start.filter(
+    (c) => c.op === 'rect' && 'theme' in c && c.theme !== undefined && c.y < KB_TOP,
+  );
+  assert.ok(sheetRects.length > 0, 'the letter is not drawn at all');
+  assert.ok(sheetRects.every((c) => bottomOf(c) <= RAIL_TOP), 'the letter reached the rail');
+  assert.ok(lecternIn(end).every((c) => c.y >= KB_TOP), 'the copy left its band');
+});
+
 test('reading mode gets neither the board nor the quill', () => {
   // The mode asks for no keys, so no board is drawn -- and a quill moving for
   // somebody who is deliberately not typing would be exactly the lie the rule

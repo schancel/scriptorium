@@ -340,7 +340,7 @@ const VERSES_PER_CHAPTER_CEILING = 1000; // tuning-exempt: a sort radix, not a t
  * sentence in the strip under the rail, once, and is gone as he types on. See
  * docs/design/11-followers.md#arriving-with-a-line.
  *
- * Deadpan and formed from the roster, so nineteen of the twenty need no
+ * Deadpan and formed from the roster, so twenty of the twenty-one need no
  * authoring at all: the row's `who` with its first letter raised, and "walks
  * with you". `the shepherd` becomes "The shepherd walks with you."
  *
@@ -353,7 +353,7 @@ const ARRIVAL_JOKES: Readonly<Record<string, string>> = {
    * The owner asked for this twice and finds it funny, and it is his game.
    *
    * It is also the right joke, and the reason it is the *only* one: it lands
-   * because the other nineteen lines are flat, and one gag among twenty
+   * because the other twenty lines are flat, and one gag among twenty-one
    * deadpan arrivals is funnier than a gag every time. Adding a second entry to
    * this table would spend the first one.
    *

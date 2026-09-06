@@ -290,6 +290,198 @@
       "held": null
     },
     {
+      "range": "Acts 28",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "Acts 28:1-10",
+      "theme": "sea",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "Acts 28:11-15",
+      "theme": "hills",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "Acts 28:16-31",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "Romans 1-16",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "Romans 16:22",
+      "theme": "household",
+      "setpiece": "by_my_own_hand",
+      "held": "yes"
+    },
+    {
+      "range": "1 Corinthians 1-16",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "1 Corinthians 16:21",
+      "theme": "household",
+      "setpiece": "by_my_own_hand",
+      "held": "yes"
+    },
+    {
+      "range": "2 Corinthians 1-13",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "Galatians 1-6",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "Galatians 6:11",
+      "theme": "household",
+      "setpiece": "by_my_own_hand",
+      "held": "yes"
+    },
+    {
+      "range": "Ephesians 1-6",
+      "theme": "cell",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "Philippians 1-4",
+      "theme": "cell",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "Colossians 1-4",
+      "theme": "cell",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "Colossians 4:18",
+      "theme": "cell",
+      "setpiece": "by_my_own_hand",
+      "held": "yes"
+    },
+    {
+      "range": "1 Thessalonians 1-5",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "2 Thessalonians 1-3",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "2 Thessalonians 3:17",
+      "theme": "household",
+      "setpiece": "by_my_own_hand",
+      "held": "yes"
+    },
+    {
+      "range": "1 Timothy 1-6",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "2 Timothy 1-4",
+      "theme": "cell",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "2 Timothy 4:9-22",
+      "theme": "cell",
+      "setpiece": "before_winter",
+      "held": "yes"
+    },
+    {
+      "range": "Titus 1-3",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "Philemon 1",
+      "theme": "cell",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "Philemon 1:19",
+      "theme": "cell",
+      "setpiece": "by_my_own_hand",
+      "held": "yes"
+    },
+    {
+      "range": "Hebrews 1-13",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "James 1-5",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "1 Peter 1-5",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "2 Peter 1-3",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "1 John 1-5",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "2 John 1",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "3 John 1",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
+      "range": "Jude 1",
+      "theme": "household",
+      "setpiece": null,
+      "held": null
+    },
+    {
       "range": "Revelation 22",
       "theme": "garden",
       "setpiece": "tree_of_life",

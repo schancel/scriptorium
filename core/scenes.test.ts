@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 import {
   GENERIC_SCENE,
   defaultThemeFor,
+  heldAt,
   loadSceneDefaults,
   loadScenes,
   overlappingRanges,
@@ -63,7 +64,7 @@ const route = loadRoute(loadDataFile('routes/pilgrimage.json'));
 const themes = new Set(loadThemes(loadDataFile('themes.json')).map((t) => t.id));
 const tuning: Tuning = loadTuning(loadDataFile('tuning.json'));
 
-const ROW_COUNT = 49; // tuning-exempt: rows in docs/design/05-scenery-warps.md#set-pieces
+const ROW_COUNT = 81; // tuning-exempt: rows in docs/design/05-scenery-warps.md#set-pieces
 
 /** The seven scenes Genesis 1 is authored as, first verse of each. */
 const GENESIS_1: readonly (readonly [number, string])[] = [
@@ -252,7 +253,13 @@ test('AN UNAUTHORED CHAPTER IS OPEN COUNTRY, AND NO LONGER A STONE CLOISTER', ()
   // across law, history, wisdom, prophecy and the epistles on purpose.
   const unauthored = [
     'Leviticus 1', 'Ruth 2', '1 Kings 18', 'Psalm 84',
-    'Isaiah 40', 'Amos 1', 'Luke 15', 'Acts 9', 'Romans 8',
+    'Isaiah 40', 'Amos 1', 'Luke 15', 'Acts 9',
+    // Romans 8 used to stand here and cannot any more: the epistles are
+    // authored now, and every one of the twenty-one letters carries a row.
+    // Nehemiah is the replacement, and it is the same kind of chapter -- a
+    // history nobody has written a scene for, in the middle of the book.
+    // docs/design/05-scenery-warps.md#the-letters-were-written-in-rooms
+    'Nehemiah 4',
   ];
   for (const ref of unauthored) {
     assert.equal(rowFor(scenes, ref), null, `${ref} is authored after all`);
@@ -353,9 +360,133 @@ test('nothing else in the table stands still, so the world still travels', () =>
     // Praetorium. Neither goes anywhere, so neither scrolls.
     // docs/design/05-scenery-warps.md#jerusalem-a-place-you-arrive-at
     'John 8:12-59', 'John 19:1-16',
+    // The six verses in which a letter names the hand writing it, and the close
+    // of 2 Timothy. Seven ranges out of a hundred and twenty-one chapters of
+    // epistle: a whole letter held would be the platformer switched off for an
+    // evening, and would assert that the figure on screen is the man sitting
+    // still in the room rather than the novice copying him.
+    // docs/design/05-scenery-warps.md#a-whole-book-that-never-scrolls-would-be-a-bigger-claim-than-it-looks
+    'Romans 16:22', '1 Corinthians 16:21', 'Galatians 6:11', 'Colossians 4:18',
+    '2 Thessalonians 3:17', '2 Timothy 4:9-22', 'Philemon 1:19',
   ]);
+  // And the letters that say nothing about their own hand stand still nowhere:
+  // an epistle scrolls like every other passage, because the scribe copying it
+  // is getting on with a page.
+  for (const ref of ['Romans 1', 'Ephesians 2', 'Philippians 4', 'Hebrews 11', '2 Timothy 1']) {
+    assert.equal(heldAt(scenes, ref), false, `${ref} stands still`);
+  }
   for (const [verse] of GENESIS_1) {
     assert.equal(sceneAtVerse(scenes, 'Genesis 1', verse, tuning).held, false);
+  }
+});
+
+// --- the letters ---------------------------------------------------------------
+
+/**
+ * Every letter in the canon, and how many chapters each has.
+ *
+ * Spelled out rather than read off the text files, because the claim being made
+ * is about the *table*: an epistle with no row falls through to `hills` and
+ * stands in a field, which is what this whole section exists to stop, and a list
+ * derived from the same data could not catch a book nobody had authored.
+ */
+const LETTERS: readonly (readonly [string, number])[] = [
+  /* tuning-exempt: every number below is a chapter count from the canon. */
+  ['Romans', 16], ['1 Corinthians', 16], ['2 Corinthians', 13], ['Galatians', 6],   // tuning-exempt: chapter counts
+  ['Ephesians', 6], ['Philippians', 4], ['Colossians', 4], ['1 Thessalonians', 5],  // tuning-exempt: chapter counts
+  ['2 Thessalonians', 3], ['1 Timothy', 6], ['2 Timothy', 4], ['Titus', 3],         // tuning-exempt: chapter counts
+  ['Philemon', 1], ['Hebrews', 13], ['James', 5], ['1 Peter', 5], ['2 Peter', 3],   // tuning-exempt: chapter counts
+  ['1 John', 5], ['2 John', 1], ['3 John', 1], ['Jude', 1],                         // tuning-exempt: chapter counts
+];
+
+/** The two rooms, and the cloister a novel still gets. */
+const INTERIORS: ReadonlySet<string> = new Set(['household', 'cell', 'abbey']);
+
+test('EVERY CHAPTER OF EVERY LETTER IS A ROOM, NOT A FIELD', () => {
+  // The epistles took the Bible's default and stood in open country -- the same
+  // shape of bug the default was written to fix, one book along, and invisible
+  // for the same reason: no test walked them. A hundred and twenty-one chapters,
+  // every one of them checked.
+  // docs/design/05-scenery-warps.md#the-letters-were-written-in-rooms
+  let checked = 0;
+  for (const [book, chapters] of LETTERS) {
+    for (let chapter = 1; chapter <= chapters; chapter += 1) {
+      const ref = `${book} ${String(chapter)}`;
+      const theme = themeFor(scenes, ref);
+      assert.ok(INTERIORS.has(theme), `${ref} is ${theme}, which is not a room`);
+      assert.notEqual(theme, BIBLE_DEFAULT, `${ref} is still standing in a field`);
+      checked += 1;
+    }
+  }
+  assert.equal(checked, 121); // tuning-exempt: chapters in the twenty-one letters
+});
+
+test('THE ROOM IS AUTHORED AND THE CITY IS NOT', () => {
+  // Romans names its own room -- Tertius at 16:22, Gaius the host at 16:23 -- so
+  // it is a house. The four letters that name their chains and no city are a
+  // room a man is kept in, and nothing anywhere says where that room was: that
+  // the chains are the Roman ones of Acts 28 is tradition, and Ephesus and
+  // Caesarea both have real support.
+  // docs/design/05-scenery-warps.md#the-room-is-textual-the-city-is-not
+  for (const ref of ['Romans 1', 'Romans 16', '1 Corinthians 1', 'Hebrews 11', 'Jude 1']) {
+    assert.equal(themeFor(scenes, ref), 'household', `${ref} is not a house`);
+  }
+  for (const ref of ['Ephesians 3', 'Philippians 1', 'Colossians 4', 'Philemon 1', '2 Timothy 2']) {
+    assert.equal(themeFor(scenes, ref), 'cell', `${ref} is not a guarded room`);
+  }
+  // The two rooms are different rooms, which is the point of there being two.
+  assert.notEqual(themeFor(scenes, 'Romans 1'), themeFor(scenes, 'Ephesians 1'));
+
+  // Acts 28 is the one place the city *is* the text -- 28:16 has the soldier and
+  // 28:30 has the rented house in Rome -- and it is authored as what it says: a
+  // household, arrived at from the sea and the road, and only from verse 16.
+  assert.equal(themeFor(scenes, 'Acts 28:1'), 'sea');
+  assert.equal(themeFor(scenes, 'Acts 28:12'), 'hills');
+  assert.equal(themeFor(scenes, 'Acts 28:16'), 'household');
+  assert.equal(themeFor(scenes, 'Acts 28:30'), 'household');
+  // And the chapter as a whole answers with where the book ends.
+  assert.equal(themeFor(scenes, 'Acts 28'), 'household');
+});
+
+test('THE SIX VERSES THAT NAME THEIR OWN HAND STAND STILL AND SHOW THE PAGE', () => {
+  // Every letter that stops and says who is holding the pen. They are the only
+  // held ranges in a hundred and twenty-one chapters, and they carry the one
+  // flourish that is a picture of the thing the player is doing.
+  // docs/design/05-scenery-warps.md#the-letters-that-name-their-own-hand
+  const autographs: readonly (readonly [string, number])[] = [
+    ['Romans 16', 22], ['1 Corinthians 16', 21], ['Galatians 6', 11],    // tuning-exempt: verse numbers from the scene table
+    ['Colossians 4', 18], ['2 Thessalonians 3', 17], ['Philemon 1', 19], // tuning-exempt: verse numbers from the scene table
+  ];
+  for (const [chapter, verse] of autographs) {
+    const ref = `${chapter}:${String(verse)}`;
+    assert.equal(setpieceFor(scenes, ref), 'by_my_own_hand', `${ref} has no page on it`);
+    assert.equal(heldAt(scenes, ref), true, `${ref} travels`);
+    // One verse only. The verse before and the verse after are the ordinary
+    // room, scrolling like everything else -- the letter stops for the line
+    // about the hand and then gets on.
+    assert.equal(heldAt(scenes, `${chapter}:${String(verse - 1)}`), false);
+    assert.equal(setpieceFor(scenes, `${chapter}:${String(verse - 1)}`), null);
+    // And the room does not change under it: the theme is the chapter's own, so
+    // the hold and the flourish are the only things that happen.
+    assert.equal(themeFor(scenes, ref), themeFor(scenes, chapter));
+  }
+});
+
+test('the cold in 2 Timothy is two verses at the end, not a third room', () => {
+  // 4:13 asks for the cloak left at Troas and 4:21 asks him to come before
+  // winter. A third theme would have put the cold in the whole book; the text
+  // puts it in the close of the last chapter, so that is where it is authored.
+  // docs/design/05-scenery-warps.md#2-timothy-is-colder-and-says-so-in-two-verses
+  for (const ref of ['2 Timothy 1', '2 Timothy 3', '2 Timothy 4:1']) {
+    assert.equal(setpieceFor(scenes, ref), null, `${ref} is cold already`);
+    assert.equal(heldAt(scenes, ref), false, `${ref} stands still`);
+  }
+  for (const ref of ['2 Timothy 4:13', '2 Timothy 4:21']) {
+    assert.equal(setpieceFor(scenes, ref), 'before_winter');
+    assert.equal(heldAt(scenes, ref), true);
+    // The same room, colder. A cooling palette is a picture of a room getting
+    // cold; a whole theme would be a picture of a different room.
+    assert.equal(themeFor(scenes, ref), 'cell');
   }
 });
 

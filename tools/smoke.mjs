@@ -3261,6 +3261,164 @@ ok(/^1 of 181 passages finished\.$/.test(walkedCount),
    'AND THE COUNTER COUNTS THE SAME THING ON BOTH SIDES OF ITS SENTENCE',
    walkedCount);
 
+// --- the letters were written in rooms ---------------------------------------
+//
+// docs/design/05-scenery-warps.md#the-letters-were-written-in-rooms. The
+// epistles stood in a field: `hills` is the Bible's default and nobody had
+// authored a hundred and twenty-one chapters of letter. That is the same shape
+// of bug as the abbey and it was invisible for the same reason -- no test walks
+// the epistles -- so this reads the colour the running game actually paints, in
+// a house and in a room under guard, and then walks a scribe into the verse
+// where a scribe names himself.
+press('Escape');
+await waitFor(() => askedFor() !== null);
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-route').value = 'canonical';
+stubEl('menu-route').dispatchEvent({ type: 'change' });
+await quiesce();
+tick(4);
+ok(record().route === 'canonical',
+   'the harness is on a route that goes through Romans', String(record().route));
+press('Escape');
+await waitFor(() => askedFor() !== null);
+
+// Four skies off the canvas: the two rooms, the open country every unauthored
+// chapter takes, and the cloister an imported novel still gets.
+const romansSky = await skyOf('Romans', 1);
+const prisonSky = await skyOf('Philippians', 1);
+const fieldSky = await skyOf('Nehemiah', 4);
+const cloisterSky = await skyOf('Psalms', 23);
+ok(romansSky !== null && prisonSky !== null && fieldSky !== null && cloisterSky !== null,
+   'the harness reached both letters and the sky was painted in each',
+   `${romansSky} / ${prisonSky} / ${fieldSky} / ${cloisterSky}`);
+ok(romansSky !== fieldSky && prisonSky !== fieldSky,
+   'A LETTER IS AN INTERIOR NOW, AND NO LONGER STANDS IN A FIELD',
+   `Romans ${romansSky}, Philippians ${prisonSky}, open country ${fieldSky}`);
+ok(romansSky !== prisonSky,
+   "AND A PATRON'S HOUSE IS NOT A ROOM UNDER GUARD",
+   `Romans ${romansSky} vs Philippians ${prisonSky}`);
+ok(romansSky !== cloisterSky && prisonSky !== cloisterSky,
+   'and neither of them is the medieval cloister, which is a different room again',
+   `abbey ${cloisterSky}`);
+// The letters that name their chains share one room, and the letters that name
+// none share the other: two rooms, not twenty-one. Sampled first and asserted
+// after, because `skyOf` navigates -- calling it inside an assertion's own detail
+// string would walk the game somewhere else to describe where it had been.
+const colossiansSky = await skyOf('Colossians', 2);
+const jamesSky = await skyOf('James', 1);
+ok(colossiansSky === prisonSky, 'the letters written in chains are one room',
+   `Colossians ${colossiansSky} vs Philippians ${prisonSky}`);
+ok(jamesSky === romansSky, 'and the letters that name no room at all take the plainer one',
+   `James ${jamesSky} vs Romans ${romansSky}`);
+
+// --- Tertius, at Romans 16:22 ------------------------------------------------
+//
+// A scribe joining a scribe, at the verse where he stops and names himself. He
+// is the one row in the roster that is not a Pilgrimage node, so this is also
+// the only proof that a follower on a *route the player chose* reaches the
+// screen at all. docs/design/05-scenery-warps.md#tertius-and-the-lectern
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-book').value = 'Romans';
+stubEl('menu-chapter').value = '16';
+stubEl('menu-go').click();
+const atRomans16 = await waitFor(() => refText().startsWith('Romans 16:') && askedFor() !== null);
+tick(4);
+ok(atRomans16, 'the harness is standing at the top of Romans 16', refText());
+
+/** The stretch on the HUD right now, as [first, last]. */
+function romansSpan() {
+  const found = /^Romans 16:(\d+)(?:-(\d+))?$/.exec(refText());
+  return found ? [Number(found[1]), Number(found[2] ?? found[1])] : null;
+}
+
+/**
+ * Get back to the rail from whatever is over it.
+ *
+ * `takeCardForward` presses Enter once and then handles at most one promotion
+ * and one gilding offer, which is right where the harness is driving a single
+ * booted game. By this point in the file seven of them are listening, so a
+ * screen may be several deep and a click that resumes one leaves another over
+ * the rail. This just keeps taking the top thing forward until somebody is
+ * asking for a key again.
+ */
+async function backToTyping(tries = 40) {
+  for (let i = 0; i < tries && askedFor() === null; i++) {
+    if (panel('panel-promotion')) stubEl('promotion-ok').click();
+    else if (panel('panel-gild')) stubEl('gild-no').click();
+    else press('Enter');
+    await pump(2);
+  }
+  return askedFor() !== null;
+}
+
+let tertius = null;
+for (let part = 0; part < 24 && tertius === null; part++) {
+  for (let i = 0; i < 4000; i++) {
+    const k = askedFor();
+    if (k === null) break;
+    const span = romansSpan();
+    press(k);
+    tick();
+    const line = arrivalNow();
+    if (line !== undefined) { tertius = { line, span, figures: figuresDrawn().length }; break; }
+  }
+  if (tertius === null && !(await backToTyping())) break;
+}
+
+ok(tertius !== null, 'SOMEBODY JOINS WHILE ROMANS 16 IS BEING TYPED',
+   tertius ? tertius.line : '(nobody arrived in twenty stretches)');
+ok(tertius !== null && tertius.line === 'Tertius walks with you.',
+   'AND IT IS TERTIUS, WHO NAMES HIMSELF AS THE ONE HOLDING THE PEN',
+   tertius ? tertius.line : '');
+ok(tertius !== null && tertius.span !== null
+   && tertius.span[0] <= 22 && tertius.span[1] >= 22,
+   'AND HE ARRIVES INSIDE THE STRETCH THAT HOLDS ROMANS 16:22',
+   tertius && tertius.span ? `Romans 16:${tertius.span[0]}-${tertius.span[1]}` : '(no stretch on the HUD)');
+ok(tertius !== null && tertius.figures > 0,
+   'and there is a figure behind the scribe where there was none',
+   tertius ? `${tertius.figures} figure(s)` : '');
+
+// The map names where he joined, with the verse -- the citation, not the
+// chapter, because a chapter stopped being an answer the day one handed over
+// two people. docs/design/11-followers.md#on-the-map
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-map').click();
+tick(2);
+const company = rowsOf('map-party').map(textOf);
+ok(company.some((row) => row.includes('Romans 16:22') && row.includes('Tertius')),
+   'AND THE MAP NAMES THE VERSE HE JOINED AT, NOT THE CHAPTER',
+   company.join(' / ').slice(0, 200) || '(nobody listed)');
+// Nothing anywhere on this screen places any letter in a city. The room is what
+// the text supports and the city is what tradition supplies; the game says the
+// first and not the second.
+// docs/design/05-scenery-warps.md#the-room-is-textual-the-city-is-not
+const prisonRows = rowsOf('map-nodes').map(textOf).filter(
+  (row) => /^(Ephesians|Philippians|Colossians|Philemon|2 Timothy)\b/.test(row));
+const aboutTheLetters = [...prisonRows, ...company].join(' ');
+ok(prisonRows.length === 5,
+   'the map lists the five letters written in chains, so there is something to check',
+   `${prisonRows.length} rows`);
+ok(!/\bRome\b|\bRoman\b|\bEphesus\b|\bCaesarea\b/.test(aboutTheLetters),
+   'AND NOTHING ON SCREEN PLACES A PRISON LETTER IN A CITY THE TEXT DOES NOT NAME',
+   aboutTheLetters.slice(0, 200));
+press('Escape');
+await waitFor(() => askedFor() !== null);
+tick(4);
+
+// Back onto Wisdom, which is where the rest of this file expects to be.
+stubEl('menu-open').click();
+tick(2);
+stubEl('menu-route').value = 'wisdom';
+stubEl('menu-route').dispatchEvent({ type: 'change' });
+await quiesce();
+tick(4);
+press('Escape');
+await waitFor(() => askedFor() !== null);
+tick(4);
+
 // --- Chronicle: reachable on purpose, and only on purpose --------------------
 //
 // docs/design/04-route.md#chronicle-the-genealogies-are-opt-in. The list in the

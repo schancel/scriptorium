@@ -107,9 +107,10 @@ text's default theme, and the defaults are their own generated table:
 `theme` must name a theme `data/themes.json` carries. A text with no row here, and a text
 with no scene file at all, resolves entirely to `abbey` — which is the expected outcome
 for user-imported books and is unchanged. The Bible has a row because it is not that case:
-authored scenery covers 30 of its 1,189 chapters, so for 97.5% of the book the default
-*is* the game, and a stone cloister is the wrong picture of Ruth, Kings, the Psalms and
-Acts alike. See
+authored scenery covers 153 of its 1,189 chapters -- 30 of them before
+[the letters were authored](../design/05-scenery-warps.md#the-letters-were-written-in-rooms)
+-- so for seven eighths of the book the default *is* the game, and a stone cloister is the
+wrong picture of Ruth, Kings, the Psalms and Acts alike. See
 [the default is a property of the text](../design/05-scenery-warps.md#the-default-is-a-property-of-the-text-and-the-bibles-is-open-country).
 
 `held` is `"yes"` on a range where the camera does not translate and word progress moves

@@ -1,0 +1,537 @@
+{
+  "id": "tallis-canon",
+  "name": "Tallis' Canon",
+  "source": "Thomas Tallis, the eighth of the nine tunes he wrote for Matthew Parker's The Whole Psalter Translated into English Metre, c. 1567, and known as THE EIGHTH TUNE before it was known by his name. Melody transcribed from the ABC setting at abc.musicaviva.com (tallis-thomas/tallis-canon, transcribed by Frank Nordberg) and checked against the Hymnary incipit for TALLIS' CANON, 11711 22314 43322, which it matches note for note. Public domain: the melody only, never a modern harmonisation. The second voice here is the first delayed by one bar and wrapped at the loop point -- which is what the tune is, a canon at the octave one bar apart, rather than a thirty-two-note melody with a tail.",
+  "bpm": 80,
+  "ppq": 24,
+  "loop": 768,
+  "tracks": [
+    {
+      "ch": "pulse1",
+      "duty": 0.25,
+      "notes": [
+        {
+          "t": 0,
+          "dur": 24,
+          "midi": 72,
+          "vel": 88
+        },
+        {
+          "t": 24,
+          "dur": 24,
+          "midi": 72,
+          "vel": 88
+        },
+        {
+          "t": 48,
+          "dur": 24,
+          "midi": 71,
+          "vel": 88
+        },
+        {
+          "t": 72,
+          "dur": 24,
+          "midi": 72,
+          "vel": 88
+        },
+        {
+          "t": 96,
+          "dur": 24,
+          "midi": 72,
+          "vel": 88
+        },
+        {
+          "t": 120,
+          "dur": 24,
+          "midi": 74,
+          "vel": 88
+        },
+        {
+          "t": 144,
+          "dur": 24,
+          "midi": 74,
+          "vel": 88
+        },
+        {
+          "t": 168,
+          "dur": 24,
+          "midi": 76,
+          "vel": 88
+        },
+        {
+          "t": 192,
+          "dur": 24,
+          "midi": 72,
+          "vel": 88
+        },
+        {
+          "t": 216,
+          "dur": 24,
+          "midi": 77,
+          "vel": 88
+        },
+        {
+          "t": 240,
+          "dur": 24,
+          "midi": 77,
+          "vel": 88
+        },
+        {
+          "t": 264,
+          "dur": 24,
+          "midi": 76,
+          "vel": 88
+        },
+        {
+          "t": 288,
+          "dur": 24,
+          "midi": 76,
+          "vel": 88
+        },
+        {
+          "t": 312,
+          "dur": 24,
+          "midi": 74,
+          "vel": 88
+        },
+        {
+          "t": 336,
+          "dur": 24,
+          "midi": 74,
+          "vel": 88
+        },
+        {
+          "t": 360,
+          "dur": 24,
+          "midi": 72,
+          "vel": 88
+        },
+        {
+          "t": 384,
+          "dur": 24,
+          "midi": 79,
+          "vel": 88
+        },
+        {
+          "t": 408,
+          "dur": 24,
+          "midi": 77,
+          "vel": 88
+        },
+        {
+          "t": 432,
+          "dur": 24,
+          "midi": 74,
+          "vel": 88
+        },
+        {
+          "t": 456,
+          "dur": 24,
+          "midi": 76,
+          "vel": 88
+        },
+        {
+          "t": 480,
+          "dur": 24,
+          "midi": 76,
+          "vel": 88
+        },
+        {
+          "t": 504,
+          "dur": 24,
+          "midi": 74,
+          "vel": 88
+        },
+        {
+          "t": 528,
+          "dur": 24,
+          "midi": 74,
+          "vel": 88
+        },
+        {
+          "t": 552,
+          "dur": 24,
+          "midi": 72,
+          "vel": 88
+        },
+        {
+          "t": 576,
+          "dur": 24,
+          "midi": 67,
+          "vel": 88
+        },
+        {
+          "t": 600,
+          "dur": 24,
+          "midi": 69,
+          "vel": 88
+        },
+        {
+          "t": 624,
+          "dur": 24,
+          "midi": 71,
+          "vel": 88
+        },
+        {
+          "t": 648,
+          "dur": 24,
+          "midi": 72,
+          "vel": 88
+        },
+        {
+          "t": 672,
+          "dur": 24,
+          "midi": 76,
+          "vel": 88
+        },
+        {
+          "t": 696,
+          "dur": 24,
+          "midi": 74,
+          "vel": 88
+        },
+        {
+          "t": 720,
+          "dur": 24,
+          "midi": 74,
+          "vel": 88
+        },
+        {
+          "t": 744,
+          "dur": 24,
+          "midi": 72,
+          "vel": 88
+        }
+      ]
+    },
+    {
+      "ch": "pulse2",
+      "duty": 0.5,
+      "notes": [
+        {
+          "t": 0,
+          "dur": 24,
+          "midi": 64,
+          "vel": 64
+        },
+        {
+          "t": 24,
+          "dur": 24,
+          "midi": 62,
+          "vel": 64
+        },
+        {
+          "t": 48,
+          "dur": 24,
+          "midi": 62,
+          "vel": 64
+        },
+        {
+          "t": 72,
+          "dur": 24,
+          "midi": 60,
+          "vel": 64
+        },
+        {
+          "t": 96,
+          "dur": 24,
+          "midi": 60,
+          "vel": 64
+        },
+        {
+          "t": 120,
+          "dur": 24,
+          "midi": 60,
+          "vel": 64
+        },
+        {
+          "t": 144,
+          "dur": 24,
+          "midi": 59,
+          "vel": 64
+        },
+        {
+          "t": 168,
+          "dur": 24,
+          "midi": 60,
+          "vel": 64
+        },
+        {
+          "t": 192,
+          "dur": 24,
+          "midi": 60,
+          "vel": 64
+        },
+        {
+          "t": 216,
+          "dur": 24,
+          "midi": 62,
+          "vel": 64
+        },
+        {
+          "t": 240,
+          "dur": 24,
+          "midi": 62,
+          "vel": 64
+        },
+        {
+          "t": 264,
+          "dur": 24,
+          "midi": 64,
+          "vel": 64
+        },
+        {
+          "t": 288,
+          "dur": 24,
+          "midi": 60,
+          "vel": 64
+        },
+        {
+          "t": 312,
+          "dur": 24,
+          "midi": 65,
+          "vel": 64
+        },
+        {
+          "t": 336,
+          "dur": 24,
+          "midi": 65,
+          "vel": 64
+        },
+        {
+          "t": 360,
+          "dur": 24,
+          "midi": 64,
+          "vel": 64
+        },
+        {
+          "t": 384,
+          "dur": 24,
+          "midi": 64,
+          "vel": 64
+        },
+        {
+          "t": 408,
+          "dur": 24,
+          "midi": 62,
+          "vel": 64
+        },
+        {
+          "t": 432,
+          "dur": 24,
+          "midi": 62,
+          "vel": 64
+        },
+        {
+          "t": 456,
+          "dur": 24,
+          "midi": 60,
+          "vel": 64
+        },
+        {
+          "t": 480,
+          "dur": 24,
+          "midi": 67,
+          "vel": 64
+        },
+        {
+          "t": 504,
+          "dur": 24,
+          "midi": 65,
+          "vel": 64
+        },
+        {
+          "t": 528,
+          "dur": 24,
+          "midi": 62,
+          "vel": 64
+        },
+        {
+          "t": 552,
+          "dur": 24,
+          "midi": 64,
+          "vel": 64
+        },
+        {
+          "t": 576,
+          "dur": 24,
+          "midi": 64,
+          "vel": 64
+        },
+        {
+          "t": 600,
+          "dur": 24,
+          "midi": 62,
+          "vel": 64
+        },
+        {
+          "t": 624,
+          "dur": 24,
+          "midi": 62,
+          "vel": 64
+        },
+        {
+          "t": 648,
+          "dur": 24,
+          "midi": 60,
+          "vel": 64
+        },
+        {
+          "t": 672,
+          "dur": 24,
+          "midi": 55,
+          "vel": 64
+        },
+        {
+          "t": 696,
+          "dur": 24,
+          "midi": 57,
+          "vel": 64
+        },
+        {
+          "t": 720,
+          "dur": 24,
+          "midi": 59,
+          "vel": 64
+        },
+        {
+          "t": 744,
+          "dur": 24,
+          "midi": 60,
+          "vel": 64
+        }
+      ]
+    },
+    {
+      "ch": "triangle",
+      "notes": [
+        {
+          "t": 0,
+          "dur": 24,
+          "midi": 36
+        },
+        {
+          "t": 24,
+          "dur": 48,
+          "midi": 36
+        },
+        {
+          "t": 72,
+          "dur": 48,
+          "midi": 43
+        },
+        {
+          "t": 120,
+          "dur": 48,
+          "midi": 43
+        },
+        {
+          "t": 168,
+          "dur": 48,
+          "midi": 36
+        },
+        {
+          "t": 216,
+          "dur": 48,
+          "midi": 41
+        },
+        {
+          "t": 264,
+          "dur": 48,
+          "midi": 36
+        },
+        {
+          "t": 312,
+          "dur": 48,
+          "midi": 43
+        },
+        {
+          "t": 360,
+          "dur": 48,
+          "midi": 36
+        },
+        {
+          "t": 408,
+          "dur": 48,
+          "midi": 41
+        },
+        {
+          "t": 456,
+          "dur": 48,
+          "midi": 36
+        },
+        {
+          "t": 504,
+          "dur": 48,
+          "midi": 43
+        },
+        {
+          "t": 552,
+          "dur": 48,
+          "midi": 36
+        },
+        {
+          "t": 600,
+          "dur": 48,
+          "midi": 41
+        },
+        {
+          "t": 648,
+          "dur": 48,
+          "midi": 43
+        },
+        {
+          "t": 696,
+          "dur": 48,
+          "midi": 43
+        },
+        {
+          "t": 744,
+          "dur": 24,
+          "midi": 36
+        }
+      ]
+    },
+    {
+      "ch": "noise",
+      "notes": [
+        {
+          "t": 216,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 26
+        },
+        {
+          "t": 312,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 26
+        },
+        {
+          "t": 408,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 26
+        },
+        {
+          "t": 504,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 26
+        },
+        {
+          "t": 600,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 26
+        },
+        {
+          "t": 696,
+          "dur": 6,
+          "timbre": "hat",
+          "vel": 26
+        }
+      ]
+    }
+  ]
+}

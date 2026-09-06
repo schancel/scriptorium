@@ -89,6 +89,10 @@ test('the progress-driven flourishes only ever climb', () => {
     ['loaves_multiplied', 'baskets'],
     ['lamps_kindled', 'lamps'],
     ['gate_of_the_fold', 'open'],
+    // The letters. `written` is the ink crossing the sheet and `cold` is winter
+    // arriving; both are the passage being typed and nothing else.
+    ['by_my_own_hand', 'written'],
+    ['before_winter', 'cold'],
   ];
   for (const [id, name] of climbing) {
     let last = -1;
@@ -221,6 +225,48 @@ test('the wall falls away when he is taken out, and rises when he goes up', () =
     previous = now;
   }
   assert.equal(previous, 1);
+});
+
+test('THE HAND THAT WROTE IT MOVES AT THE PLAYER\'S OWN RATE, NOT FASTER', () => {
+  // The one flourish in the table that is a picture of the thing the player is
+  // doing. `pushLectern` fills its page as a linear function of the cursor, so
+  // this has to be linear too: a sheet in the scenery band that accelerated away
+  // from the page under the keyboard would break the only doubling this game
+  // has. Every other `gathering` flourish in the file is deliberately not this.
+  // docs/design/05-scenery-warps.md#tertius-and-the-lectern
+  for (let i = 0; i <= STEPS; i += 1) {
+    const t = i / STEPS;
+    const written = setpieceParam(setpieceState('by_my_own_hand', { elapsedMs: 0, progress: t }), 'written');
+    assert.equal(written, t, `the ink is ahead of the cursor at ${String(t)}`);
+  }
+  // And the lamp is the only clock in it, so the picture is still when he is.
+  const still = setpieceState('by_my_own_hand', { elapsedMs: 0, progress: HALF_WAY });
+  const later = setpieceState('by_my_own_hand', { elapsedMs: LONG_MS, progress: HALF_WAY });
+  assert.equal(setpieceParam(still, 'written'), setpieceParam(later, 'written'));
+  assert.deepEqual(Object.keys(still.params).sort(), ['lamp', 'written']);
+});
+
+test('winter comes in as the lamp goes out, and the two are one fact', () => {
+  // 2 Timothy 4:13 and 4:21 -- the cloak from Troas, and come before winter.
+  // `cold` climbs and `lit` falls, and this is the only flourish in the table
+  // whose fire dies: the bush is not consumed and the wick is not quenched
+  // because their passages say so, and this lamp goes out because its passage
+  // says that.
+  // docs/design/05-scenery-warps.md#2-timothy-is-colder-and-says-so-in-two-verses
+  const at = (t: number) => setpieceState('before_winter', { elapsedMs: 0, progress: t });
+  assert.equal(setpieceParam(at(0), 'cold'), 0);
+  assert.equal(setpieceParam(at(0), 'lit'), 1);
+  assert.equal(setpieceParam(at(1), 'cold'), 1);
+  assert.equal(setpieceParam(at(1), 'lit'), 0);
+  let last = 2;
+  for (let i = 0; i <= STEPS; i += 1) {
+    const lit = setpieceParam(at(i / STEPS), 'lit');
+    assert.ok(lit <= last, 'the lamp brightened');
+    last = lit;
+  }
+  // It starts warm rather than cold: the passage opens on a list of people who
+  // have left and arrives at winter, so the cooling gathers.
+  assert.ok(setpieceParam(at(HALF_WAY), 'cold') < HALF_WAY, 'the room is cold from the first verse');
 });
 
 test('a set piece emits parameters, never draw commands', () => {

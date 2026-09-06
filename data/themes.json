@@ -77,6 +77,18 @@
       "palette": "night blue, star white",
       "mood": "the expanse, lights set in it",
       "tune": "addisons"
+    },
+    {
+      "id": "household",
+      "palette": "plaster, lamp amber, dark rafters",
+      "mood": "a room in a house: where a letter is written, and where one is read out",
+      "tune": "tallis-canon"
+    },
+    {
+      "id": "cell",
+      "palette": "cold grey, iron, one slot of daylight",
+      "mood": "a room a man is kept in: one barred opening, high up, and no lamp",
+      "tune": "veni-emmanuel"
     }
   ],
   "_generated_from": "docs/design/05-scenery-warps.md"
