@@ -220,9 +220,16 @@ and then, of the prison letters, *"he was under house arrest apparently."*
 Both are true of different letters — but they are not equally well founded, and the
 owner questioned the second one. Sorting text from tradition:
 
-- **Romans is Corinth.** 16:22 — *"I, Tertius, who write the letter, greet you"*; 16:23 —
-  *"Gaius, my host, and host of the whole assembly"*, and Erastus the city treasurer. A
-  patron's house, a guest, and a scribe writing to dictation.
+- **Romans is written from Corinth, to Rome.** Rome is the address — *"to all who are in
+  Rome"* (1:7) — and Corinth is where the pen was: Phoebe of Cenchreae, Corinth's port
+  (16:1); Gaius his host (16:23), plausibly the Gaius baptised at Corinth (1 Cor 1:14);
+  and Erastus the city treasurer, whose name is cut into a pavement there. And 16:22 —
+  *"I, Tertius, who write the letter, greet you"*.
+
+  **The scene is where the writing happens, not where it is read.** That is the rule for
+  every letter, and it matters because a letter is named for its destination: the player
+  is the one holding the pen, so he sits in the room the ink is in. A patron's house in
+  Corinth, a guest, and a scribe taking dictation.
 - **The prison letters are written in chains — and the city is not stated.** Ephesians,
   Philippians, Colossians and Philemon say the chains themselves: *"remember my chains"*
   (Col 4:18), *"my bonds are manifest in the whole praetorian guard"* (Phil 1:13). What
