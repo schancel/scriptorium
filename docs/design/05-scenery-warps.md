@@ -208,6 +208,38 @@ tuning — it lives with the parallax depths in `core/worlds.ts` — and the win
 `scene_blend_verses` in [the tuning table](07-tuning.md), because how fast the world turns
 under you is something the owner may want to turn.
 
+## The letters were written in rooms
+
+`hills` is the Bible's default and it is right for narrative, history, wisdom and Acts.
+It was wrong for the epistles, which stood in a field, and the objection I raised was
+that a letter is not a place.
+
+The owner's answer: *"paul was typing in a house in corinth when romans was written"* —
+and then, of the prison letters, *"he was under house arrest apparently."*
+
+Both are true, of different letters, and the text says so itself rather than leaving it
+to inference:
+
+- **Romans is Corinth.** 16:22 — *"I, Tertius, who write the letter, greet you"*; 16:23 —
+  *"Gaius, my host, and host of the whole assembly"*, and Erastus the city treasurer. A
+  patron's house, a guest, and a scribe writing to dictation.
+- **The prison letters are Rome, under guard.** Acts 28:30 — *"Paul stayed two whole
+  years in his own rented house"*, with the soldier of 28:16; Philippians 1:13 names the
+  praetorian guard. Ephesians, Philippians, Colossians and Philemon.
+- **2 Timothy is colder than either**, and says so: 4:13 asks for the cloak left at Troas,
+  and 4:21 asks him to come before winter.
+
+So an epistle is not placeless. It is an interior, and the interiors differ. A patron's
+house is not a rented room under guard, and the letters read differently in each.
+
+**And the scribe is already the game's own figure.** A letter dictated to Tertius, copied
+by a novice at a lectern, is the one kind of passage where the scene and the player are
+the same thing. The lectern that fills the keyboard's band is not a decoration here; it is
+what the passage is about.
+
+Tertius is the natural follower for Romans — a scribe joining a scribe, and one of the
+very few people in Scripture who identifies himself as the person holding the pen.
+
 ## Held scenes: not every passage is a journey
 
 The world scrolls because finishing a word carries the scribe forward. That is right for
