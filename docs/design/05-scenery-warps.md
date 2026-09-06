@@ -217,20 +217,35 @@ that a letter is not a place.
 The owner's answer: *"paul was typing in a house in corinth when romans was written"* —
 and then, of the prison letters, *"he was under house arrest apparently."*
 
-Both are true, of different letters, and the text says so itself rather than leaving it
-to inference:
+Both are true of different letters — but they are not equally well founded, and the
+owner questioned the second one. Sorting text from tradition:
 
 - **Romans is Corinth.** 16:22 — *"I, Tertius, who write the letter, greet you"*; 16:23 —
   *"Gaius, my host, and host of the whole assembly"*, and Erastus the city treasurer. A
   patron's house, a guest, and a scribe writing to dictation.
-- **The prison letters are Rome, under guard.** Acts 28:30 — *"Paul stayed two whole
-  years in his own rented house"*, with the soldier of 28:16; Philippians 1:13 names the
-  praetorian guard. Ephesians, Philippians, Colossians and Philemon.
+- **The prison letters are written in chains — and the city is not stated.** Ephesians,
+  Philippians, Colossians and Philemon say the chains themselves: *"remember my chains"*
+  (Col 4:18), *"my bonds are manifest in the whole praetorian guard"* (Phil 1:13). What
+  none of them says is *which* imprisonment. Attributing them to the Roman house arrest
+  of Acts 28 is the traditional reading and a reasonable one, but Ephesus and Caesarea
+  have real support: Paul speaks of *"far more imprisonments"* (2 Cor 11:23), and
+  πραιτώριον is used of Herod's praetorium in Caesarea (Acts 23:35) as readily as of
+  Rome's.
+
+  **So the room is authored and the city is not.** Chains, a guard, a door that does not
+  open — that is what the letters supply and what the player sees. Rome is not named for
+  these four. Acts 28 is a separate case, where the house arrest in Rome simply *is* the
+  text and can be authored as what it says.
 - **2 Timothy is colder than either**, and says so: 4:13 asks for the cloak left at Troas,
   and 4:21 asks him to come before winter.
 
-So an epistle is not placeless. It is an interior, and the interiors differ. A patron's
-house is not a rented room under guard, and the letters read differently in each.
+So an epistle is not placeless. It is an interior, and the interiors differ: a patron's
+house is not a guarded room, and neither is a cold one.
+
+This is the same line the game held over Mary Magdalene, where a conflation tradition has
+made since the sixth century was declined because the text does not make it. Worth saying
+plainly that the line was crossed here by me and caught by the owner: I asserted the
+traditional attribution as though it were what the text said.
 
 **And the scribe is already the game's own figure.** A letter dictated to Tertius, copied
 by a novice at a lectern, is the one kind of passage where the scene and the player are
